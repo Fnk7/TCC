@@ -1,0 +1,21 @@
+#include "llvm/Support/CommandLine.h"
+
+#include "ContractionTree.h"
+#include "Parser.h"
+
+using namespace llvm;
+
+static cl::opt<std::string> InputFileName(cl::Positional,
+                                          cl::desc("<Input contraction file>"),
+                                          cl::init("-"),
+                                          cl::value_desc("filename"));
+
+int main(int argc, char **argv) {
+  cl::ParseCommandLineOptions(argc, argv, "toy compiler\n");
+  auto CF = contraction::parseInputFile(InputFileName);
+  if (CF) {
+    CF->dump();
+    return 0;
+  }
+  return 1;
+}
