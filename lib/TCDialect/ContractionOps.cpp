@@ -9,7 +9,7 @@ using namespace mlir::contraction;
 // Dialect
 //===----------------------------------------------------------------------===//
 
-void ContractDialect::initialize() {
+void ContractionDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
 #include "TCDialect/ContractionOps.cpp.inc"

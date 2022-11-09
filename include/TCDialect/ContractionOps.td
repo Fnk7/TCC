@@ -12,17 +12,17 @@ include "mlir/IR/RegionKindInterface.td"
 include "mlir/Interfaces/ParallelCombiningOpInterface.td"
 include "mlir/Interfaces/ViewLikeInterface.td"
 
-def Contract_Dialect : Dialect {
+def Contraction_Dialect : Dialect {
     let name = "contraction";
     let cppNamespace = "::mlir::contraction";
 }
 
-class Contract_Op<string mnemonic, list<Trait> traits = []> :
-    Op<Contract_Dialect, mnemonic, traits>;
+class Contraction_Op<string mnemonic, list<Trait> traits = []> :
+    Op<Contraction_Dialect, mnemonic, traits>;
 
 
 
-def AddOp : Contract_Op<"add", []> {
+def AddOp : Contraction_Op<"add", []> {
     let arguments = (ins F64:$lhs, F64:$rhs);
     let results = (outs F64);
     let builders = [
@@ -30,7 +30,7 @@ def AddOp : Contract_Op<"add", []> {
     ];
 }
 
-def MulOp : Contract_Op<"mul", []> {
+def MulOp : Contraction_Op<"mul", []> {
     let arguments = (ins F64:$lhs, F64:$rhs);
     let results = (outs F64);
     let builders = [
@@ -38,18 +38,18 @@ def MulOp : Contract_Op<"mul", []> {
     ];
 }
 
-def ForOp : Contract_Op<"for", [
+def ForOp : Contraction_Op<"for", [
     DeclareOpInterfaceMethods<RegionBranchOpInterface>,
     SingleBlockImplicitTerminator<"contraction::YieldOp">]> {
     let arguments = (ins Variadic<Index>:$ranges);
-    let results = (outs AnyTypeOf<[F64Tensor, F64MemRef]>);
+    let results = (outs F64Tensor);
     let regions = (region SizedRegion<1>:$region);
     let builders = [
         OpBuilder<(ins "ValueRange":$ranges)>
     ];
 }
 
-def ContractOp : Contract_Op<"contraction", [
+def ContractOp : Contraction_Op<"contraction", [
     DeclareOpInterfaceMethods<RegionBranchOpInterface>,
     SingleBlockImplicitTerminator<"contraction::YieldOp">]> {
     let arguments = (ins Variadic<Index>:$ranges);
@@ -60,13 +60,13 @@ def ContractOp : Contract_Op<"contraction", [
     ];
 }
 
-def YieldOp : Contract_Op<"yield", [Pure, ReturnLike, Terminator, ParentOneOf<["ForOp", "ContractOp"]>]> {
+def YieldOp : Contraction_Op<"yield", [Pure, ReturnLike, Terminator, ParentOneOf<["ForOp", "ContractOp"]>]> {
     let arguments = (ins F64:$result);
     let builders = [OpBuilder<(ins), [{ /* nothing to do */ }]>];
 }
 
-def IndexOp : Contract_Op<"index", []> {
-    let arguments = (ins AnyTypeOf<[F64Tensor, F64MemRef]>:$tensor, Variadic<Index>:$indexes);
+def IndexOp : Contraction_Op<"index", []> {
+    let arguments = (ins F64Tensor:$tensor, Variadic<Index>:$indexes);
     let results = (outs F64);
     let builders = [
         OpBuilder<(ins "Value":$tensor, "ValueRange":$indexes)>

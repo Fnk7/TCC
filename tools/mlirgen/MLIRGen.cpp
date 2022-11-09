@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
   mlir::MLIRContext Ctx;
   Ctx.getOrLoadDialect<mlir::scf::SCFDialect>();
   Ctx.getOrLoadDialect<mlir::func::FuncDialect>();
-  Ctx.getOrLoadDialect<mlir::contraction::ContractDialect>();
+  Ctx.getOrLoadDialect<mlir::contraction::ContractionDialect>();
   auto M = mlir::contraction::MLIRGen(Ctx, *CF);
   M->dump();
   return 0;

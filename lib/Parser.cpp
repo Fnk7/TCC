@@ -141,8 +141,7 @@ std::unique_ptr<ContractionForest> Parser::parseContractionForest() {
     parseLine();
     CurToken = Lx.getNextToken();
   }
-  // TODO: Update size info
-  CF->setInputSizes();
+  CF->resolveInputSizes();
   return std::move(CF);
 }
 

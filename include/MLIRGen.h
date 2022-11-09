@@ -10,7 +10,7 @@ using ContractionForest = contraction::ContractionForest;
 
 namespace mlir {
 namespace contraction {
-OwningOpRef<ModuleOp> MLIRGen(MLIRContext &context, ContractionForest &forest);
+OwningOpRef<ModuleOp> MLIRGen(MLIRContext &Ctx, ContractionForest &CF);
 } // namespace contraction
 } // namespace mlir
 

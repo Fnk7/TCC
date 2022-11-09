@@ -84,11 +84,11 @@ void ContractionForest::dump() {
   }
   errs() << "\n";
   errs() << "Input tensors: ";
-  if (InputNames.size()) {
-    InputTensors[InputNames[0]]->dump();
-    for (size_t i = 1; i < InputNames.size(); i++) {
+  if (InputTensors.size()) {
+    InputTensors[0]->dump();
+    for (size_t i = 1; i < InputTensors.size(); i++) {
       errs() << ", ";
-      InputTensors[InputNames[i]]->dump();
+      InputTensors[i]->dump();
     }
   }
   errs() << "\n";
@@ -110,18 +110,18 @@ void ContractionForest::dump() {
   for (auto &tree : Trees)
     tree->dump();
   errs() << "Result outputs: ";
-  if (ResultTrees.size()) {
-    errs() << ResultTrees[0]->getUniqueName();
-    for (size_t i = 1; i < ResultTrees.size(); i++) {
-      errs() << ", " << ResultTrees[i]->getUniqueName();
+  if (OutputTrees.size()) {
+    errs() << OutputTrees[0]->getUniqueName();
+    for (size_t i = 1; i < OutputTrees.size(); i++) {
+      errs() << ", " << OutputTrees[i]->getUniqueName();
     }
   }
   errs() << "\n";
-  if (ReserveInputs.size()) {
+  if (ReservedInputs.size()) {
     errs() << "Reserved inputs: ";
-    errs() << ReserveInputs[0]->getName();
-    for (size_t i = 1; i < ReserveInputs.size(); i++) {
-      errs() << ", " << ReserveInputs[i]->getName();
+    errs() << ReservedInputs[0]->getName();
+    for (size_t i = 1; i < ReservedInputs.size(); i++) {
+      errs() << ", " << ReservedInputs[i]->getName();
     }
     errs() << "\n";
   }

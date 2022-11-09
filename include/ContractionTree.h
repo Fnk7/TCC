@@ -1,5 +1,5 @@
-#ifndef TENSORCONTRACTION_CONTRACTTREE_H
-#define TENSORCONTRACTION_CONTRACTTREE_H
+#ifndef TENSORCONTRACTION_CONTRACTIONTREE_H
+#define TENSORCONTRACTION_CONTRACTIONTREE_H
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
@@ -131,31 +131,39 @@ public:
   void dump() { Root->dump(); };
 };
 
+using InputTensorsTy = SmallVector<std::shared_ptr<InputTensor>>;
+using InputTensorMapTy = DenseMap<StringRef, std::shared_ptr<InputTensor>>;
+using ContractionTreesTy = SmallVector<std::shared_ptr<ContractionTree>>;
+using ContractionTreeMapTy =
+    DenseMap<StringRef, std::shared_ptr<ContractionTree>>;
+
 class ContractionForest {
   std::string Name;
-  SizesTy Sizes;
+  // Inputs and outputs and reserves
   SizesTy InputSizes;
-  SmallVector<StringRef> InputNames;
-  DenseMap<StringRef, std::shared_ptr<InputTensor>> InputTensors;
-  SmallVector<std::shared_ptr<ContractionTree>> Trees;
-  DenseMap<StringRef, std::shared_ptr<ContractionTree>> TreesMap;
-  SmallVector<std::shared_ptr<InputTensor>> ReserveInputs;
-  SmallVector<std::shared_ptr<ContractionTree>> ResultTrees;
+  InputTensorsTy InputTensors;
+  InputTensorsTy ReservedInputs;
+  ContractionTreesTy OutputTrees;
+  // Shapes and trees
+  SizesTy Sizes;
+  InputTensorMapTy InputMap;
+  ContractionTreesTy Trees;
+  ContractionTreeMapTy TreeMap;
 
 public:
   ContractionForest() { Name = "Contraction"; }
   void dump();
 
   std::shared_ptr<InputTensor> getInputTensor(StringRef Name) {
-    if (InputTensors.count(Name)) {
-      return InputTensors[Name];
+    if (InputMap.count(Name)) {
+      return InputMap[Name];
     }
     return nullptr;
   }
   std::shared_ptr<InputTensor> getOrInsertInputTensor(StringRef Name, int dim) {
     std::shared_ptr<InputTensor> IT;
-    if (InputTensors.count(Name)) {
-      IT = InputTensors[Name];
+    if (InputMap.count(Name)) {
+      IT = InputMap[Name];
       assert(IT->getDimension() == dim);
     } else {
       SizesTy InputSizes;
@@ -163,39 +171,39 @@ public:
         InputSizes.emplace_back(Sizes.size() + Sz);
       Sizes.append(InputSizes);
       IT = std::make_shared<InputTensor>(std::string(Name), InputSizes);
-      InputNames.emplace_back(IT->getName());
-      InputTensors[IT->getName()] = IT;
+      InputTensors.emplace_back(IT);
+      InputMap[IT->getName()] = IT;
     }
     return IT;
   }
 
   std::shared_ptr<ContractionTree> getContractionTree(StringRef Name) {
-    if (TreesMap.count(Name)) {
-      return TreesMap[Name];
+    if (TreeMap.count(Name)) {
+      return TreeMap[Name];
     }
     return nullptr;
   }
   void addContractionTree(std::shared_ptr<ContractionTree> CT) {
     Trees.emplace_back(CT);
     int Suffix = 0;
-    while (TreesMap.count(CT->getUniqueName())) {
+    while (TreeMap.count(CT->getUniqueName())) {
       CT->setUniqueName(std::string(CT->getName()) + '#' +
                         std::to_string(++Suffix));
     }
-    TreesMap[CT->getUniqueName()] = CT;
-    TreesMap[CT->getName()] = CT;
+    TreeMap[CT->getUniqueName()] = CT;
+    TreeMap[CT->getName()] = CT;
   }
 
   void addKeep(StringRef Name) {
     if (auto CT = getContractionTree(Name)) {
-      ResultTrees.emplace_back(CT);
+      OutputTrees.emplace_back(CT);
     } else if (auto IT = getInputTensor(Name)) {
-      ReserveInputs.emplace_back(IT);
+      ReservedInputs.emplace_back(IT);
     } else {
       assert("Input or Tree Tensor not defined!");
     }
   }
-
+  // Sizes
   inline void setSizeEqual(int &Sz1, int &Sz2) {
     assert(Sz1 < (int)Sizes.size());
     assert(Sz2 < (int)Sizes.size() && Sz2 >= 0);
@@ -214,34 +222,25 @@ public:
       setSizeEqual(Sz1[i], Sz2[i]);
     }
   }
-
-  void setInputSizes() {
+  void resolveInputSizes() {
     for (size_t i = 0; i < Sizes.size(); i++) {
       if ((int)i == Sizes[i]) {
         InputSizes.emplace_back(i);
       } else {
-        int size = Sizes[i];
-        if (size != Sizes[size]) {
-          Sizes[i] = Sizes[size];
-        }
+        int UniqueSz = Sizes[i];
+        Sizes[i] = Sizes[UniqueSz];
       }
     }
   }
-
-  // TODO:
-
-  int getIdentifySize(int size) { return Sizes[size]; }
-
-  SizesTy &getInputSizes() { return InputSizes; }
-  SmallVector<StringRef> &getInputTensors() { return InputNames; }
-  SmallVector<std::shared_ptr<ContractionTree>> &getOutputTensors() {
-    return ResultTrees;
-  }
-  SmallVector<std::shared_ptr<ContractionTree>> &getContractionTrees() {
-    return Trees;
-  }
+  int getUniqueInputSizeOf(int Sz) { return Sizes[Sz]; }
 
   StringRef getName() { return Name; }
+  SizesTy &getInputSizes() { return InputSizes; }
+  InputTensorsTy &getInputTensors() { return InputTensors; }
+  ContractionTreesTy &getOutputTensors() { return OutputTrees; }
+  ContractionTreesTy &getContractionTrees() { return Trees; }
+
+  // TODO:
 
   int getNumInputSizs() {
     int num = 0;
@@ -251,8 +250,8 @@ public:
     return num;
   }
 
-  int getNumInputTensors() { return InputTensors.size(); }
-  int getNumOutputTensors() { return ResultTrees.size(); }
+  int getNumInputTensors() { return InputMap.size(); }
+  int getNumOutputTensors() { return OutputTrees.size(); }
 };
 } // namespace contraction
 
