@@ -43,7 +43,7 @@ public:
     ContractionTreesTy &OTs = CF.getOutputTensors();
     SmallVector<Type> InputTypes(ISzs.size(), OB.getIndexType());
     for (auto &IT : ITs) {
-      InputTypes.emplace_back(RankedTensorType::get(
+      InputTypes.emplace_back(MemRefType::get(
           SmallVector<int64_t>(IT->getDimension(), -1), OB.getF64Type()));
     }
     SmallVector<Type> ResultTypes;

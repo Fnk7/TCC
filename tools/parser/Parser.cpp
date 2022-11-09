@@ -10,7 +10,7 @@ static cl::opt<std::string> InputFileName(cl::Positional,
                                           cl::value_desc("filename"));
 
 int main(int argc, char **argv) {
-  cl::ParseCommandLineOptions(argc, argv, "toy compiler\n");
+  cl::ParseCommandLineOptions(argc, argv, "TCC Parser\n");
   auto CF = contraction::parseInputFile(InputFileName);
   if (CF) {
     CF->dump();
