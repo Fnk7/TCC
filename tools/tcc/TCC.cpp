@@ -1,9 +1,11 @@
 #include "llvm/Support/CommandLine.h"
 
+#include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Transforms/Passes.h"
 
 #include "MLIRGen.h"
 #include "Parser.h"
@@ -56,7 +58,19 @@ int main(int argc, char **argv) {
   }
   mlir::PassManager PM(&Ctx);
   PM.addPass(mlir::contraction::createLowerToAffinePass());
+  mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
+  FuncPM.addPass(mlir::createCanonicalizerPass());
+  FuncPM.addPass(mlir::createCSEPass());
+  FuncPM.addPass(mlir::createLoopFusionPass());
+  FuncPM.addPass(mlir::createAffineScalarReplacementPass());
+  if (Emit == DumpMLIRLLVM) {
+    PM.addPass(mlir::contraction::createLowerToLLVMPass());
+  }
   mlir::failed(PM.run(*M));
+  if (Emit == DumpMLIRAffine || Emit == DumpMLIRLLVM) {
+    M->dump();
+    return 0;
+  }
   M->dump();
   return 0;
 }
