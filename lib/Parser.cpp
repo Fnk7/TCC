@@ -292,7 +292,7 @@ std::unique_ptr<ContractionForest> parseInputFile(StringRef FileName) {
   ErrorOr<std::unique_ptr<MemoryBuffer>> fileOrErr =
       MemoryBuffer::getFileOrSTDIN(FileName);
   if (std::error_code EC = fileOrErr.getError()) {
-    errs() << "Could not open Input file: " << EC.message() << "\n";
+    errs() << "Open input file failed: " << EC.message() << "\n";
     return nullptr;
   }
   parser::Lexer Lexer{std::move(fileOrErr.get())};

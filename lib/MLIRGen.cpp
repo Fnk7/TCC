@@ -1,0 +1,152 @@
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/IR/Attributes.h"
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/MLIRContext.h"
+#include "mlir/IR/Region.h"
+#include "mlir/IR/Verifier.h"
+#include "llvm/Support/raw_ostream.h"
+
+#include "MLIRGen.h"
+#include "TCDialect/ContractionOps.h"
+
+using llvm::errs;
+using namespace contraction;
+
+namespace mlir {
+namespace contraction {
+class MLIRGenImpl {
+public:
+  MLIRGenImpl(MLIRContext &C, ContractionForest &CF)
+      : CF(CF), OB(&C), Loc(UnknownLoc::get(&C)){};
+
+  ModuleOp mlirGen() {
+    M = ModuleOp::create(Loc);
+    OB.setInsertionPointToEnd(M.getBody());
+    SizesTy &InSizes = CF.getInputSizes();
+    SmallVector<StringRef> &InTensors = CF.getInputTensors();
+    SmallVector<std::shared_ptr<ContractionTree>> &OutTensors =
+        CF.getOutputTensors();
+    SmallVector<Type> inputsType(InSizes.size(), OB.getIndexType());
+    for (size_t i = 0; i < InTensors.size(); i++) {
+      auto IT = CF.getInputTensor(InTensors[i]);
+      inputsType.emplace_back(MemRefType::get(
+          SmallVector<int64_t>(IT->getDimension(), -1), OB.getF64Type()));
+    }
+    SmallVector<Type> resultsType;
+    for (size_t i = 0; i < OutTensors.size(); i++) {
+      auto CT = OutTensors[i];
+      resultsType.emplace_back(RankedTensorType::get(
+          SmallVector<int64_t>(CT->getDimension(), -1), OB.getF64Type()));
+    }
+    auto FuncType = OB.getFunctionType(inputsType, resultsType);
+    auto Func = OB.create<func::FuncOp>(Loc, CF.getName(), FuncType);
+    EntryB = Func.addEntryBlock();
+    for (size_t i = 0; i < InSizes.size(); i++) {
+      InputSizeValueMap[InSizes[i]] = EntryB->getArgument(i);
+    }
+    for (size_t i = 0; i < InTensors.size(); i++) {
+      InputTensorValueMap[InTensors[i]] =
+          EntryB->getArgument(i + InSizes.size());
+    }
+    OB.setInsertionPointToEnd(EntryB);
+    auto &CTs = CF.getContractionTrees();
+    for (auto &CT : CTs) {
+      generateContractTree(*CT.get());
+    }
+    SmallVector<Value> Returns;
+    for (auto &CT : OutTensors) {
+      Returns.emplace_back(TreeValueMap[CT->getUniqueName()]);
+    }
+    OB.create<func::ReturnOp>(Loc, Returns);
+    return M;
+  }
+
+private:
+  ContractionForest &CF;
+  ModuleOp M;
+  OpBuilder OB;
+  Block *EntryB;
+  Location Loc;
+
+  llvm::DenseMap<int, Value> InputSizeValueMap;
+  llvm::DenseMap<StringRef, Value> InputTensorValueMap;
+  llvm::SmallVector<Value> IndexValueMap;
+  llvm::DenseMap<StringRef, Value> TreeValueMap;
+
+  void generateContractTree(ContractionTree &CT) {
+    IndexValueMap.clear();
+    auto Value = generateNode(CT.getRoot());
+    TreeValueMap[CT.getUniqueName()] = Value;
+  }
+
+  Value generateNode(std::unique_ptr<Node> &N) {
+    if (N->Type == Node::Root) {
+      return generateRootOrContractNode<ForOp>(N);
+    } else if (N->Type == Node::Addition) {
+      return generateArithNode<AddOp>(N);
+    } else if (N->Type == Node::Multiplication) {
+      return generateArithNode<MulOp>(N);
+    } else if (N->Type == Node::InputAsLeaf || N->Type == Node::TreeAsLeaf) {
+      return generateIndexedTensorNode(N);
+    } else {
+      assert(N->Type == Node::Contraction);
+      return generateRootOrContractNode<ContractOp>(N);
+    }
+  }
+  template <class T>
+  Value generateRootOrContractNode(std::unique_ptr<Node> &N) {
+    Block *OldB = OB.getInsertionBlock();
+    SmallVector<Value, 4> RangesValue;
+    SizesTy &Ranges = N->getSizes();
+    for (auto size : Ranges) {
+      size = CF.getIdentifySize(size);
+      RangesValue.emplace_back(InputSizeValueMap[size]);
+    }
+    auto ForOrContract = OB.create<T>(Loc, RangesValue);
+    auto Body = ForOrContract.getBody();
+    OB.setInsertionPointToEnd(Body);
+    for (auto Index : Body->getArguments()) {
+      IndexValueMap.emplace_back(Index);
+    }
+    auto ChildValue = generateNode(N->getChilds()[0]);
+    OB.create<YieldOp>(Loc, ChildValue);
+    OB.setInsertionPointToEnd(OldB);
+    return ForOrContract;
+  }
+  template <class T> Value generateArithNode(std::unique_ptr<Node> &N) {
+    ChildNodesTy &Childs = N->getChilds();
+    assert(Childs.size() >= 2);
+    auto LHS = generateNode(Childs[0]);
+    for (size_t i = 1; i < Childs.size(); i++) {
+      auto RHS = generateNode(Childs[i]);
+      LHS = OB.create<T>(Loc, LHS, RHS);
+    }
+    return LHS;
+  }
+  Value generateIndexedTensorNode(std::unique_ptr<Node> &N) {
+    Value T;
+    if (N->Type == Node::InputAsLeaf) {
+      auto IT = N->getInputTensor();
+      T = InputTensorValueMap[IT->getName()];
+    } else {
+      assert(N->Type == Node::TreeAsLeaf);
+      auto CT = N->getContractionTensor();
+      T = TreeValueMap[CT->getUniqueName()];
+    }
+    SmallVector<Value> IndexValues;
+    auto Indexes = N->getIndexes();
+    for (auto I : Indexes) {
+      IndexValues.emplace_back(IndexValueMap[I]);
+    }
+    return OB.create<IndexOp>(Loc, T, IndexValues);
+  }
+};
+
+OwningOpRef<ModuleOp> MLIRGen(MLIRContext &context, ContractionForest &forest) {
+  return MLIRGenImpl(context, forest).mlirGen();
+}
+} // namespace contraction
+} // namespace mlir
