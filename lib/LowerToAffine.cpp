@@ -152,12 +152,15 @@ struct FuncOpLowering : public OpConversionPattern<func::FuncOp> {
                   ConversionPatternRewriter &rewriter) const final {
     auto InputTypes = op.getArgumentTypes();
     auto ResultTypes = op.getResultTypes();
+    rewriter.startRootUpdate(op);
     SmallVector<Type> NewInputTypes;
     SmallVector<Type> NewResultTypes;
-    for (auto T : InputTypes) {
+    for (unsigned ArgIdx = 0; ArgIdx < InputTypes.size(); ArgIdx++) {
+      auto T = InputTypes[ArgIdx];
       if (auto TT = T.dyn_cast<TensorType>()) {
         NewInputTypes.emplace_back(
             MemRefType::get(TT.getShape(), TT.getElementType()));
+        op.getRegion().getArgument(ArgIdx).setType(NewInputTypes.back());
       } else {
         NewInputTypes.emplace_back(T);
       }
@@ -168,19 +171,7 @@ struct FuncOpLowering : public OpConversionPattern<func::FuncOp> {
           MemRefType::get(TT.getShape(), TT.getElementType()));
     }
     auto NewFuncType = rewriter.getFunctionType(NewInputTypes, NewResultTypes);
-    rewriter.startRootUpdate(op);
     op.setType(NewFuncType);
-    auto &R = op.getRegion();
-    unsigned NumArgs = R.getNumArguments();
-    for (unsigned ArgIdx = 0; ArgIdx < NumArgs; ArgIdx++) {
-      if (!NewFuncType.getInput(ArgIdx).isa<MemRefType>())
-        continue;
-      BlockArgument NewArg = R.insertArgument(
-          ArgIdx, NewFuncType.getInput(ArgIdx), rewriter.getUnknownLoc());
-      BlockArgument OldArg = R.getArgument(ArgIdx + 1);
-      OldArg.replaceAllUsesWith(NewArg);
-      R.eraseArgument(ArgIdx + 1);
-    }
     rewriter.finalizeRootUpdate(op);
     return success();
   }

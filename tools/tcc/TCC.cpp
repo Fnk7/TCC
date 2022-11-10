@@ -4,6 +4,7 @@
 
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/LLVMIR/Transforms/RequestCWrappers.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Pass/Pass.h"
@@ -65,10 +66,12 @@ int main(int argc, char **argv) {
   mlir::PassManager PM(&Ctx);
   PM.addPass(mlir::contraction::createLowerToAffinePass());
   mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
+  FuncPM.addPass(mlir::contraction::createReturnToArgumentPass());
   FuncPM.addPass(mlir::createCanonicalizerPass());
   FuncPM.addPass(mlir::createCSEPass());
   FuncPM.addPass(mlir::createLoopFusionPass());
   FuncPM.addPass(mlir::createAffineScalarReplacementPass());
+  FuncPM.addPass(mlir::LLVM::createRequestCWrappersPass());
   if (Emit == DumpMLIRLLVM || Emit == DumpLLVMIR) {
     PM.addPass(mlir::contraction::createLowerToLLVMPass());
   }

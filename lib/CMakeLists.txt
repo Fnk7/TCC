@@ -3,6 +3,7 @@ add_mlir_library(TensorContraction
         Parser.cpp
         MLIRGen.cpp
         LowerToAffine.cpp
+        ReturnToArgumentPass.cpp
         LowerToLLVM.cpp
 
         ADDITIONAL_HEADER_DIRS
