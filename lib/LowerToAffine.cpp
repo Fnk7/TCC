@@ -150,19 +150,37 @@ struct FuncOpLowering : public OpConversionPattern<func::FuncOp> {
   LogicalResult
   matchAndRewrite(func::FuncOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
-    auto FuncType = op.getFunctionType();
-    auto ResultType = FuncType.getResults();
-    SmallVector<Type> NewResultType;
-    for (auto T : ResultType) {
+    auto InputTypes = op.getArgumentTypes();
+    auto ResultTypes = op.getResultTypes();
+    SmallVector<Type> NewInputTypes;
+    SmallVector<Type> NewResultTypes;
+    for (auto T : InputTypes) {
+      if (auto TT = T.dyn_cast<TensorType>()) {
+        NewInputTypes.emplace_back(
+            MemRefType::get(TT.getShape(), TT.getElementType()));
+      } else {
+        NewInputTypes.emplace_back(T);
+      }
+    }
+    for (auto T : ResultTypes) {
       auto TT = T.cast<TensorType>();
-      NewResultType.emplace_back(
+      NewResultTypes.emplace_back(
           MemRefType::get(TT.getShape(), TT.getElementType()));
     }
-    auto NewFuncType =
-        rewriter.getFunctionType(FuncType.getInputs(), NewResultType);
+    auto NewFuncType = rewriter.getFunctionType(NewInputTypes, NewResultTypes);
     rewriter.startRootUpdate(op);
     op.setType(NewFuncType);
-    op->getOperands();
+    auto &R = op.getRegion();
+    unsigned NumArgs = R.getNumArguments();
+    for (unsigned ArgIdx = 0; ArgIdx < NumArgs; ArgIdx++) {
+      if (!NewFuncType.getInput(ArgIdx).isa<MemRefType>())
+        continue;
+      BlockArgument NewArg = R.insertArgument(
+          ArgIdx, NewFuncType.getInput(ArgIdx), rewriter.getUnknownLoc());
+      BlockArgument OldArg = R.getArgument(ArgIdx + 1);
+      OldArg.replaceAllUsesWith(NewArg);
+      R.eraseArgument(ArgIdx + 1);
+    }
     rewriter.finalizeRootUpdate(op);
     return success();
   }
@@ -170,10 +188,10 @@ struct FuncOpLowering : public OpConversionPattern<func::FuncOp> {
 } // namespace
 
 namespace {
-struct ContractToAffineLoweringPass
-    : public PassWrapper<ContractToAffineLoweringPass,
+struct ContractionToAffineLoweringPass
+    : public PassWrapper<ContractionToAffineLoweringPass,
                          OperationPass<ModuleOp>> {
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ContractToAffineLoweringPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ContractionToAffineLoweringPass)
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<AffineDialect, func::FuncDialect, memref::MemRefDialect>();
@@ -182,7 +200,7 @@ struct ContractToAffineLoweringPass
 };
 } // namespace
 
-void ContractToAffineLoweringPass::runOnOperation() {
+void ContractionToAffineLoweringPass::runOnOperation() {
   ConversionTarget target(getContext());
   target.addLegalDialect<AffineDialect, BuiltinDialect, arith::ArithDialect,
                          memref::MemRefDialect>();
@@ -205,5 +223,5 @@ void ContractToAffineLoweringPass::runOnOperation() {
 }
 
 std::unique_ptr<Pass> mlir::contraction::createLowerToAffinePass() {
-  return std::make_unique<ContractToAffineLoweringPass>();
+  return std::make_unique<ContractionToAffineLoweringPass>();
 }

@@ -42,7 +42,7 @@ def ForOp : Contraction_Op<"for", [
     DeclareOpInterfaceMethods<RegionBranchOpInterface>,
     SingleBlockImplicitTerminator<"contraction::YieldOp">]> {
     let arguments = (ins Variadic<Index>:$ranges);
-    let results = (outs AnyTypeOf<[F64Tensor, F64MemRef]>);
+    let results = (outs F64Tensor);
     let regions = (region SizedRegion<1>:$region);
     let builders = [
         OpBuilder<(ins "ValueRange":$ranges)>
@@ -66,7 +66,7 @@ def YieldOp : Contraction_Op<"yield", [Pure, ReturnLike, Terminator, ParentOneOf
 }
 
 def IndexOp : Contraction_Op<"index", []> {
-    let arguments = (ins AnyTypeOf<[F64Tensor, F64MemRef]>:$tensor, Variadic<Index>:$indexes);
+    let arguments = (ins F64Tensor:$tensor, Variadic<Index>:$indexes);
     let results = (outs F64);
     let builders = [
         OpBuilder<(ins "Value":$tensor, "ValueRange":$indexes)>

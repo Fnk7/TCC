@@ -1,10 +1,15 @@
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 
 #include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
 
 #include "MLIRGen.h"
@@ -50,6 +55,7 @@ int main(int argc, char **argv) {
   mlir::MLIRContext Ctx;
   Ctx.getOrLoadDialect<mlir::scf::SCFDialect>();
   Ctx.getOrLoadDialect<mlir::func::FuncDialect>();
+  Ctx.getOrLoadDialect<mlir::memref::MemRefDialect>();
   Ctx.getOrLoadDialect<mlir::contraction::ContractionDialect>();
   auto M = mlir::contraction::MLIRGen(Ctx, *CF);
   if (Emit == DumpMLIR) {
@@ -63,7 +69,7 @@ int main(int argc, char **argv) {
   FuncPM.addPass(mlir::createCSEPass());
   FuncPM.addPass(mlir::createLoopFusionPass());
   FuncPM.addPass(mlir::createAffineScalarReplacementPass());
-  if (Emit == DumpMLIRLLVM) {
+  if (Emit == DumpMLIRLLVM || Emit == DumpLLVMIR) {
     PM.addPass(mlir::contraction::createLowerToLLVMPass());
   }
   mlir::failed(PM.run(*M));
@@ -71,6 +77,9 @@ int main(int argc, char **argv) {
     M->dump();
     return 0;
   }
-  M->dump();
+  mlir::registerLLVMDialectTranslation(*M->getContext());
+  llvm::LLVMContext LLVMCtx;
+  auto LLVMIR = mlir::translateModuleToLLVMIR(M.get(), LLVMCtx);
+  errs() << *LLVMIR << "\n";
   return 0;
 }
