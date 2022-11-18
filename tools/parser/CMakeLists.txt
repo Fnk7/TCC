@@ -1,4 +1,4 @@
-set(LIBS TensorContraction)
+set(LIBS TCCParser)
 
 add_llvm_executable(parser Parser.cpp)
 llvm_update_compile_flags(parser)

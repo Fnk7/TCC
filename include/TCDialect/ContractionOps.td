@@ -20,70 +20,17 @@ def Contraction_Dialect : Dialect {
 class Contraction_Op<string mnemonic, list<Trait> traits = []> :
     Op<Contraction_Dialect, mnemonic, traits>;
 
-
-
-def AddOp : Contraction_Op<"add0", []> {
-    let arguments = (ins F64:$lhs, F64:$rhs);
-    let results = (outs F64);
-    let builders = [
-        OpBuilder<(ins "Value":$lhs, "Value":$rhs)>
-    ];
-}
-
-def MulOp : Contraction_Op<"mul0", []> {
-    let arguments = (ins F64:$lhs, F64:$rhs);
-    let results = (outs F64);
-    let builders = [
-        OpBuilder<(ins "Value":$lhs, "Value":$rhs)>
-    ];
-}
-
-def ForOp : Contraction_Op<"for", [
-    DeclareOpInterfaceMethods<RegionBranchOpInterface>,
-    SingleBlockImplicitTerminator<"contraction::YieldOp">]> {
-    let arguments = (ins Variadic<Index>:$ranges);
-    let results = (outs F64Tensor);
-    let regions = (region SizedRegion<1>:$region);
-    let builders = [
-        OpBuilder<(ins "ValueRange":$ranges)>
-    ];
-}
-
-def ContractOp : Contraction_Op<"contraction", [
-    DeclareOpInterfaceMethods<RegionBranchOpInterface>,
-    SingleBlockImplicitTerminator<"contraction::YieldOp">]> {
-    let arguments = (ins Variadic<Index>:$ranges);
-    let results = (outs F64);
-    let regions = (region SizedRegion<1>:$region);
-    let builders = [
-        OpBuilder<(ins "ValueRange":$ranges)>
-    ];
-}
-
-def YieldOp : Contraction_Op<"yield", [Pure, ReturnLike, Terminator, ParentOneOf<["ForOp", "ContractOp"]>]> {
-    let arguments = (ins F64:$result);
-    let builders = [OpBuilder<(ins), [{ /* nothing to do */ }]>];
-}
-
-def IndexOp : Contraction_Op<"index", []> {
-    let arguments = (ins F64Tensor:$tensor, Variadic<Index>:$indexes);
-    let results = (outs F64);
-    let builders = [
-        OpBuilder<(ins "Value":$tensor, "ValueRange":$indexes)>
-    ];
-}
-
-def NewAddOp : Contraction_Op<"add", []> {
+def AddOp : Contraction_Op<"add", []> {
     let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps);
     let results = (outs F64Tensor:$result);
 }
 
-def NewMulOp : Contraction_Op<"mul", []> {
+def MulOp : Contraction_Op<"mul", []> {
     let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps);
     let results = (outs F64Tensor:$result);
 }
 
-def NewContractOp : Contraction_Op<"contract", []> {
+def ContractOp : Contraction_Op<"contract", []> {
     let arguments = (ins F64Tensor:$tensor, I64ArrayAttr:$axes);
     let results = (outs F64Tensor:$result);
 }

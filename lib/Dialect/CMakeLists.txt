@@ -1,4 +1,6 @@
-add_mlir_dialect_library(MLIRContraction
+add_mlir_dialect_library(
+        MLIRContraction
+
         ContractionOps.cpp
 
         ADDITIONAL_HEADER_DIRS
