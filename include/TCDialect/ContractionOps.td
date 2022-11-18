@@ -22,7 +22,7 @@ class Contraction_Op<string mnemonic, list<Trait> traits = []> :
 
 
 
-def AddOp : Contraction_Op<"add", []> {
+def AddOp : Contraction_Op<"add0", []> {
     let arguments = (ins F64:$lhs, F64:$rhs);
     let results = (outs F64);
     let builders = [
@@ -30,7 +30,7 @@ def AddOp : Contraction_Op<"add", []> {
     ];
 }
 
-def MulOp : Contraction_Op<"mul", []> {
+def MulOp : Contraction_Op<"mul0", []> {
     let arguments = (ins F64:$lhs, F64:$rhs);
     let results = (outs F64);
     let builders = [
@@ -71,6 +71,26 @@ def IndexOp : Contraction_Op<"index", []> {
     let builders = [
         OpBuilder<(ins "Value":$tensor, "ValueRange":$indexes)>
     ];
+}
+
+def NewAddOp : Contraction_Op<"add", []> {
+    let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps);
+    let results = (outs F64Tensor:$result);
+}
+
+def NewMulOp : Contraction_Op<"mul", []> {
+    let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps);
+    let results = (outs F64Tensor:$result);
+}
+
+def NewContractOp : Contraction_Op<"contract", []> {
+    let arguments = (ins F64Tensor:$tensor, I64ArrayAttr:$axes);
+    let results = (outs F64Tensor:$result);
+}
+
+def PermuteOp : Contraction_Op<"permute", []> {
+    let arguments = (ins F64Tensor:$tensor, I64ArrayAttr:$axes_map);
+    let results = (outs F64Tensor:$result);
 }
 
 #endif

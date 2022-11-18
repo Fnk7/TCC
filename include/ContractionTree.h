@@ -14,7 +14,7 @@ class Node;
 class ContractionTree;
 
 using SizesTy = SmallVector<int, 4>;
-using IndexesTy = SmallVector<int, 4>;
+using IndexesTy = SmallVector<int64_t, 4>;
 using ChildNodesTy = SmallVector<std::unique_ptr<Node>, 2>;
 
 class InputTensor {
@@ -95,6 +95,7 @@ public:
   SizesTy &getSizes() { return Sizes; }
   IndexesTy &getIndexes() { return Indexes; }
   ChildNodesTy &getChilds() { return Childs; }
+  Node &getSingleChild() { return *(Childs[0]); }
   std::shared_ptr<InputTensor> getInputTensor() { return InputLeaf.lock(); }
   std::shared_ptr<ContractionTree> getContractionTensor() {
     return TreeLeaf.lock();
@@ -141,6 +142,7 @@ class ContractionForest {
   std::string Name;
   // Inputs and outputs and reserves
   SizesTy InputSizes;
+  SizesTy InputSizeMap;
   InputTensorsTy InputTensors;
   InputTensorsTy ReservedInputs;
   ContractionTreesTy OutputTrees;
@@ -223,15 +225,19 @@ public:
     }
   }
   void resolveInputSizes() {
+    int InSz = 0;
     for (size_t i = 0; i < Sizes.size(); i++) {
       if ((int)i == Sizes[i]) {
         InputSizes.emplace_back(i);
+        InputSizeMap.emplace_back(InSz++);
       } else {
         int UniqueSz = Sizes[i];
         Sizes[i] = Sizes[UniqueSz];
+        InputSizeMap.emplace_back(InputSizeMap[Sizes[i]]);
       }
     }
   }
+  int getInputSizeOf(int Sz) { return InputSizeMap[Sz]; }
   int getUniqueInputSizeOf(int Sz) { return Sizes[Sz]; }
 
   StringRef getName() { return Name; }

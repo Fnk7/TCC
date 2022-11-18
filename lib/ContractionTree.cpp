@@ -92,10 +92,17 @@ void ContractionForest::dump() {
     }
   }
   errs() << "\n";
+  errs() << "Input size map: ";
+  for (size_t i = 0; i < InputSizeMap.size(); i++) {
+    if (i != 0)
+      errs() << ", ";
+    errs() << InputSizeMap[i];
+  }
+  errs() << "\n";
   size_t i = 0;
   for (; i < Sizes.size(); i++) {
     if ((int)i != Sizes[i]) {
-      errs() << "SizesTy relation: Sz" << i << " = Sz" << Sizes[i];
+      errs() << "Sizes relation: Sz" << i << " = Sz" << Sizes[i];
       break;
     }
   }
