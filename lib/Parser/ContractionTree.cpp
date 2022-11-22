@@ -5,10 +5,6 @@
 using namespace llvm;
 
 namespace contraction {
-static void dumpIndent(int indent) {
-  for (int i = 0; i < indent; i++)
-    errs() << " ";
-}
 static void dumpSizes(SizesTy &Sizes) {
   if (Sizes.size()) {
     errs() << "(Sz" << Sizes[0];
@@ -32,7 +28,7 @@ void InputTensor::dump() {
 }
 
 void Node::dump(int indent) {
-  dumpIndent(indent);
+  errs().indent(indent);
   if (Type == Root) {
     errs() << TreeLeaf.lock()->getUniqueName() << " ";
     dumpSizes(Sizes);
@@ -42,12 +38,12 @@ void Node::dump(int indent) {
   } else if (Type == Addition) {
     errs() << "Addition {";
     dumpChilds(indent);
-    dumpIndent(indent);
+    errs().indent(indent);
     errs() << "}\n";
   } else if (Type == Multiplication) {
     errs() << "Multiplication {";
     dumpChilds(indent);
-    dumpIndent(indent);
+    errs().indent(indent);
     errs() << "}\n";
   } else if (Type == Contraction) {
     errs() << "Contraction ";
