@@ -13,10 +13,10 @@
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
 
-#include "MLIRGen.h"
-#include "Parser.h"
-#include "Passes.h"
-#include "TCDialect/ContractionOps.h"
+#include "TCC/Dialect/ContractionOps.h"
+#include "TCC/MLIRGen.h"
+#include "TCC/Parser.h"
+#include "TCC/Passes.h"
 
 using namespace llvm;
 

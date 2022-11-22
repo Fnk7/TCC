@@ -1,6 +1,7 @@
 #ifndef TENSORCONTRACTION_TCDIALECT_CONTRACTIONOPS_H
 #define TENSORCONTRACTION_TCDIALECT_CONTRACTIONOPS_H
 
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/RegionKindInterface.h"
@@ -10,9 +11,9 @@
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/Interfaces/ViewLikeInterface.h"
 
-#include "TCDialect/ContractionOpsDialect.h.inc"
+#include "TCC/Dialect/ContractionOpsDialect.h.inc"
 
 #define GET_OP_CLASSES
-#include "TCDialect/ContractionOps.h.inc"
+#include "TCC/Dialect/ContractionOps.h.inc"
 
 #endif // STANDALONE_STANDALONEOPS_H

@@ -3,7 +3,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "Parser.h"
+#include "TCC/Parser.h"
 
 using namespace llvm;
 

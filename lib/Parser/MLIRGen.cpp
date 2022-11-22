@@ -8,8 +8,8 @@
 #include "mlir/IR/Region.h"
 #include "mlir/IR/Verifier.h"
 
-#include "MLIRGen.h"
-#include "TCDialect/ContractionOps.h"
+#include "TCC/Dialect/ContractionOps.h"
+#include "TCC/MLIRGen.h"
 
 using namespace contraction;
 

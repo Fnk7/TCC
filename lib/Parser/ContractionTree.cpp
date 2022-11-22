@@ -1,6 +1,6 @@
 #include "llvm/Support/raw_ostream.h"
 
-#include "ContractionTree.h"
+#include "TCC/ContractionTree.h"
 
 using namespace llvm;
 

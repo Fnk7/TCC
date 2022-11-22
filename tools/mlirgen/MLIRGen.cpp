@@ -3,10 +3,10 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 
-#include "Parser.h"
+#include "TCC/Parser.h"
 
-#include "MLIRGen.h"
-#include "TCDialect/ContractionOps.h"
+#include "TCC/Dialect/ContractionOps.h"
+#include "TCC/MLIRGen.h"
 
 using namespace llvm;
 

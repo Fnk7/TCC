@@ -8,8 +8,8 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 
-#include "Passes.h"
-#include "TCDialect/ContractionOps.h"
+#include "TCC/Dialect/ContractionOps.h"
+#include "TCC/Passes.h"
 
 namespace mlir {
 namespace contraction {
@@ -234,6 +234,7 @@ struct PermuteOpLowering : public OpConversionPattern<PermuteOp> {
     return success();
   }
 };
+
 struct ContractOpLowering : public OpConversionPattern<ContractOp> {
   using OpConversionPattern<ContractOp>::OpConversionPattern;
 

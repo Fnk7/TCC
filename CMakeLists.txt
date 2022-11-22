@@ -28,6 +28,6 @@ include_directories(${PROJECT_BINARY_DIR}/include)
 link_directories(${LLVM_BUILD_LIBRARY_DIR})
 add_definitions(${LLVM_DEFINITIONS})
 
-add_subdirectory(include/TCDialect)
+add_subdirectory(include/TCC/Dialect)
 add_subdirectory(lib)
 add_subdirectory(tools)

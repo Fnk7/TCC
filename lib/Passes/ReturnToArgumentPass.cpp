@@ -6,8 +6,8 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Pass/Pass.h"
 
-#include "Passes.h"
-#include "TCDialect/ContractionOps.h"
+#include "TCC/Dialect/ContractionOps.h"
+#include "TCC/Passes.h"
 
 #define DEBUG_TYPE "return-2-argument"
 

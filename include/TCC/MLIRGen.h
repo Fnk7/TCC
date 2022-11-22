@@ -4,7 +4,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
 
-#include "ContractionTree.h"
+#include "TCC/ContractionTree.h"
 
 using ContractionForest = contraction::ContractionForest;
 

@@ -15,6 +15,7 @@ include "mlir/Interfaces/ViewLikeInterface.td"
 def Contraction_Dialect : Dialect {
     let name = "contraction";
     let cppNamespace = "::mlir::contraction";
+    let dependentDialects = ["func::FuncDialect"];
 }
 
 class Contraction_Op<string mnemonic, list<Trait> traits = []> :
