@@ -85,10 +85,10 @@ class Parser {
   void parseKeepTensors();
   void parseContractionTree();
   NamedIndexesTy parseNamedIndexes();
-  std::unique_ptr<Node> parseAddition();
-  std::unique_ptr<Node> parseMultiplication();
-  std::unique_ptr<Node> parseIndexedTensor();
-  std::unique_ptr<Node> parseContraction();
+  NodePtr parseAddition();
+  NodePtr parseMultiplication();
+  NodePtr parseIndexedTensor();
+  NodePtr parseContraction();
 
   IndexesTy insertIndexesMap(NamedIndexesTy &NamedIndexes) {
     IndexesTy Indexes;
@@ -193,7 +193,7 @@ Parser::NamedIndexesTy Parser::parseNamedIndexes() {
   return NamedIndexes;
 }
 
-std::unique_ptr<Node> Parser::parseAddition() {
+NodePtr Parser::parseAddition() {
   ChildNodesTy Childs;
   while (true) {
     Childs.emplace_back(parseMultiplication());
@@ -206,7 +206,7 @@ std::unique_ptr<Node> Parser::parseAddition() {
   return AdditionNode::get(Childs);
 }
 
-std::unique_ptr<Node> Parser::parseMultiplication() {
+NodePtr Parser::parseMultiplication() {
   ChildNodesTy Childs;
   while (true) {
     if (CurToken == Token_Contraction)
@@ -230,7 +230,7 @@ std::unique_ptr<Node> Parser::parseMultiplication() {
   return MultiplicationNode::get(Childs);
 }
 
-std::unique_ptr<Node> Parser::parseContraction() {
+NodePtr Parser::parseContraction() {
   assert(CurToken == Token_Contraction);
   CurToken = Lx.getNextToken();
   assert(CurToken == Token_ParentheseOpen);
@@ -249,7 +249,7 @@ std::unique_ptr<Node> Parser::parseContraction() {
   return ContractionNode::get(Sizes, Indexes, std::move(child));
 }
 
-std::unique_ptr<Node> Parser::parseIndexedTensor() {
+NodePtr Parser::parseIndexedTensor() {
   // get Name
   auto Name = std::string(Lx.getIdentifier());
   CurToken = Lx.getNextToken();

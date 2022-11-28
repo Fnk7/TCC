@@ -11,13 +11,20 @@ using llvm::SmallVector;
 using llvm::StringRef;
 
 namespace contraction {
+// Node is an AST node of Contraction Expression. It use the LLVM style RTTI.
+// And since LLVM Value class use deleteValue and ValueDeleter for unique_ptr,
+// std default_delete<Node> was not used here.
 class Node;
+struct NodeDeleter {
+  void operator()(Node *N);
+};
+using NodePtr = std::unique_ptr<Node, NodeDeleter>;
+
 class ContractionTree;
 
 using IndexTy = int64_t;
 using SizesTy = SmallVector<int, 4>;
 using IndexesTy = SmallVector<int64_t, 4>;
-using NodePtr = std::unique_ptr<Node>;
 using ChildNodesTy = SmallVector<NodePtr, 2>;
 
 class InputTensor {
@@ -34,6 +41,7 @@ public:
 
 class Node {
 public:
+  // NodeKind and LLVM RTTI
   enum NodeKind {
     NK_Root,
     NK_Contraction,
@@ -44,6 +52,28 @@ public:
     NK_TreeAsLeaf,
     NK_InputAsLeaf
   };
+  static const std::string getKindString(NodeKind K) {
+    switch (K) {
+    case NK_Root:
+      return "Root";
+    case NK_Contraction:
+      return "Contraction";
+    case NK_Addition:
+      return "Addition";
+    case NK_Multiplication:
+      return "Multiplication";
+    case NK_TreeAsLeaf:
+      return "TreeRef";
+    case NK_InputAsLeaf:
+      return "InputRef";
+    default:
+      return "Undifined";
+    }
+  }
+  friend llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, NodeKind K) {
+    OS << getKindString(K);
+    return OS;
+  }
 
 private:
   const NodeKind Kind;
@@ -55,10 +85,13 @@ protected:
   std::weak_ptr<ContractionTree> TreeLeaf;
   ChildNodesTy Childs;
 
-  Node(NodeKind Kind, NodePtr Child) : Kind(Kind) {
+  Node(NodeKind K) : Kind(K) {
+    // llvm::errs() << "Create Node " << K << "\n";
+  }
+  Node(NodeKind Kind, NodePtr Child) : Node(Kind) {
     Childs.emplace_back(std::move(Child));
   }
-  Node(NodeKind Kind, ChildNodesTy &Childs) : Kind(Kind) {
+  Node(NodeKind Kind, ChildNodesTy &Childs) : Node(Kind) {
     std::move(Childs.begin(), Childs.end(), std::back_inserter(this->Childs));
   }
   Node(IndexesTy &Indexes, std::weak_ptr<ContractionTree> TreeLeaf)
@@ -69,20 +102,20 @@ protected:
   void dump(int indent);
   void dumpChilds(int indent);
 
+  ~Node() = default;
+
 public:
   NodeKind getKind() const { return Kind; }
-  Node(NodeKind K) : Kind(K) {}
-
-  virtual ~Node() = default;
+  void deleteNode();
 
 public:
   template <typename... Args>
   static auto createNode(NodeKind Kind, Args &&...args) {
-    return std::unique_ptr<Node>(new Node(Kind, std::forward<Args>(args)...));
+    return NodePtr(new Node(Kind, std::forward<Args>(args)...));
   }
 
   template <typename... Args> static auto createLeafNode(Args &&...args) {
-    return std::unique_ptr<Node>(new Node(std::forward<Args>(args)...));
+    return NodePtr(new Node(std::forward<Args>(args)...));
   }
 
   void setContractionTree(std::shared_ptr<ContractionTree> tree) {
@@ -110,8 +143,7 @@ private:
 
 public:
   static NodePtr get(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child) {
-    return std::unique_ptr<Node>(
-        new RootNode(Sizes, Indexes, std::move(Child)));
+    return NodePtr(new RootNode(Sizes, Indexes, std::move(Child)));
   }
   // Functions
   Node &getChild() { return *Childs[0]; }
@@ -133,8 +165,7 @@ private:
 
 public:
   static NodePtr get(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child) {
-    return std::unique_ptr<Node>(
-        new ContractionNode(Sizes, Indexes, std::move(Child)));
+    return NodePtr(new ContractionNode(Sizes, Indexes, std::move(Child)));
   }
   // Funtions
   Node &getChild() { return *Childs[0]; }
@@ -162,7 +193,7 @@ private:
 
 public:
   static NodePtr get(ChildNodesTy &Childs) {
-    return std::unique_ptr<Node>(new AdditionNode(Childs));
+    return NodePtr(new AdditionNode(Childs));
   }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Addition; }
@@ -175,10 +206,12 @@ private:
 
 public:
   static NodePtr get(ChildNodesTy &Childs) {
-    return std::unique_ptr<Node>(new MultiplicationNode(Childs));
+    return NodePtr(new MultiplicationNode(Childs));
   }
   // For LLVM RTTI
-  static bool classof(const Node *N) { return N->getKind() == NK_Multiplication; }
+  static bool classof(const Node *N) {
+    return N->getKind() == NK_Multiplication;
+  }
 };
 
 class LeafNode : public Node {
@@ -206,7 +239,7 @@ private:
 
 public:
   static NodePtr get(IndexesTy &IndexUses, TreeRefTy TreeRef) {
-    return std::unique_ptr<Node>(new TreeAsLeafNode(IndexUses, TreeRef));
+    return NodePtr(new TreeAsLeafNode(IndexUses, TreeRef));
   }
   // Member Functions
   TreePtrTy getTree() { return TreeRef.lock(); }
@@ -226,7 +259,7 @@ private:
 
 public:
   static NodePtr get(IndexesTy &IndexUses, InputRefTy InputRef) {
-    return std::unique_ptr<Node>(new InputAsLeafNode(IndexUses, InputRef));
+    return NodePtr(new InputAsLeafNode(IndexUses, InputRef));
   }
   // Member Functions
   InputPtrTy getInput() { return InputRef.lock(); }
@@ -236,18 +269,39 @@ public:
   void dump(int);
 };
 
+inline void NodeDeleter::operator()(Node *N) { N->deleteNode(); }
+inline void Node::deleteNode() {
+  // llvm::errs() << "Delete Node " << getKind() << "\n";
+  if (auto *N = llvm::dyn_cast<RootNode>(this)) {
+    delete N;
+  } else if (auto *N = llvm::dyn_cast<ContractionNode>(this)) {
+    delete N;
+  } else if (auto *N = llvm::dyn_cast<AdditionNode>(this)) {
+    delete N;
+  } else if (auto *N = llvm::dyn_cast<MultiplicationNode>(this)) {
+    delete N;
+  } else if (auto *N = llvm::dyn_cast<TreeAsLeafNode>(this)) {
+    delete N;
+  } else if (auto *N = llvm::dyn_cast<InputAsLeafNode>(this)) {
+    delete N;
+  } else {
+    llvm_unreachable("Deleting Undifined Node");
+  }
+}
+} // namespace contraction
+
+namespace contraction {
 class ContractionTree {
   std::string Name;
   std::string UniqueName;
-  std::unique_ptr<Node> Root;
+  NodePtr Root;
 
-  ContractionTree(StringRef Name, std::unique_ptr<Node> Root)
+  ContractionTree(StringRef Name, NodePtr Root)
       : Name(std::string(Name)), UniqueName(std::string(Name)),
         Root(std::move(Root)) {}
 
 public:
-  static std::shared_ptr<ContractionTree> create(StringRef Name,
-                                                 std::unique_ptr<Node> Root) {
+  static std::shared_ptr<ContractionTree> create(StringRef Name, NodePtr Root) {
     auto CT = std::shared_ptr<ContractionTree>(
         new ContractionTree(Name, std::move(Root)));
     CT->Root->setContractionTree(CT);
@@ -256,7 +310,7 @@ public:
   RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
   StringRef getName() { return Name; }
   StringRef getUniqueName() { return UniqueName; }
-  std::unique_ptr<Node> &getRoot() { return Root; }
+  NodePtr &getRoot() { return Root; }
   SizesTy &getSizes() { return getRootNode().getSizes(); }
   int getDimension() { return getSizes().size(); }
   void setUniqueName(StringRef UniqueName) {
