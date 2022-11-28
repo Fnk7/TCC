@@ -4,6 +4,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Casting.h"
 
 using llvm::DenseMap;
 using llvm::SmallVector;
@@ -13,9 +14,11 @@ namespace contraction {
 class Node;
 class ContractionTree;
 
+using IndexTy = int64_t;
 using SizesTy = SmallVector<int, 4>;
 using IndexesTy = SmallVector<int64_t, 4>;
-using ChildNodesTy = SmallVector<std::unique_ptr<Node>, 2>;
+using NodePtr = std::unique_ptr<Node>;
+using ChildNodesTy = SmallVector<NodePtr, 2>;
 
 class InputTensor {
   std::string Name;
@@ -31,59 +34,53 @@ public:
 
 class Node {
 public:
-  enum NodeType : int {
-    Root = 0,
-    Contraction = 1,
-    Addition = 2,
-    Multiplication = 3,
-    TreeAsLeaf = 4,
-    InputAsLeaf = 5,
+  enum NodeKind {
+    NK_Root,
+    NK_Contraction,
+    NK_Arith,
+    NK_Addition,
+    NK_Multiplication,
+    NK_Leaf,
+    NK_TreeAsLeaf,
+    NK_InputAsLeaf
   };
-  NodeType Type;
 
 private:
+  const NodeKind Kind;
+
+protected:
   SizesTy Sizes;
   IndexesTy Indexes;
   std::weak_ptr<InputTensor> InputLeaf;
   std::weak_ptr<ContractionTree> TreeLeaf;
   ChildNodesTy Childs;
 
-  Node(NodeType Type, SizesTy &Sizes, IndexesTy &Indexes,
-       std::unique_ptr<Node> Child)
-      : Type(Type), Sizes(Sizes), Indexes(Indexes) {
+  Node(NodeKind Kind, NodePtr Child) : Kind(Kind) {
     Childs.emplace_back(std::move(Child));
   }
-  Node(NodeType Type, ChildNodesTy &Childs) : Type(Type) {
+  Node(NodeKind Kind, ChildNodesTy &Childs) : Kind(Kind) {
     std::move(Childs.begin(), Childs.end(), std::back_inserter(this->Childs));
   }
   Node(IndexesTy &Indexes, std::weak_ptr<ContractionTree> TreeLeaf)
-      : Type(TreeAsLeaf), Indexes(Indexes), TreeLeaf(TreeLeaf) {}
+      : Kind(NK_TreeAsLeaf), Indexes(Indexes), TreeLeaf(TreeLeaf) {}
   Node(IndexesTy &Indexes, std::weak_ptr<InputTensor> InputLeaf)
-      : Type(InputAsLeaf), Indexes(Indexes), InputLeaf(InputLeaf) {}
+      : Kind(NK_InputAsLeaf), Indexes(Indexes), InputLeaf(InputLeaf) {}
 
   void dump(int indent);
   void dumpChilds(int indent);
 
 public:
+  NodeKind getKind() const { return Kind; }
+  Node(NodeKind K) : Kind(K) {}
+
+  virtual ~Node() = default;
+
+public:
   template <typename... Args>
-  static auto createNode(NodeType Type, Args &&...args) {
-    return std::unique_ptr<Node>(new Node(Type, std::forward<Args>(args)...));
+  static auto createNode(NodeKind Kind, Args &&...args) {
+    return std::unique_ptr<Node>(new Node(Kind, std::forward<Args>(args)...));
   }
 
-  template <typename... Args> static auto createRootNode(Args &&...args) {
-    return createNode(Root, std::forward<Args>(args)...);
-  }
-  template <typename... Args>
-  static auto createContractionNode(Args &&...args) {
-    return createNode(Contraction, std::forward<Args>(args)...);
-  }
-  template <typename... Args> static auto createAdditionNode(Args &&...args) {
-    return createNode(Addition, std::forward<Args>(args)...);
-  }
-  template <typename... Args>
-  static auto createMultiplicationNode(Args &&...args) {
-    return createNode(Multiplication, std::forward<Args>(args)...);
-  }
   template <typename... Args> static auto createLeafNode(Args &&...args) {
     return std::unique_ptr<Node>(new Node(std::forward<Args>(args)...));
   }
@@ -101,7 +98,142 @@ public:
     return TreeLeaf.lock();
   }
 
-  void dump() { dump(0); };
+  void dump() { dump(0); }
+};
+
+class RootNode : public Node {
+private:
+  SizesTy Sizes;
+  IndexesTy IndexDefs;
+  RootNode(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child)
+      : Node(NK_Root, std::move(Child)), Sizes(Sizes), IndexDefs(Indexes) {}
+
+public:
+  static NodePtr get(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child) {
+    return std::unique_ptr<Node>(
+        new RootNode(Sizes, Indexes, std::move(Child)));
+  }
+  // Functions
+  Node &getChild() { return *Childs[0]; }
+  SizesTy &getSizes() { return Sizes; }
+  IndexesTy &getIndexes() { return IndexDefs; }
+  // For LLVM RTTI
+  static bool classof(const Node *N) { return N->getKind() == NK_Root; }
+  // dump
+  void dump(int);
+};
+
+class ContractionNode : public Node {
+private:
+  SizesTy Sizes;
+  IndexesTy IndexDefs;
+  ContractionNode(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child)
+      : Node(NK_Contraction, std::move(Child)), Sizes(Sizes),
+        IndexDefs(Indexes) {}
+
+public:
+  static NodePtr get(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child) {
+    return std::unique_ptr<Node>(
+        new ContractionNode(Sizes, Indexes, std::move(Child)));
+  }
+  // Funtions
+  Node &getChild() { return *Childs[0]; }
+  SizesTy &getSizes() { return Sizes; }
+  IndexesTy &getIndexes() { return IndexDefs; }
+  // For LLVM RTTI
+  static bool classof(const Node *N) { return N->getKind() == NK_Contraction; }
+  // dump
+  void dump(int);
+};
+
+class ArithNode : public Node {
+protected:
+  ArithNode(NodeKind Kind, ChildNodesTy &Childs) : Node(Kind, Childs) {}
+
+public:
+  static bool classof(const Node *N) {
+    return N->getKind() == NK_Addition || N->getKind() == NK_Multiplication;
+  }
+};
+
+class AdditionNode : public ArithNode {
+private:
+  AdditionNode(ChildNodesTy &Childs) : ArithNode(NK_Addition, Childs) {}
+
+public:
+  static NodePtr get(ChildNodesTy &Childs) {
+    return std::unique_ptr<Node>(new AdditionNode(Childs));
+  }
+  // For LLVM RTTI
+  static bool classof(const Node *N) { return N->getKind() == NK_Addition; }
+};
+
+class MultiplicationNode : public ArithNode {
+private:
+  MultiplicationNode(ChildNodesTy &Childs)
+      : ArithNode(NK_Multiplication, Childs) {}
+
+public:
+  static NodePtr get(ChildNodesTy &Childs) {
+    return std::unique_ptr<Node>(new MultiplicationNode(Childs));
+  }
+  // For LLVM RTTI
+  static bool classof(const Node *N) { return N->getKind() == NK_Multiplication; }
+};
+
+class LeafNode : public Node {
+protected:
+  IndexesTy IndexUses;
+  LeafNode(NodeKind Kind, IndexesTy &IndexUses)
+      : Node(Kind), IndexUses(IndexUses) {}
+
+public:
+  // Member Functions
+  IndexesTy &getIndexUses() { return IndexUses; }
+  // For LLVM RTTI
+  static bool classof(const Node *N) {
+    return N->getKind() == NK_TreeAsLeaf || N->getKind() == NK_InputAsLeaf;
+  }
+};
+
+using TreePtrTy = std::shared_ptr<ContractionTree>;
+using TreeRefTy = std::weak_ptr<ContractionTree>;
+class TreeAsLeafNode : public LeafNode {
+private:
+  TreeRefTy TreeRef;
+  TreeAsLeafNode(IndexesTy &IndexUses, TreeRefTy TreeRef)
+      : LeafNode(NK_TreeAsLeaf, IndexUses), TreeRef(TreeRef) {}
+
+public:
+  static NodePtr get(IndexesTy &IndexUses, TreeRefTy TreeRef) {
+    return std::unique_ptr<Node>(new TreeAsLeafNode(IndexUses, TreeRef));
+  }
+  // Member Functions
+  TreePtrTy getTree() { return TreeRef.lock(); }
+  // For LLVM RTTI
+  static bool classof(const Node *N) { return N->getKind() == NK_TreeAsLeaf; }
+  // dump
+  void dump(int);
+};
+
+using InputPtrTy = std::shared_ptr<InputTensor>;
+using InputRefTy = std::weak_ptr<InputTensor>;
+class InputAsLeafNode : public LeafNode {
+private:
+  InputRefTy InputRef;
+  InputAsLeafNode(IndexesTy &IndexUses, InputRefTy InputRef)
+      : LeafNode(NK_InputAsLeaf, IndexUses), InputRef(InputRef) {}
+
+public:
+  static NodePtr get(IndexesTy &IndexUses, InputRefTy InputRef) {
+    return std::unique_ptr<Node>(new InputAsLeafNode(IndexUses, InputRef));
+  }
+  // Member Functions
+  InputPtrTy getInput() { return InputRef.lock(); }
+  // For LLVM RTTI
+  static bool classof(const Node *N) { return N->getKind() == NK_InputAsLeaf; }
+  // dump
+  void dump(int);
 };
 
 class ContractionTree {
@@ -121,11 +253,12 @@ public:
     CT->Root->setContractionTree(CT);
     return CT;
   }
+  RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
   StringRef getName() { return Name; }
   StringRef getUniqueName() { return UniqueName; }
   std::unique_ptr<Node> &getRoot() { return Root; }
-  SizesTy &getSizes() { return Root->getSizes(); }
-  int getDimension() { return Root->getSizes().size(); }
+  SizesTy &getSizes() { return getRootNode().getSizes(); }
+  int getDimension() { return getSizes().size(); }
   void setUniqueName(StringRef UniqueName) {
     this->UniqueName = std::string(UniqueName);
   }

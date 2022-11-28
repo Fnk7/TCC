@@ -170,7 +170,7 @@ void Parser::parseContractionTree() {
   eraseIndexesMap(NamedIndexes);
   // create tree
   auto Sizes = getSizes(Indexes);
-  auto Root = Node::createRootNode(Sizes, Indexes, std::move(child));
+  auto Root = RootNode::get(Sizes, Indexes, std::move(child));
   auto CT = ContractionTree::create(Name, std::move(Root));
   CF->addContractionTree(CT);
 }
@@ -203,7 +203,7 @@ std::unique_ptr<Node> Parser::parseAddition() {
   }
   if (Childs.size() == 1)
     return std::move(Childs[0]);
-  return Node::createAdditionNode(Childs);
+  return AdditionNode::get(Childs);
 }
 
 std::unique_ptr<Node> Parser::parseMultiplication() {
@@ -227,7 +227,7 @@ std::unique_ptr<Node> Parser::parseMultiplication() {
   }
   if (Childs.size() == 1)
     return std::move(Childs[0]);
-  return Node::createMultiplicationNode(Childs);
+  return MultiplicationNode::get(Childs);
 }
 
 std::unique_ptr<Node> Parser::parseContraction() {
@@ -246,7 +246,7 @@ std::unique_ptr<Node> Parser::parseContraction() {
   eraseIndexesMap(NamedIndexes);
   // create Node
   auto Sizes = getSizes(Indexes);
-  return Node::createContractionNode(Sizes, Indexes, std::move(child));
+  return ContractionNode::get(Sizes, Indexes, std::move(child));
 }
 
 std::unique_ptr<Node> Parser::parseIndexedTensor() {
@@ -261,13 +261,13 @@ std::unique_ptr<Node> Parser::parseIndexedTensor() {
     // parse indexed tensor
     CF->setSizeEqual(Sz1, CT->getSizes());
     setSizes(Indexes, Sz1);
-    return Node::createLeafNode(Indexes, CT);
+    return TreeAsLeafNode::get(Indexes, CT);
   } else {
     // parse Input tensor
     auto IT = CF->getOrInsertInputTensor(Name, Indexes.size());
     CF->setSizeEqual(Sz1, IT->getSizes());
     setSizes(Indexes, Sz1);
-    return Node::createLeafNode(Indexes, IT);
+    return InputAsLeafNode::get(Indexes, IT);
   }
 }
 

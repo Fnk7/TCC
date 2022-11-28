@@ -27,40 +27,58 @@ void InputTensor::dump() {
   dumpSizes(Sizes);
 }
 
-void Node::dump(int indent) {
+void RootNode::dump(int indent) {
   errs().indent(indent);
-  if (Type == Root) {
-    errs() << TreeLeaf.lock()->getUniqueName() << " ";
-    dumpSizes(Sizes);
-    errs() << " -> ";
-    dumpIndexes(Indexes);
-    dumpChilds(indent);
-  } else if (Type == Addition) {
+  errs() << TreeLeaf.lock()->getUniqueName() << " ";
+  dumpSizes(Sizes);
+  errs() << " -> ";
+  dumpIndexes(IndexDefs);
+  dumpChilds(indent);
+}
+void ContractionNode::dump(int indent) {
+  errs().indent(indent);
+  errs() << "Contraction ";
+  dumpSizes(Sizes);
+  errs() << " -> ";
+  dumpIndexes(IndexDefs);
+  dumpChilds(indent);
+}
+void TreeAsLeafNode::dump(int indent) {
+  errs().indent(indent);
+  errs() << TreeRef.lock()->getUniqueName();
+  errs() << " [tree] ";
+  dumpIndexes(IndexUses);
+  dumpChilds(indent);
+}
+void InputAsLeafNode::dump(int indent) {
+  errs().indent(indent);
+  errs() << InputRef.lock()->getName();
+  errs() << " [Input] ";
+  dumpIndexes(IndexUses);
+  dumpChilds(indent);
+}
+
+void Node::dump(int indent) {
+  if (auto *RN = dyn_cast<RootNode>(this)) {
+    RN->dump(indent);
+  } else if (auto *CN = dyn_cast<ContractionNode>(this)) {
+    CN->dump(indent);
+  } else if (getKind() == NK_Addition) {
+    errs().indent(indent);
     errs() << "Addition {";
     dumpChilds(indent);
     errs().indent(indent);
     errs() << "}\n";
-  } else if (Type == Multiplication) {
+  } else if (getKind() == NK_Multiplication) {
+    errs().indent(indent);
     errs() << "Multiplication {";
     dumpChilds(indent);
     errs().indent(indent);
     errs() << "}\n";
-  } else if (Type == Contraction) {
-    errs() << "Contraction ";
-    dumpSizes(Sizes);
-    errs() << " -> ";
-    dumpIndexes(Indexes);
-    dumpChilds(indent);
-  } else if (Type == InputAsLeaf) {
-    errs() << InputLeaf.lock()->getName();
-    errs() << " [Input] ";
-    dumpIndexes(Indexes);
-    dumpChilds(indent);
-  } else if (Type == TreeAsLeaf) {
-    errs() << TreeLeaf.lock()->getUniqueName();
-    errs() << " [tree] ";
-    dumpIndexes(Indexes);
-    dumpChilds(indent);
+  } else if (auto *TLN = dyn_cast<TreeAsLeafNode>(this)) {
+    TLN->dump(indent);
+  } else if (auto *ILN = dyn_cast<InputAsLeafNode>(this)) {
+    ILN->dump(indent);
   }
 }
 void Node::dumpChilds(int indent) {

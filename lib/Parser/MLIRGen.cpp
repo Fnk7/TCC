@@ -11,6 +11,11 @@
 #include "TCC/Dialect/ContractionOps.h"
 #include "TCC/MLIRGen.h"
 
+using llvm::cast;
+using llvm::isa;
+
+using llvm::errs;
+
 using namespace contraction;
 
 namespace mlir {
@@ -101,17 +106,21 @@ private:
   }
 
   Value generateNode(Node &N) {
-    if (N.Type == Node::Root) {
-      return generateRootNode(N);
-    } else if (N.Type == Node::Addition) {
-      return generateArithNode<AddOp>(N);
-    } else if (N.Type == Node::Multiplication) {
-      return generateArithNode<MulOp>(N);
-    } else if (N.Type == Node::InputAsLeaf || N.Type == Node::TreeAsLeaf) {
-      return generateIndexedTensorNode(N);
+    if (isa<RootNode>(N)) {
+      return generateNode(cast<RootNode>(N));
+    } else if (isa<ContractionNode>(N)) {
+      return generateNode(cast<ContractionNode>(N));
+    } else if (isa<AdditionNode>(N)) {
+      return generateNode<AddOp>(cast<ArithNode>(N));
+    } else if (isa<MultiplicationNode>(N)) {
+      return generateNode<MulOp>(cast<ArithNode>(N));
+    } else if (isa<TreeAsLeafNode>(N)) {
+      return generateNode(cast<TreeAsLeafNode>(N));
+    } else if (isa<InputAsLeafNode>(N)) {
+      return generateNode(cast<InputAsLeafNode>(N));
     } else {
-      assert(N.Type == Node::Contraction);
-      return generateContractionNode(N);
+      errs() << "Generate Node of Kind: " << N.getKind() << "\n";
+      llvm_unreachable("Undefined Node Kind\n");
     }
   }
   static SmallVector<int64_t> getTensorSizes(Value V) {
@@ -124,10 +133,10 @@ private:
     }
     return Sizes;
   }
-  Value generateRootNode(Node &N) {
-    Value V = generateNode(N.getSingleChild());
+  Value generateNode(RootNode &RN) {
+    Value V = generateNode(RN.getChild());
     IndexesTy &InIndexes = ValueIndexesMap[V];
-    IndexesTy &OutIndexes = N.getIndexes();
+    IndexesTy &OutIndexes = RN.getIndexes();
     assert(InIndexes.size() == OutIndexes.size());
     SmallVector<int64_t> AxesMap;
     for (auto Idx : InIndexes) {
@@ -152,11 +161,11 @@ private:
     V = OB.create<PermuteOp>(Loc, OutType, V, AxesMapAttr);
     return V;
   }
-  Value generateContractionNode(Node &N) {
-    Value V = generateNode(N.getSingleChild());
+  Value generateNode(ContractionNode &CN) {
+    Value V = generateNode(CN.getChild());
     auto InSizes = getTensorSizes(V);
     IndexesTy &InIndexes = ValueIndexesMap[V];
-    IndexesTy &CtIndexes = N.getIndexes();
+    IndexesTy &CtIndexes = CN.getIndexes();
     IndexesTy OutIndexes;
     SmallVector<int64_t> OutSizes;
     SmallVector<int64_t> ContractedAxes;
@@ -177,8 +186,8 @@ private:
     ValueIndexesMap[V] = OutIndexes;
     return V;
   }
-  template <class T> Value generateArithNode(Node &N) {
-    auto &Childs = N.getChilds();
+  template <class T> Value generateNode(ArithNode &AN) {
+    auto &Childs = AN.getChilds();
     SmallVector<Value> Operands;
     SmallVector<int64_t> OutSizes;
     IndexesTy OutIndexes;
@@ -215,17 +224,16 @@ private:
     ValueIndexesMap[V] = OutIndexes;
     return V;
   }
-  Value generateIndexedTensorNode(Node &N) {
-    Value V;
-    if (N.Type == Node::InputAsLeaf) {
-      auto IT = N.getInputTensor();
-      V = InputTensorValueMap[IT->getName()];
-    } else {
-      assert(N.Type == Node::TreeAsLeaf);
-      auto CT = N.getContractionTensor();
-      V = TreeTensorValueMap[CT->getName()];
-    }
-    ValueIndexesMap[V] = N.getIndexes();
+  Value generateNode(TreeAsLeafNode &TALN) {
+    auto CT = TALN.getTree();
+    Value V = TreeTensorValueMap[CT->getName()];
+    ValueIndexesMap[V] = TALN.getIndexUses();
+    return V;
+  }
+  Value generateNode(InputAsLeafNode &IALN) {
+    auto IT = IALN.getInput();
+    Value V = InputTensorValueMap[IT->getName()];
+    ValueIndexesMap[V] = IALN.getIndexUses();
     return V;
   }
 };
