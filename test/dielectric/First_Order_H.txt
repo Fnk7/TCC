@@ -1,0 +1,7 @@
+first_order_sigama(p) = sum((c), gradient_rho(p,c) * first_order_gradient_rho(p,c))
+pf1(p) = ptab(p) * (first_order_potential(p) + v2rho2(p) * first_order_rho(p) + v2rhosigma(p) * first_order_sigama(p))
+pf2(p) = ptab(p) * (v2rhosigma(p) * first_order_rho(p) + v2sigma2(p) * first_order_sigama(p))
+pf3(p) = partition_tab(p) * vsigma(p)
+pf23(p,c) = gradient_rho(p,c) * pf2(p) + first_order_gradient_rho(p,c) * pf3(p)
+H(i,j) = sum((p), wave(p,i) * pf1(p) * wave(p,j) + wave(p,i) * sum((c), pf23(p,c) * gradient_basis_wave(p,c,j)) + sum((c), pf23(p,c) * gradient_basis_wave(p,c,i)) * wave(p,j))
+keep H

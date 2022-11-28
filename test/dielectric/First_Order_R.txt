@@ -1,0 +1,2 @@
+R(p) = sum((i,j), wave(p,i) * DM(i,j) * wave(p,j))
+keep R
