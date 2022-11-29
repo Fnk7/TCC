@@ -55,37 +55,11 @@ public:
     NK_TreeAsLeaf,
     NK_InputAsLeaf
   };
-  static const std::string getKindString(NodeKind K) {
-    switch (K) {
-    case NK_Root:
-      return "Root";
-    case NK_Contraction:
-      return "Contraction";
-    case NK_Addition:
-      return "Addition";
-    case NK_Multiplication:
-      return "Multiplication";
-    case NK_TreeAsLeaf:
-      return "TreeRef";
-    case NK_InputAsLeaf:
-      return "InputRef";
-    default:
-      return "Undifined";
-    }
-  }
-  friend llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, NodeKind K) {
-    OS << getKindString(K);
-    return OS;
-  }
-
-private:
-  const NodeKind Kind;
 
 protected:
+  const NodeKind Kind;
   ChildNodesTy Childs;
-  Node(NodeKind K) : Kind(K) {
-    // llvm::errs() << "Create Node " << K << "\n";
-  }
+  Node(NodeKind K) : Kind(K) {}
   Node(NodeKind Kind, NodePtr Child) : Node(Kind) {
     Childs.emplace_back(std::move(Child));
   }
@@ -94,16 +68,22 @@ protected:
   }
   ~Node() = default;
 
-  void dump(int indent);
-  void dumpChilds(int indent);
-
 public:
   NodeKind getKind() const { return Kind; }
   ChildNodesTy &getChilds() { return Childs; }
   void deleteNode();
+  // Print
   void dump() { dump(0); }
+  void dump(int indent);
+  void dumpChilds(int indent);
+  static const std::string getKindString(NodeKind K);
+  friend llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, NodeKind K) {
+    OS << getKindString(K);
+    return OS;
+  }
 };
 
+// RootNode: Write result into tensor, and define indexes.
 class RootNode : public Node {
 private:
   SizesTy Sizes;
@@ -125,6 +105,7 @@ public:
   void dump(int);
 };
 
+// ContractionNode: Contract tensor in some axes, where the indexes defined for.
 class ContractionNode : public Node {
 private:
   SizesTy Sizes;
@@ -147,6 +128,7 @@ public:
   void dump(int);
 };
 
+// ArithNode: addition, negative or multiplication.
 class ArithNode : public Node {
 protected:
   ArithNode(NodeKind Kind, ChildNodesTy &Childs) : Node(Kind, Childs) {}
@@ -157,6 +139,7 @@ public:
   }
 };
 
+// AdditionNode: tensor addition, more than elementwise.
 class AdditionNode : public ArithNode {
 private:
   AdditionNode(ChildNodesTy &Childs) : ArithNode(NK_Addition, Childs) {}
@@ -169,6 +152,7 @@ public:
   static bool classof(const Node *N) { return N->getKind() == NK_Addition; }
 };
 
+// AdditionNode: tensor multiplication, more than elementwise.
 class MultiplicationNode : public ArithNode {
 private:
   MultiplicationNode(ChildNodesTy &Childs)
@@ -184,6 +168,8 @@ public:
   }
 };
 
+// LeafNode: Reference of a tensor either input or contraction expression
+// result.
 class LeafNode : public Node {
 protected:
   IndexesTy IndexUses;
@@ -201,6 +187,7 @@ public:
 
 using TreePtrTy = std::shared_ptr<ContractionTree>;
 using TreeRefTy = std::weak_ptr<ContractionTree>;
+// TreeAsLeafNode: Reference to a contraction expression result.
 class TreeAsLeafNode : public LeafNode {
 private:
   TreeRefTy TreeRef;
@@ -221,6 +208,7 @@ public:
 
 using InputPtrTy = std::shared_ptr<InputTensor>;
 using InputRefTy = std::weak_ptr<InputTensor>;
+// InputAsLeafNode: Reference to an input tensor.
 class InputAsLeafNode : public LeafNode {
 private:
   InputRefTy InputRef;
@@ -239,6 +227,7 @@ public:
   void dump(int);
 };
 
+// LLVM RTTI unique_ptr release.
 inline void NodeDeleter::operator()(Node *N) { N->deleteNode(); }
 inline void Node::deleteNode() {
   // llvm::errs() << "Delete Node " << getKind() << "\n";
@@ -258,9 +247,7 @@ inline void Node::deleteNode() {
     llvm_unreachable("Deleting Undifined Node");
   }
 }
-} // namespace contraction
 
-namespace contraction {
 class ContractionTree {
   std::string Name;
   std::string UniqueName;

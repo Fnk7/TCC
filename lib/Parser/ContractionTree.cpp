@@ -5,6 +5,25 @@
 using namespace llvm;
 
 namespace contraction {
+const std::string Node::getKindString(NodeKind K) {
+  switch (K) {
+  case NK_Root:
+    return "Root";
+  case NK_Contraction:
+    return "Contraction";
+  case NK_Addition:
+    return "Addition";
+  case NK_Multiplication:
+    return "Multiplication";
+  case NK_TreeAsLeaf:
+    return "TreeRef";
+  case NK_InputAsLeaf:
+    return "InputRef";
+  default:
+    return "Undifined";
+  }
+}
+
 static void dumpSizes(SizesTy &Sizes) {
   if (Sizes.size()) {
     errs() << "(Sz" << Sizes[0];
