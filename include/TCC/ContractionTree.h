@@ -29,6 +29,14 @@ using CTreePtr = ContractionTree *;
 using CTreePtrs = SmallVector<CTreePtr>;
 using CTreesMap = DenseMap<StringRef, CTreePtr>;
 
+// InputTensor represents the arrays used by Contraction Expression that not
+// defined by predecessor expressions.
+class InputTensor;
+using InTensors = SmallVector<std::unique_ptr<InputTensor>>;
+using InTensorPtr = InputTensor *;
+using InTensorPtrs = SmallVector<InTensorPtr>;
+using InTensorsMap = DenseMap<StringRef, InTensorPtr>;
+
 using IndexTy = int64_t;
 using SizesTy = SmallVector<int, 4>;
 using IndexesTy = SmallVector<int64_t, 4>;
@@ -39,7 +47,7 @@ class InputTensor {
   SizesTy Sizes;
 
 public:
-  InputTensor(std::string Name, SizesTy Sizes) : Name(Name), Sizes(Sizes) {}
+  InputTensor(StringRef Name, SizesTy Sizes) : Name(Name), Sizes(Sizes) {}
   StringRef getName() { return Name; }
   SizesTy &getSizes() { return Sizes; }
   int getDimension() { return Sizes.size(); }
@@ -208,21 +216,19 @@ public:
   void dump(int);
 };
 
-using InputPtrTy = std::shared_ptr<InputTensor>;
-using InputRefTy = std::weak_ptr<InputTensor>;
 // InputAsLeafNode: Reference to an input tensor.
 class InputAsLeafNode : public LeafNode {
 private:
-  InputRefTy InputRef;
-  InputAsLeafNode(IndexesTy &IndexUses, InputRefTy InputRef)
+  InTensorPtr InputRef;
+  InputAsLeafNode(IndexesTy &IndexUses, InTensorPtr InputRef)
       : LeafNode(NK_InputAsLeaf, IndexUses), InputRef(InputRef) {}
 
 public:
-  static NodePtr get(IndexesTy &IndexUses, InputRefTy InputRef) {
+  static NodePtr get(IndexesTy &IndexUses, InTensorPtr InputRef) {
     return NodePtr(new InputAsLeafNode(IndexUses, InputRef));
   }
   // Member Functions
-  InputPtrTy getInput() { return InputRef.lock(); }
+  InTensorPtr getInput() { return InputRef; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_InputAsLeaf; }
   // dump
@@ -265,7 +271,6 @@ public:
   RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
   StringRef getName() { return Name; }
   StringRef getUniqueName() { return UniqueName; }
-  NodePtr &getRoot() { return Root; }
   SizesTy &getSizes() { return getRootNode().getSizes(); }
   int getDimension() { return getSizes().size(); }
   void setUniqueName(StringRef UniqueName) {
@@ -274,20 +279,17 @@ public:
   void dump();
 };
 
-using InputTensorsTy = SmallVector<std::shared_ptr<InputTensor>>;
-using InputTensorMapTy = DenseMap<StringRef, std::shared_ptr<InputTensor>>;
-
 class ContractionForest {
   std::string Name;
   // Inputs and outputs and reserves
   SizesTy InputSizes;
   SizesTy InputSizeMap;
-  InputTensorsTy InputTensors;
-  InputTensorsTy ReservedInputs;
+  InTensors InputTensors;
+  InTensorPtrs ReservedInputs;
   CTreePtrs OutputTrees;
   // Shapes and trees
   SizesTy Sizes;
-  InputTensorMapTy InputMap;
+  InTensorsMap InputMap;
   CTrees Trees;
   CTreesMap TreeMap;
 
@@ -295,14 +297,14 @@ public:
   ContractionForest() { Name = "Contraction"; }
   void dump();
 
-  std::shared_ptr<InputTensor> getInputTensor(StringRef Name) {
+  InTensorPtr getInputTensor(StringRef Name) {
     if (InputMap.count(Name)) {
       return InputMap[Name];
     }
     return nullptr;
   }
-  std::shared_ptr<InputTensor> getOrInsertInputTensor(StringRef Name, int dim) {
-    std::shared_ptr<InputTensor> IT;
+  InTensorPtr getOrInsertInputTensor(StringRef Name, int dim) {
+    InTensorPtr IT;
     if (InputMap.count(Name)) {
       IT = InputMap[Name];
       assert(IT->getDimension() == dim);
@@ -311,8 +313,8 @@ public:
       for (int Sz = 0; Sz < dim; Sz++)
         InputSizes.emplace_back(Sizes.size() + Sz);
       Sizes.append(InputSizes);
-      IT = std::make_shared<InputTensor>(std::string(Name), InputSizes);
-      InputTensors.emplace_back(IT);
+      InputTensors.emplace_back(new InputTensor(Name, InputSizes));
+      IT = InputTensors.back().get();
       InputMap[IT->getName()] = IT;
     }
     return IT;
@@ -382,7 +384,7 @@ public:
 
   StringRef getName() { return Name; }
   SizesTy &getInputSizes() { return InputSizes; }
-  InputTensorsTy &getInputTensors() { return InputTensors; }
+  InTensors &getInputTensors() { return InputTensors; }
   CTreePtrs &getOutputTensors() { return OutputTrees; }
   CTrees &getContractionTrees() { return Trees; }
 

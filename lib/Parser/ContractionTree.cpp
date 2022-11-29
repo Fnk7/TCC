@@ -48,7 +48,7 @@ void InputTensor::dump() {
 
 void RootNode::dump(int indent) {
   errs().indent(indent);
-  errs() << "Root ";
+  errs() << getKind() << " ";
   dumpSizes(Sizes);
   errs() << " -> ";
   dumpIndexes(IndexDefs);
@@ -56,7 +56,7 @@ void RootNode::dump(int indent) {
 }
 void ContractionNode::dump(int indent) {
   errs().indent(indent);
-  errs() << "Contraction ";
+  errs() << getKind() << " ";
   dumpSizes(Sizes);
   errs() << " -> ";
   dumpIndexes(IndexDefs);
@@ -65,13 +65,13 @@ void ContractionNode::dump(int indent) {
 void TreeAsLeafNode::dump(int indent) {
   errs().indent(indent);
   errs() << TreeRef->getUniqueName();
-  errs() << " [tree] ";
+  errs() << " [CTree] ";
   dumpIndexes(IndexUses);
   dumpChilds(indent);
 }
 void InputAsLeafNode::dump(int indent) {
   errs().indent(indent);
-  errs() << InputRef.lock()->getName();
+  errs() << InputRef->getName();
   errs() << " [Input] ";
   dumpIndexes(IndexUses);
   dumpChilds(indent);

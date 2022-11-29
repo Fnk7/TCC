@@ -42,7 +42,7 @@ public:
     M = ModuleOp::create(Loc);
     OB.setInsertionPointToEnd(M.getBody());
     // create mlir function
-    InputTensorsTy &ITs = CF.getInputTensors();
+    InTensors &ITs = CF.getInputTensors();
     CTreePtrs &OTs = CF.getOutputTensors();
     SmallVector<Type> InputTypes;
     for (auto &IT : ITs) {
@@ -101,7 +101,7 @@ public:
 private:
   void generateContractionTree(ContractionTree &CT) {
     ValueIndexesMap.clear();
-    auto Value = generateNode(*(CT.getRoot()));
+    auto Value = generateNode(CT.getRootNode());
     TreeTensorValueMap[CT.getName()] = Value;
   }
 
