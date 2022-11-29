@@ -166,13 +166,12 @@ void Parser::parseContractionTree() {
   // parse expressions
   assert(CurToken == Token_Equal);
   CurToken = Lx.getNextToken();
-  auto child = parseAddition();
+  auto Child = parseAddition();
   eraseIndexesMap(NamedIndexes);
   // create tree
   auto Sizes = getSizes(Indexes);
-  auto Root = RootNode::get(Sizes, Indexes, std::move(child));
-  auto CT = ContractionTree::create(Name, std::move(Root));
-  CF->addContractionTree(CT);
+  auto Root = RootNode::get(Sizes, Indexes, std::move(Child));
+  CF->addContractionTree(Name, std::move(Root));
 }
 
 Parser::NamedIndexesTy Parser::parseNamedIndexes() {
@@ -257,7 +256,7 @@ NodePtr Parser::parseIndexedTensor() {
   NamedIndexesTy NamedIndexes = parseNamedIndexes();
   IndexesTy Indexes = getIndexes(NamedIndexes);
   SizesTy Sz1 = getSizes(Indexes);
-  if (auto CT = CF->getContractionTree(Name)) {
+  if (auto *CT = CF->getContractionTree(Name)) {
     // parse indexed tensor
     CF->setSizeEqual(Sz1, CT->getSizes());
     setSizes(Indexes, Sz1);

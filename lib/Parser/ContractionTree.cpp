@@ -64,7 +64,7 @@ void ContractionNode::dump(int indent) {
 }
 void TreeAsLeafNode::dump(int indent) {
   errs().indent(indent);
-  errs() << TreeRef.lock()->getUniqueName();
+  errs() << TreeRef->getUniqueName();
   errs() << " [tree] ";
   dumpIndexes(IndexUses);
   dumpChilds(indent);
@@ -152,8 +152,8 @@ void ContractionForest::dump() {
     errs() << "\n";
   }
   errs() << "Contraction Trees:\n";
-  for (auto &tree : Trees)
-    tree->dump();
+  for (auto &Tree : Trees)
+    Tree->dump();
   errs() << "Result outputs: ";
   if (OutputTrees.size()) {
     errs() << OutputTrees[0]->getUniqueName();

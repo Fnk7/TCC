@@ -24,6 +24,10 @@ using NodePtr = std::unique_ptr<Node, NodeDeleter>;
 // some calculation (contraction is major) and store value to a tensor. The
 // result can be used by succeed Expression.
 class ContractionTree;
+using CTrees = SmallVector<std::unique_ptr<ContractionTree>>;
+using CTreePtr = ContractionTree *;
+using CTreePtrs = SmallVector<CTreePtr>;
+using CTreesMap = DenseMap<StringRef, CTreePtr>;
 
 using IndexTy = int64_t;
 using SizesTy = SmallVector<int, 4>;
@@ -185,21 +189,19 @@ public:
   }
 };
 
-using TreePtrTy = std::shared_ptr<ContractionTree>;
-using TreeRefTy = std::weak_ptr<ContractionTree>;
 // TreeAsLeafNode: Reference to a contraction expression result.
 class TreeAsLeafNode : public LeafNode {
 private:
-  TreeRefTy TreeRef;
-  TreeAsLeafNode(IndexesTy &IndexUses, TreeRefTy TreeRef)
+  CTreePtr TreeRef;
+  TreeAsLeafNode(IndexesTy &IndexUses, CTreePtr TreeRef)
       : LeafNode(NK_TreeAsLeaf, IndexUses), TreeRef(TreeRef) {}
 
 public:
-  static NodePtr get(IndexesTy &IndexUses, TreeRefTy TreeRef) {
+  static NodePtr get(IndexesTy &IndexUses, CTreePtr TreeRef) {
     return NodePtr(new TreeAsLeafNode(IndexUses, TreeRef));
   }
   // Member Functions
-  TreePtrTy getTree() { return TreeRef.lock(); }
+  CTreePtr getTree() { return TreeRef; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_TreeAsLeaf; }
   // dump
@@ -249,20 +251,16 @@ inline void Node::deleteNode() {
 }
 
 class ContractionTree {
+private:
   std::string Name;
   std::string UniqueName;
   NodePtr Root;
 
+public:
   ContractionTree(StringRef Name, NodePtr Root)
       : Name(std::string(Name)), UniqueName(std::string(Name)),
-        Root(std::move(Root)) {}
-
-public:
-  static std::shared_ptr<ContractionTree> create(StringRef Name, NodePtr Root) {
-    auto CT = std::shared_ptr<ContractionTree>(
-        new ContractionTree(Name, std::move(Root)));
-    assert(llvm::isa<RootNode>(CT->Root.get()));
-    return CT;
+        Root(std::move(Root)) {
+    assert(llvm::isa<RootNode>(this->Root.get()));
   }
   RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
   StringRef getName() { return Name; }
@@ -278,9 +276,6 @@ public:
 
 using InputTensorsTy = SmallVector<std::shared_ptr<InputTensor>>;
 using InputTensorMapTy = DenseMap<StringRef, std::shared_ptr<InputTensor>>;
-using ContractionTreesTy = SmallVector<std::shared_ptr<ContractionTree>>;
-using ContractionTreeMapTy =
-    DenseMap<StringRef, std::shared_ptr<ContractionTree>>;
 
 class ContractionForest {
   std::string Name;
@@ -289,12 +284,12 @@ class ContractionForest {
   SizesTy InputSizeMap;
   InputTensorsTy InputTensors;
   InputTensorsTy ReservedInputs;
-  ContractionTreesTy OutputTrees;
+  CTreePtrs OutputTrees;
   // Shapes and trees
   SizesTy Sizes;
   InputTensorMapTy InputMap;
-  ContractionTreesTy Trees;
-  ContractionTreeMapTy TreeMap;
+  CTrees Trees;
+  CTreesMap TreeMap;
 
 public:
   ContractionForest() { Name = "Contraction"; }
@@ -323,14 +318,15 @@ public:
     return IT;
   }
 
-  std::shared_ptr<ContractionTree> getContractionTree(StringRef Name) {
+  ContractionTree *getContractionTree(StringRef Name) {
     if (TreeMap.count(Name)) {
       return TreeMap[Name];
     }
     return nullptr;
   }
-  void addContractionTree(std::shared_ptr<ContractionTree> CT) {
-    Trees.emplace_back(CT);
+  void addContractionTree(StringRef Name, NodePtr Root) {
+    Trees.emplace_back(new ContractionTree(Name, std::move(Root)));
+    auto *CT = Trees.back().get();
     int Suffix = 0;
     while (TreeMap.count(CT->getUniqueName())) {
       CT->setUniqueName(std::string(CT->getName()) + '#' +
@@ -387,8 +383,8 @@ public:
   StringRef getName() { return Name; }
   SizesTy &getInputSizes() { return InputSizes; }
   InputTensorsTy &getInputTensors() { return InputTensors; }
-  ContractionTreesTy &getOutputTensors() { return OutputTrees; }
-  ContractionTreesTy &getContractionTrees() { return Trees; }
+  CTreePtrs &getOutputTensors() { return OutputTrees; }
+  CTrees &getContractionTrees() { return Trees; }
 
   // TODO:
 

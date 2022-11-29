@@ -43,7 +43,7 @@ public:
     OB.setInsertionPointToEnd(M.getBody());
     // create mlir function
     InputTensorsTy &ITs = CF.getInputTensors();
-    ContractionTreesTy &OTs = CF.getOutputTensors();
+    CTreePtrs &OTs = CF.getOutputTensors();
     SmallVector<Type> InputTypes;
     for (auto &IT : ITs) {
       SmallVector<int64_t> Shape(IT->getDimension(), -1);
@@ -56,7 +56,7 @@ public:
     }
     SmallVector<Type> ResultTypes;
     SmallVector<int64_t> WriteBacks;
-    for (auto &CT : OTs) {
+    for (auto *CT : OTs) {
       SmallVector<int64_t> Shape(CT->getDimension(), -1);
       SmallVector<int64_t> Sizes;
       for (auto Sz : CT->getSizes())
@@ -86,7 +86,7 @@ public:
     // Generate Contraction Dialect of trees
     auto &CTs = CF.getContractionTrees();
     for (auto &CT : CTs) {
-      generateContractionTree(*CT.get());
+      generateContractionTree(*CT);
     }
     // create mlir return
     // writebacks point to the argument tensor
