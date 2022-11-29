@@ -20,6 +20,9 @@ struct NodeDeleter {
 };
 using NodePtr = std::unique_ptr<Node, NodeDeleter>;
 
+// ContractionTree represents a line of the Contraction Expression, which do
+// some calculation (contraction is major) and store value to a tensor. The
+// result can be used by succeed Expression.
 class ContractionTree;
 
 using IndexTy = int64_t;
@@ -79,12 +82,7 @@ private:
   const NodeKind Kind;
 
 protected:
-  SizesTy Sizes;
-  IndexesTy Indexes;
-  std::weak_ptr<InputTensor> InputLeaf;
-  std::weak_ptr<ContractionTree> TreeLeaf;
   ChildNodesTy Childs;
-
   Node(NodeKind K) : Kind(K) {
     // llvm::errs() << "Create Node " << K << "\n";
   }
@@ -94,43 +92,15 @@ protected:
   Node(NodeKind Kind, ChildNodesTy &Childs) : Node(Kind) {
     std::move(Childs.begin(), Childs.end(), std::back_inserter(this->Childs));
   }
-  Node(IndexesTy &Indexes, std::weak_ptr<ContractionTree> TreeLeaf)
-      : Kind(NK_TreeAsLeaf), Indexes(Indexes), TreeLeaf(TreeLeaf) {}
-  Node(IndexesTy &Indexes, std::weak_ptr<InputTensor> InputLeaf)
-      : Kind(NK_InputAsLeaf), Indexes(Indexes), InputLeaf(InputLeaf) {}
+  ~Node() = default;
 
   void dump(int indent);
   void dumpChilds(int indent);
 
-  ~Node() = default;
-
 public:
   NodeKind getKind() const { return Kind; }
-  void deleteNode();
-
-public:
-  template <typename... Args>
-  static auto createNode(NodeKind Kind, Args &&...args) {
-    return NodePtr(new Node(Kind, std::forward<Args>(args)...));
-  }
-
-  template <typename... Args> static auto createLeafNode(Args &&...args) {
-    return NodePtr(new Node(std::forward<Args>(args)...));
-  }
-
-  void setContractionTree(std::shared_ptr<ContractionTree> tree) {
-    TreeLeaf = tree;
-  }
-
-  SizesTy &getSizes() { return Sizes; }
-  IndexesTy &getIndexes() { return Indexes; }
   ChildNodesTy &getChilds() { return Childs; }
-  Node &getSingleChild() { return *(Childs[0]); }
-  std::shared_ptr<InputTensor> getInputTensor() { return InputLeaf.lock(); }
-  std::shared_ptr<ContractionTree> getContractionTensor() {
-    return TreeLeaf.lock();
-  }
-
+  void deleteNode();
   void dump() { dump(0); }
 };
 
@@ -304,7 +274,7 @@ public:
   static std::shared_ptr<ContractionTree> create(StringRef Name, NodePtr Root) {
     auto CT = std::shared_ptr<ContractionTree>(
         new ContractionTree(Name, std::move(Root)));
-    CT->Root->setContractionTree(CT);
+    assert(llvm::isa<RootNode>(CT->Root.get()));
     return CT;
   }
   RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
@@ -316,7 +286,7 @@ public:
   void setUniqueName(StringRef UniqueName) {
     this->UniqueName = std::string(UniqueName);
   }
-  void dump() { Root->dump(); };
+  void dump();
 };
 
 using InputTensorsTy = SmallVector<std::shared_ptr<InputTensor>>;

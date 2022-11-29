@@ -29,7 +29,7 @@ void InputTensor::dump() {
 
 void RootNode::dump(int indent) {
   errs().indent(indent);
-  errs() << TreeLeaf.lock()->getUniqueName() << " ";
+  errs() << "Root ";
   dumpSizes(Sizes);
   errs() << " -> ";
   dumpIndexes(IndexDefs);
@@ -85,6 +85,11 @@ void Node::dumpChilds(int indent) {
   errs() << "\n";
   for (auto &C : Childs)
     C->dump(indent + 2);
+}
+
+void ContractionTree::dump() {
+  errs() << "Tree " << getUniqueName() << "\n";
+  Root->dump();
 }
 
 void ContractionForest::dump() {
