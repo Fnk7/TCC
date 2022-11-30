@@ -256,14 +256,19 @@ NodePtr Parser::parseIndexedTensor() {
   NamedIndexesTy NamedIndexes = parseNamedIndexes();
   IndexesTy Indexes = getIndexes(NamedIndexes);
   SizesTy Sz1 = getSizes(Indexes);
-  if (auto *CT = CF->getContractionTree(Name)) {
+  auto T = CF->getTensorOfName(Name);
+  if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(T)) {
     // parse indexed tensor
     CF->setSizeEqual(Sz1, CT->getSizes());
     setSizes(Indexes, Sz1);
     return TreeAsLeafNode::get(Indexes, CT);
   } else {
     // parse Input tensor
-    auto IT = CF->getOrInsertInputTensor(Name, Indexes.size());
+    assert(!T || llvm::isa<InputTensor>(T));
+    auto IT = llvm::cast_if_present<InputTensor>(T);
+    if (!IT) {
+      IT = CF->addInputTensor(Name, Indexes.size());
+    }
     CF->setSizeEqual(Sz1, IT->getSizes());
     setSizes(Indexes, Sz1);
     return InputAsLeafNode::get(Indexes, IT);

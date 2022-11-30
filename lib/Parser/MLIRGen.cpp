@@ -42,8 +42,8 @@ public:
     M = ModuleOp::create(Loc);
     OB.setInsertionPointToEnd(M.getBody());
     // create mlir function
-    InTensors &ITs = CF.getInputTensors();
-    CTreePtrs &OTs = CF.getOutputTensors();
+    InTensorsTy &ITs = CF.getInputTensors();
+    CTreePtrsTy &OTs = CF.getOutputTensors();
     SmallVector<Type> InputTypes;
     for (auto &IT : ITs) {
       SmallVector<int64_t> Shape(IT->getDimension(), -1);

@@ -11,7 +11,7 @@ using llvm::SmallVector;
 using llvm::StringRef;
 
 namespace contraction {
-// Node is an AST node of Contraction Expression. It use the LLVM style RTTI.
+// Node - AST node of Contraction Expression. It use the LLVM style RTTI.
 // And since LLVM Value class use deleteValue and ValueDeleter for unique_ptr,
 // std default_delete<Node> was not used here.
 class Node;
@@ -20,37 +20,59 @@ struct NodeDeleter {
 };
 using NodePtr = std::unique_ptr<Node, NodeDeleter>;
 
-// ContractionTree represents a line of the Contraction Expression, which do
+// Symbol - Represent the indentity in Contraction Expression and its kind,
+// include input tensor, contraction tensor, index, constant index and size.
+class Symbol;
+using SymbolPtr = Symbol *;
+using SymbolsMapTy = DenseMap<StringRef, SymbolPtr>;
+
+// InputTensor - The arrays used by Contraction Expression that not
+// defined by predecessor expressions.
+class InputTensor;
+using InTensorsTy = SmallVector<std::unique_ptr<InputTensor>>;
+using InTensorPtr = InputTensor *;
+using InTensorPtrsTy = SmallVector<InTensorPtr>;
+using InTensorsMapTy = DenseMap<StringRef, InTensorPtr>;
+
+// ContractionTree - Line of the Contraction Expression, which do
 // some calculation (contraction is major) and store value to a tensor. The
 // result can be used by succeed Expression.
 class ContractionTree;
-using CTrees = SmallVector<std::unique_ptr<ContractionTree>>;
+using CTreesTy = SmallVector<std::unique_ptr<ContractionTree>>;
 using CTreePtr = ContractionTree *;
-using CTreePtrs = SmallVector<CTreePtr>;
-using CTreesMap = DenseMap<StringRef, CTreePtr>;
+using CTreePtrsTy = SmallVector<CTreePtr>;
+using CTreesMapTy = DenseMap<StringRef, CTreePtr>;
 
-// InputTensor represents the arrays used by Contraction Expression that not
-// defined by predecessor expressions.
-class InputTensor;
-using InTensors = SmallVector<std::unique_ptr<InputTensor>>;
-using InTensorPtr = InputTensor *;
-using InTensorPtrs = SmallVector<InTensorPtr>;
-using InTensorsMap = DenseMap<StringRef, InTensorPtr>;
+class Symbol {
+public:
+  enum SymbolKind { SK_CTensor, SK_InTenser, SK_Index, SK_ConstIndex, SK_Size };
+
+protected:
+  SymbolKind Kind;
+  Symbol(SymbolKind K) : Kind(K) {}
+
+public:
+  SymbolKind getKind() const { return Kind; }
+};
 
 using IndexTy = int64_t;
 using SizesTy = SmallVector<int, 4>;
 using IndexesTy = SmallVector<int64_t, 4>;
 using ChildNodesTy = SmallVector<NodePtr, 2>;
 
-class InputTensor {
+class InputTensor : public Symbol {
   std::string Name;
   SizesTy Sizes;
 
 public:
-  InputTensor(StringRef Name, SizesTy Sizes) : Name(Name), Sizes(Sizes) {}
+  InputTensor(StringRef Name, SizesTy Sizes)
+      : Symbol(SK_InTenser), Name(Name), Sizes(Sizes) {}
   StringRef getName() { return Name; }
   SizesTy &getSizes() { return Sizes; }
   int getDimension() { return Sizes.size(); }
+  // For LLVM RTTI
+  static bool classof(const Symbol *S) { return S->getKind() == SK_InTenser; }
+  // dump
   void dump();
 };
 
@@ -256,26 +278,23 @@ inline void Node::deleteNode() {
   }
 }
 
-class ContractionTree {
+class ContractionTree : public Symbol {
 private:
   std::string Name;
-  std::string UniqueName;
   NodePtr Root;
 
 public:
   ContractionTree(StringRef Name, NodePtr Root)
-      : Name(std::string(Name)), UniqueName(std::string(Name)),
-        Root(std::move(Root)) {
+      : Symbol(SK_CTensor), Name(std::string(Name)), Root(std::move(Root)) {
     assert(llvm::isa<RootNode>(this->Root.get()));
   }
   RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
   StringRef getName() { return Name; }
-  StringRef getUniqueName() { return UniqueName; }
   SizesTy &getSizes() { return getRootNode().getSizes(); }
   int getDimension() { return getSizes().size(); }
-  void setUniqueName(StringRef UniqueName) {
-    this->UniqueName = std::string(UniqueName);
-  }
+  // For LLVM RTTI
+  static bool classof(const Symbol *S) { return S->getKind() == SK_CTensor; }
+  // dump
   void dump();
 };
 
@@ -284,58 +303,67 @@ class ContractionForest {
   // Inputs and outputs and reserves
   SizesTy InputSizes;
   SizesTy InputSizeMap;
-  InTensors InputTensors;
-  InTensorPtrs ReservedInputs;
-  CTreePtrs OutputTrees;
+  InTensorsTy InputTensors;
+  InTensorPtrsTy ReservedInputs;
+  CTreePtrsTy OutputTrees;
   // Shapes and trees
   SizesTy Sizes;
-  InTensorsMap InputMap;
-  CTrees Trees;
-  CTreesMap TreeMap;
+  CTreesTy Trees;
+  // Symbols
+  SymbolsMapTy SymbolsMap;
+  // Input Tensors
+  InTensorsMapTy InTensorsMap;
+  // Contraction Tree Tensors
+  CTreesMapTy CTreesMap;
 
 public:
-  ContractionForest() { Name = "Contraction"; }
+  ContractionForest() { Name = "CT"; }
   void dump();
 
-  InTensorPtr getInputTensor(StringRef Name) {
-    if (InputMap.count(Name)) {
-      return InputMap[Name];
-    }
-    return nullptr;
+  SymbolPtr getTensorOfName(StringRef Name) {
+    return SymbolsMap.count(Name) ? SymbolsMap[Name] : nullptr;
   }
-  InTensorPtr getOrInsertInputTensor(StringRef Name, int dim) {
+  InTensorPtr getInputTensor(StringRef Name) {
+    return InTensorsMap.count(Name) ? InTensorsMap[Name] : nullptr;
+  }
+  CTreePtr getContractionTree(StringRef Name) {
+    return CTreesMap.count(Name) ? CTreesMap[Name] : nullptr;
+  }
+
+  InTensorPtr getOrInsertInputTensor(StringRef Name, int Dim) {
     InTensorPtr IT;
-    if (InputMap.count(Name)) {
-      IT = InputMap[Name];
-      assert(IT->getDimension() == dim);
+    if (InTensorsMap.count(Name)) {
+      IT = InTensorsMap[Name];
+      assert(IT->getDimension() == Dim);
     } else {
       SizesTy InputSizes;
-      for (int Sz = 0; Sz < dim; Sz++)
+      for (int Sz = 0; Sz < Dim; Sz++)
         InputSizes.emplace_back(Sizes.size() + Sz);
       Sizes.append(InputSizes);
       InputTensors.emplace_back(new InputTensor(Name, InputSizes));
       IT = InputTensors.back().get();
-      InputMap[IT->getName()] = IT;
+      SymbolsMap[IT->getName()] = IT;
+      InTensorsMap[IT->getName()] = IT;
     }
     return IT;
   }
-
-  ContractionTree *getContractionTree(StringRef Name) {
-    if (TreeMap.count(Name)) {
-      return TreeMap[Name];
-    }
-    return nullptr;
+  InTensorPtr addInputTensor(StringRef Name, int Dim) {
+    assert(!InTensorsMap.count(Name));
+    SizesTy InputSizes;
+    for (int Sz = 0; Sz < Dim; Sz++)
+      InputSizes.emplace_back(Sizes.size() + Sz);
+    Sizes.append(InputSizes);
+    InputTensors.emplace_back(new InputTensor(Name, InputSizes));
+    auto IT = InputTensors.back().get();
+    SymbolsMap[IT->getName()] = IT;
+    InTensorsMap[IT->getName()] = IT;
+    return IT;
   }
   void addContractionTree(StringRef Name, NodePtr Root) {
     Trees.emplace_back(new ContractionTree(Name, std::move(Root)));
-    auto *CT = Trees.back().get();
-    int Suffix = 0;
-    while (TreeMap.count(CT->getUniqueName())) {
-      CT->setUniqueName(std::string(CT->getName()) + '#' +
-                        std::to_string(++Suffix));
-    }
-    TreeMap[CT->getUniqueName()] = CT;
-    TreeMap[CT->getName()] = CT;
+    auto CT = Trees.back().get();
+    SymbolsMap[CT->getName()] = CT;
+    CTreesMap[CT->getName()] = CT;
   }
 
   void addKeep(StringRef Name) {
@@ -384,9 +412,9 @@ public:
 
   StringRef getName() { return Name; }
   SizesTy &getInputSizes() { return InputSizes; }
-  InTensors &getInputTensors() { return InputTensors; }
-  CTreePtrs &getOutputTensors() { return OutputTrees; }
-  CTrees &getContractionTrees() { return Trees; }
+  InTensorsTy &getInputTensors() { return InputTensors; }
+  CTreePtrsTy &getOutputTensors() { return OutputTrees; }
+  CTreesTy &getContractionTrees() { return Trees; }
 
   // TODO:
 
@@ -398,7 +426,7 @@ public:
     return num;
   }
 
-  int getNumInputTensors() { return InputMap.size(); }
+  int getNumInputTensors() { return InputTensors.size(); }
   int getNumOutputTensors() { return OutputTrees.size(); }
 };
 } // namespace contraction
