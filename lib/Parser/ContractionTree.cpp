@@ -116,7 +116,7 @@ void ContractionForest::dump() {
   if (SizesMap.size()) {
     errs() << "Sz" << 0;
     for (size_t i = 1; i < SizesMap.size(); i++) {
-      if (!SizesMap[i]->isUnique())
+      if (!SizesMap[i]->isFirstAppear())
         errs() << ", Sz" << i;
     }
   }
@@ -139,14 +139,14 @@ void ContractionForest::dump() {
   errs() << "\n";
   size_t i = 0;
   for (; i < SizesMap.size(); i++) {
-    if (!SizesMap[i]->isUnique()) {
+    if (!SizesMap[i]->isFirstAppear()) {
       errs() << "Sizes relation: Sz" << i << " = Sz" << SizesMap[i]->getUID();
       break;
     }
   }
   if (i < SizesMap.size()) {
     for (i++; i < SizesMap.size(); i++) {
-      if (!SizesMap[i]->isUnique())
+      if (!SizesMap[i]->isFirstAppear())
         errs() << ", Sz" << i << " = Sz" << SizesMap[i]->getUID();
     }
     errs() << "\n";

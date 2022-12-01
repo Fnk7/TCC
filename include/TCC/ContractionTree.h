@@ -1,6 +1,7 @@
 #ifndef TENSORCONTRACTION_CONTRACTIONTREE_H
 #define TENSORCONTRACTION_CONTRACTIONTREE_H
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -8,6 +9,7 @@
 
 using llvm::raw_ostream;
 
+using llvm::ArrayRef;
 using llvm::DenseMap;
 using llvm::SmallVector;
 using llvm::StringRef;
@@ -68,61 +70,88 @@ using SizePtr = SizeSymbol *;
 using SizesMapTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 class SizeSymbol : public Symbol {
 private:
-  std::string Name;
-  int64_t UpperBound;
-  int64_t LowerBound;
   SizeID ID;
-  SmallVector<SizePtr> Aliases;
+  std::string Name;
   bool Implicit;
+  SmallVector<SizePtr> Aliases;
+
+  class EqualityStorage {
+  public:
+    SizeID ID;
+    SizeID UID = -1;
+    int64_t UpperBound = 0;
+    int64_t LowerBound = 0;
+    SmallVector<SizePtr> Aliases;
+    EqualityStorage(ArrayRef<SizePtr> Aliases) : Aliases(Aliases) {}
+  };
+  EqualityStorage *EqualityInfo;
+
+  EqualityStorage *getInfo() {
+    if (!EqualityInfo) {
+      EqualityInfo = new EqualityStorage{{this}};
+      EqualityInfo->ID = ID;
+    }
+    return EqualityInfo;
+  }
 
 public:
-  SizeSymbol(SizeID ID) : Symbol(SK_Size) {
-    Aliases.emplace_back(this);
-    this->ID = ID;
+  SizeSymbol(SizeID ID) : Symbol(SK_Size), ID(ID) {
     Name = "Sz." + std::to_string(ID);
     Implicit = true;
-    UpperBound = 0;
-    LowerBound = 0;
+    EqualityInfo = nullptr;
   }
   SizeSymbol(SizeID ID, StringRef Name, int64_t UB = 0, int64_t LB = 0)
-      : Symbol(SK_Size), Name(Name) {
-    Aliases.emplace_back(this);
-    this->ID = ID;
+      : Symbol(SK_Size), ID(ID), Name(Name) {
     Implicit = false;
-    UpperBound = UB;
-    LowerBound = LB;
+    EqualityInfo = nullptr;
+    setUpperBound(UB);
+    setLowerBound(LB);
   }
   // Member Functions
-  bool operator==(const SizeSymbol &Sz) { return this == &Sz; }
-  static bool makeSizeEqual(SizeSymbol &Sz1, SizeSymbol &Sz2) {
+  bool operator==(const SizeSymbol &Sz) {
+    return EqualityInfo && EqualityInfo == Sz.EqualityInfo;
+  }
+  static void makeSizeEqual(SizeSymbol &Sz1, SizeSymbol &Sz2) {
     if (Sz1 == Sz2)
-      return true;
-    if (Sz1.Implicit && !Sz2.Implicit) {
+      return;
+    if (!Sz1.EqualityInfo && Sz2.EqualityInfo) {
       return makeSizeEqual(Sz2, Sz1);
+    } else if (!Sz1.EqualityInfo) {
+      Sz1.EqualityInfo = new EqualityStorage({&Sz1, &Sz2});
+      Sz2.EqualityInfo = Sz1.EqualityInfo;
+      Sz1.EqualityInfo->ID = Sz1.ID < Sz2.ID ? Sz1.ID : Sz2.ID;
+    } else if (!Sz2.EqualityInfo) {
+      Sz1.EqualityInfo->Aliases.emplace_back(&Sz2);
+      Sz2.EqualityInfo = Sz1.EqualityInfo;
+      Sz1.EqualityInfo->ID = Sz1.ID < Sz2.ID ? Sz1.ID : Sz2.ID;
     } else {
-      assert(&Sz1 == Sz1.Aliases[0]);
-      assert(&Sz2 == Sz2.Aliases[0]);
-      size_t NewAlias = Sz1.Aliases.size() + 1;
-      Sz1.Aliases.append(Sz2.Aliases);
-      Sz2.Aliases.clear();
-      Sz2.Aliases.emplace_back(&Sz1);
-      for (; NewAlias < Sz1.Aliases.size(); NewAlias++) {
-        Sz1.Aliases[NewAlias]->Aliases[0] = &Sz1;
+      auto ToDelete = Sz2.EqualityInfo;
+      for (auto Alias : Sz2.EqualityInfo->Aliases) {
+        Sz1.EqualityInfo->Aliases.emplace_back(Alias);
+        Alias->EqualityInfo = Sz1.EqualityInfo;
+        Sz1.EqualityInfo->ID = Sz1.ID < Alias->ID ? Sz1.ID : Alias->ID;
       }
-      return true;
+      delete ToDelete;
     }
   }
-  void setUpperBound(int64_t UB) { UpperBound = UB; }
-  void setLowerBound(int64_t LB) { LowerBound = LB; }
-  SizeSymbol &get() { return *Aliases[0]; }
-  bool isUnique() { return this == &get(); }
-  SizeID getUID() { return get().ID; }
-  int64_t getUpperBound() { return get().UpperBound; }
-  int64_t getLowerBound() { return get().LowerBound; }
+  void setUpperBound(int64_t UB) { getInfo()->UpperBound = UB; }
+  void setLowerBound(int64_t LB) { getInfo()->LowerBound = LB; }
+  bool isFirstAppear() { return ID == getInfo()->ID; }
+  SizeID getUID() { return getInfo()->UID; }
+  int64_t getUpperBound() { return getInfo()->UpperBound; }
+  int64_t getLowerBound() { return getInfo()->LowerBound; }
   // For LLVM RTTI
   static bool classof(const Symbol *S) { return S->getKind() == SK_Size; }
   // Print
   void dump();
+  // Destructor
+  ~SizeSymbol() {
+    if (EqualityInfo) {
+      llvm::erase_value(EqualityInfo->Aliases, this);
+      if (EqualityInfo->Aliases.empty())
+        delete EqualityInfo;
+    }
+  }
 };
 
 using SizesTy = SmallVector<SizePtr, 4>;
@@ -435,11 +464,11 @@ public:
     for (size_t i = 0; i < Sz1.size(); i++) {
       if (!Sz1[i]) {
         assert(Sz2[i]);
-        Sz1[i] = &(Sz2[i]->get());
+        Sz1[i] = Sz2[i];
       } else if (!Sz2[i]) {
-        Sz2[i] = &(Sz1[i]->get());
+        Sz2[i] = Sz1[i];
       } else {
-        SizeSymbol::makeSizeEqual(Sz1[i]->get(), Sz2[i]->get());
+        SizeSymbol::makeSizeEqual(*Sz1[i], *Sz2[i]);
       }
     }
   }
@@ -459,7 +488,7 @@ public:
   int getNumInputSizs() {
     int num = 0;
     for (auto &Sz : SizesMap) {
-      if (Sz->isUnique())
+      if (Sz->isFirstAppear())
         num++;
     }
     return num;
