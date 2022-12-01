@@ -26,9 +26,9 @@ const std::string Node::getKindString(NodeKind K) {
 
 static void dumpSizes(SizesTy &Sizes) {
   if (Sizes.size()) {
-    errs() << "(Sz" << Sizes[0];
+    errs() << "(Sz" << Sizes[0]->getUID();
     for (size_t i = 1; i < Sizes.size(); i++)
-      errs() << ", Sz" << Sizes[i];
+      errs() << ", Sz" << Sizes[i]->getUID();
     errs() << ")";
   }
 }
@@ -113,10 +113,10 @@ void ContractionTree::dump() {
 
 void ContractionForest::dump() {
   errs() << "Input Sizes: ";
-  if (Sizes.size()) {
+  if (SizesMap.size()) {
     errs() << "Sz" << 0;
-    for (size_t i = 1; i < Sizes.size(); i++) {
-      if ((int)i == Sizes[i])
+    for (size_t i = 1; i < SizesMap.size(); i++) {
+      if (!SizesMap[i]->isUnique())
         errs() << ", Sz" << i;
     }
   }
@@ -138,16 +138,16 @@ void ContractionForest::dump() {
   }
   errs() << "\n";
   size_t i = 0;
-  for (; i < Sizes.size(); i++) {
-    if ((int)i != Sizes[i]) {
-      errs() << "Sizes relation: Sz" << i << " = Sz" << Sizes[i];
+  for (; i < SizesMap.size(); i++) {
+    if (!SizesMap[i]->isUnique()) {
+      errs() << "Sizes relation: Sz" << i << " = Sz" << SizesMap[i]->getUID();
       break;
     }
   }
-  if (i < Sizes.size()) {
-    for (i++; i < Sizes.size(); i++) {
-      if ((int)i != Sizes[i])
-        errs() << ", Sz" << i << " = Sz" << Sizes[i];
+  if (i < SizesMap.size()) {
+    for (i++; i < SizesMap.size(); i++) {
+      if (!SizesMap[i]->isUnique())
+        errs() << ", Sz" << i << " = Sz" << SizesMap[i]->getUID();
     }
     errs() << "\n";
   }

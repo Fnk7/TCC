@@ -72,7 +72,7 @@ class Parser {
   Lexer &Lx;
   Token CurToken;
 
-  SmallVector<int> SizeMap;
+  SmallVector<SizePtr> IndexSizeMap;
   DenseMap<StringRef, int> IndexMap;
 
   std::unique_ptr<ContractionForest> CF;
@@ -94,9 +94,9 @@ class Parser {
     IndexesTy Indexes;
     for (auto &Name : NamedIndexes) {
       assert(!IndexMap.count(Name));
-      IndexMap[Name] = SizeMap.size();
-      Indexes.emplace_back(SizeMap.size());
-      SizeMap.emplace_back(-1);
+      IndexMap[Name] = IndexSizeMap.size();
+      Indexes.emplace_back(IndexSizeMap.size());
+      IndexSizeMap.emplace_back(nullptr);
     }
     return Indexes;
   }
@@ -115,9 +115,9 @@ class Parser {
     return Indexes;
   }
   SizesTy getSizes(IndexesTy &Indexes) {
-    SmallVector<int> Sizes;
+    SizesTy Sizes;
     for (auto index : Indexes) {
-      Sizes.emplace_back(SizeMap[index]);
+      Sizes.emplace_back(IndexSizeMap[index]);
     }
     return Sizes;
   }
@@ -125,7 +125,7 @@ class Parser {
   void setSizes(IndexesTy &Indexes, SizesTy &Sizes) {
     assert(Indexes.size() == Sizes.size());
     for (size_t i = 0; i < Indexes.size(); i++) {
-      SizeMap[Indexes[i]] = Sizes[i];
+      IndexSizeMap[Indexes[i]] = Sizes[i];
     }
   }
 
@@ -141,6 +141,7 @@ std::unique_ptr<ContractionForest> Parser::parseContractionForest() {
     parseLine();
     CurToken = Lx.getNextToken();
   }
+  // TODO: After Parse
   CF->resolveInputSizes();
   return std::move(CF);
 }
@@ -160,7 +161,7 @@ void Parser::parseContractionTree() {
   auto Name = std::string(Lx.getIdentifier());
   CurToken = Lx.getNextToken();
   // parse Indexes
-  SizeMap.clear();
+  IndexSizeMap.clear();
   NamedIndexesTy NamedIndexes = parseNamedIndexes();
   auto Indexes = insertIndexesMap(NamedIndexes);
   // parse expressions

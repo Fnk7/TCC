@@ -58,7 +58,6 @@ public:
 };
 
 using IndexTy = int64_t;
-using SizesTy = SmallVector<int, 4>;
 using IndexesTy = SmallVector<int64_t, 4>;
 using ChildNodesTy = SmallVector<NodePtr, 2>;
 
@@ -66,29 +65,29 @@ class SizeSymbol;
 using SizeID = int64_t;
 using SizePtr = SizeSymbol *;
 // SizeID map to SizeSymbol
-using SizesMap = SmallVector<std::unique_ptr<SizeSymbol>>;
+using SizesMapTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 class SizeSymbol : public Symbol {
 private:
   std::string Name;
   int64_t UpperBound;
   int64_t LowerBound;
-  SizeID UID;
+  SizeID ID;
   SmallVector<SizePtr> Alias;
   bool Implicit;
 
 public:
   SizeSymbol(SizeID ID) : Symbol(SK_Size) {
     Alias.emplace_back(this);
-    UID = ID;
+    this->ID = ID;
     Name = "Sz." + std::to_string(ID);
     Implicit = true;
-    this->UpperBound = 0;
-    this->LowerBound = 0;
+    UpperBound = 0;
+    LowerBound = 0;
   }
   SizeSymbol(SizeID ID, StringRef Name, int64_t UB = 0, int64_t LB = 0)
       : Symbol(SK_Size), Name(Name) {
     Alias.emplace_back(this);
-    UID = ID;
+    this->ID = ID;
     Implicit = false;
     UpperBound = UB;
     LowerBound = LB;
@@ -118,6 +117,8 @@ public:
   void setUpperBound(int64_t UB) { UpperBound = UB; }
   void setLowerBound(int64_t LB) { LowerBound = LB; }
   SizeSymbol &get() { return *Alias[0]; }
+  bool isUnique() { return this == &get(); }
+  SizeID getUID() { return get().ID; }
   int64_t getUpperBound() { return get().UpperBound; }
   int64_t getLowerBound() { return get().LowerBound; }
   // For LLVM RTTI
@@ -125,6 +126,8 @@ public:
   // Print
   void dump();
 };
+
+using SizesTy = SmallVector<SizePtr, 4>;
 
 class InputTensor : public Symbol {
 private:
@@ -374,7 +377,6 @@ class ContractionForest {
   InTensorPtrsTy ReservedInputs;
   CTreePtrsTy OutputCTrees;
   // Shapes and trees
-  SizesTy Sizes;
   CTreesTy Trees;
   // Symbols
   SymbolsMapTy SymbolsMap;
@@ -382,6 +384,8 @@ class ContractionForest {
   InTensorsMapTy InTensorsMap;
   // Contraction Tree Tensors
   CTreesMapTy CTreesMap;
+  // Sizes
+  SizesMapTy SizesMap;
 
 public:
   ContractionForest() { Name = "CT"; }
@@ -400,9 +404,11 @@ public:
   InTensorPtr addInputTensor(StringRef Name, int Dim) {
     assert(!InTensorsMap.count(Name));
     SizesTy InputSizes;
-    for (int Sz = 0; Sz < Dim; Sz++)
-      InputSizes.emplace_back(Sizes.size() + Sz);
-    Sizes.append(InputSizes);
+    SizeID ID = SizesMap.size();
+    for (int Sz = 0; Sz < Dim; Sz++) {
+      SizesMap.emplace_back(new SizeSymbol(ID));
+      InputSizes.emplace_back(SizesMap.back().get());
+    }
     InputTensors.emplace_back(new InputTensor(Name, InputSizes));
     auto IT = InputTensors.back().get();
     SymbolsMap[IT->getName()] = IT;
@@ -426,39 +432,23 @@ public:
     }
   }
   // Sizes
-  inline void setSizeEqual(int &Sz1, int &Sz2) {
-    assert(Sz1 < (int)Sizes.size());
-    assert(Sz2 < (int)Sizes.size() && Sz2 >= 0);
-    if (Sz1 >= 0 && Sz1 != Sz2) {
-      if (Sizes[Sz1] < Sizes[Sz2]) {
-        Sizes[Sz2] = Sizes[Sz1];
-      } else {
-        Sizes[Sz1] = Sizes[Sz2];
-      }
-    }
-    Sz1 = Sizes[Sz2];
-  }
   void setSizeEqual(SizesTy &Sz1, SizesTy &Sz2) {
     assert(Sz1.size() == Sz2.size());
     for (size_t i = 0; i < Sz1.size(); i++) {
-      setSizeEqual(Sz1[i], Sz2[i]);
-    }
-  }
-  void resolveInputSizes() {
-    int InSz = 0;
-    for (size_t i = 0; i < Sizes.size(); i++) {
-      if ((int)i == Sizes[i]) {
-        InputSizes.emplace_back(i);
-        InputSizeMap.emplace_back(InSz++);
+      if (!Sz1[i]) {
+        assert(Sz2[i]);
+        Sz1[i] = &(Sz2[i]->get());
+      } else if (!Sz2[i]) {
+        Sz2[i] = &(Sz1[i]->get());
       } else {
-        int UniqueSz = Sizes[i];
-        Sizes[i] = Sizes[UniqueSz];
-        InputSizeMap.emplace_back(InputSizeMap[Sizes[i]]);
+        SizeSymbol::makeSizeEqual(Sz1[i]->get(), Sz2[i]->get());
       }
     }
   }
-  int getInputSizeOf(int Sz) { return InputSizeMap[Sz]; }
-  int getUniqueInputSizeOf(int Sz) { return Sizes[Sz]; }
+  void resolveInputSizes() {
+    // TODO
+  }
+  int64_t getInputSizeOf(SizePtr Sz) { return Sz->getUID(); }
 
   StringRef getName() { return Name; }
   SizesTy &getInputSizes() { return InputSizes; }
@@ -470,9 +460,10 @@ public:
 
   int getNumInputSizs() {
     int num = 0;
-    for (size_t i = 0; i < Sizes.size(); i++)
-      if ((int)i == Sizes[i])
+    for (auto &Sz : SizesMap) {
+      if (Sz->isUnique())
         num++;
+    }
     return num;
   }
 
