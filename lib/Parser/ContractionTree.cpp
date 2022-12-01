@@ -155,10 +155,10 @@ void ContractionForest::dump() {
   for (auto &Tree : Trees)
     Tree->dump();
   errs() << "Result outputs: ";
-  if (OutputTrees.size()) {
-    errs() << OutputTrees[0]->getName();
-    for (size_t i = 1; i < OutputTrees.size(); i++) {
-      errs() << ", " << OutputTrees[i]->getName();
+  if (OutputCTrees.size()) {
+    errs() << OutputCTrees[0]->getName();
+    for (size_t i = 1; i < OutputCTrees.size(); i++) {
+      errs() << ", " << OutputCTrees[i]->getName();
     }
   }
   errs() << "\n";

@@ -6,6 +6,8 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
 
+using llvm::raw_ostream;
+
 using llvm::DenseMap;
 using llvm::SmallVector;
 using llvm::StringRef;
@@ -60,7 +62,72 @@ using SizesTy = SmallVector<int, 4>;
 using IndexesTy = SmallVector<int64_t, 4>;
 using ChildNodesTy = SmallVector<NodePtr, 2>;
 
+class SizeSymbol;
+using SizeID = int64_t;
+using SizePtr = SizeSymbol *;
+// SizeID map to SizeSymbol
+using SizesMap = SmallVector<std::unique_ptr<SizeSymbol>>;
+class SizeSymbol : public Symbol {
+private:
+  std::string Name;
+  int64_t UpperBound;
+  int64_t LowerBound;
+  SizeID UID;
+  SmallVector<SizePtr> Alias;
+  bool Implicit;
+
+public:
+  SizeSymbol(SizeID ID) : Symbol(SK_Size) {
+    Alias.emplace_back(this);
+    UID = ID;
+    Name = "Sz." + std::to_string(ID);
+    Implicit = true;
+    this->UpperBound = 0;
+    this->LowerBound = 0;
+  }
+  SizeSymbol(SizeID ID, StringRef Name, int64_t UB = 0, int64_t LB = 0)
+      : Symbol(SK_Size), Name(Name) {
+    Alias.emplace_back(this);
+    UID = ID;
+    Implicit = false;
+    UpperBound = UB;
+    LowerBound = LB;
+  }
+  // Member Functions
+  static bool makeSizeEqual(SizeSymbol &Sz1, SizeSymbol &Sz2) {
+    if (Sz1.Implicit && !Sz2.Implicit) {
+      return makeSizeEqual(Sz2, Sz1);
+    } else {
+      assert(&Sz1 == Sz1.Alias[0]);
+      assert(&Sz2 == Sz2.Alias[0]);
+      Sz1.Alias.append(Sz2.Alias);
+      Sz2.Alias.clear();
+      Sz2.Alias.emplace_back(&Sz1);
+      // if (!Sz2.UpperBound)
+      //   Sz2.UpperBound = Sz1.UpperBound;
+      // if (!Sz2.LowerBound)
+      //   Sz2.LowerBound = Sz1.LowerBound;
+      // if (Sz2.UpperBound && Sz2.UpperBound != Sz1.UpperBound)
+      //   return false;
+      // if (Sz2.LowerBound && Sz2.LowerBound != Sz1.LowerBound)
+      //   return false;
+      // return true;
+      return true;
+    }
+  }
+  void setUpperBound(int64_t UB) { UpperBound = UB; }
+  void setLowerBound(int64_t LB) { LowerBound = LB; }
+  SizeSymbol &get() { return *Alias[0]; }
+  int64_t getUpperBound() { return get().UpperBound; }
+  int64_t getLowerBound() { return get().LowerBound; }
+  // For LLVM RTTI
+  static bool classof(const Symbol *S) { return S->getKind() == SK_Size; }
+  // Print
+  void dump();
+};
+
 class InputTensor : public Symbol {
+private:
   std::string Name;
   SizesTy Sizes;
 
@@ -111,7 +178,7 @@ public:
   void dump(int indent);
   void dumpChilds(int indent);
   static const std::string getKindString(NodeKind K);
-  friend llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, NodeKind K) {
+  friend raw_ostream &operator<<(raw_ostream &OS, NodeKind K) {
     OS << getKindString(K);
     return OS;
   }
@@ -305,7 +372,7 @@ class ContractionForest {
   SizesTy InputSizeMap;
   InTensorsTy InputTensors;
   InTensorPtrsTy ReservedInputs;
-  CTreePtrsTy OutputTrees;
+  CTreePtrsTy OutputCTrees;
   // Shapes and trees
   SizesTy Sizes;
   CTreesTy Trees;
@@ -319,7 +386,7 @@ class ContractionForest {
 public:
   ContractionForest() { Name = "CT"; }
   void dump();
-
+  // Get Tensor
   SymbolPtr getTensorOfName(StringRef Name) {
     return SymbolsMap.count(Name) ? SymbolsMap[Name] : nullptr;
   }
@@ -329,24 +396,7 @@ public:
   CTreePtr getContractionTree(StringRef Name) {
     return CTreesMap.count(Name) ? CTreesMap[Name] : nullptr;
   }
-
-  InTensorPtr getOrInsertInputTensor(StringRef Name, int Dim) {
-    InTensorPtr IT;
-    if (InTensorsMap.count(Name)) {
-      IT = InTensorsMap[Name];
-      assert(IT->getDimension() == Dim);
-    } else {
-      SizesTy InputSizes;
-      for (int Sz = 0; Sz < Dim; Sz++)
-        InputSizes.emplace_back(Sizes.size() + Sz);
-      Sizes.append(InputSizes);
-      InputTensors.emplace_back(new InputTensor(Name, InputSizes));
-      IT = InputTensors.back().get();
-      SymbolsMap[IT->getName()] = IT;
-      InTensorsMap[IT->getName()] = IT;
-    }
-    return IT;
-  }
+  // Add Tensor
   InTensorPtr addInputTensor(StringRef Name, int Dim) {
     assert(!InTensorsMap.count(Name));
     SizesTy InputSizes;
@@ -365,14 +415,14 @@ public:
     SymbolsMap[CT->getName()] = CT;
     CTreesMap[CT->getName()] = CT;
   }
-
+  // Add Keep
   void addKeep(StringRef Name) {
     if (auto CT = getContractionTree(Name)) {
-      OutputTrees.emplace_back(CT);
+      OutputCTrees.emplace_back(CT);
     } else if (auto IT = getInputTensor(Name)) {
       ReservedInputs.emplace_back(IT);
     } else {
-      assert("Input or Tree Tensor not defined!");
+      llvm_unreachable("Input or CTree Tensor not defined!");
     }
   }
   // Sizes
@@ -413,7 +463,7 @@ public:
   StringRef getName() { return Name; }
   SizesTy &getInputSizes() { return InputSizes; }
   InTensorsTy &getInputTensors() { return InputTensors; }
-  CTreePtrsTy &getOutputTensors() { return OutputTrees; }
+  CTreePtrsTy &getOutputTensors() { return OutputCTrees; }
   CTreesTy &getContractionTrees() { return Trees; }
 
   // TODO:
@@ -427,7 +477,7 @@ public:
   }
 
   int getNumInputTensors() { return InputTensors.size(); }
-  int getNumOutputTensors() { return OutputTrees.size(); }
+  int getNumOutputTensors() { return OutputCTrees.size(); }
 };
 } // namespace contraction
 
