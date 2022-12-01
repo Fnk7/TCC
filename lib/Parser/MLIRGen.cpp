@@ -48,7 +48,7 @@ public:
     for (auto &IT : ITs) {
       SmallVector<int64_t> Shape(IT->getDimension(), -1);
       SmallVector<int64_t> Sizes;
-      for (auto Sz : IT->getSizes())
+      for (auto Sz : IT->getShape())
         Sizes.emplace_back(CF.getInputSizeOf(Sz));
       Attribute EncodingAttr = OB.getI64ArrayAttr(Sizes);
       Type T = RankedTensorType::get(Shape, OB.getF64Type(), EncodingAttr);
@@ -59,7 +59,7 @@ public:
     for (auto *CT : OTs) {
       SmallVector<int64_t> Shape(CT->getDimension(), -1);
       SmallVector<int64_t> Sizes;
-      for (auto Sz : CT->getSizes())
+      for (auto Sz : CT->getShape())
         Sizes.emplace_back(CF.getInputSizeOf(Sz));
       Attribute EncodingAttr = OB.getI64ArrayAttr(Sizes);
       Type T = RankedTensorType::get(Shape, OB.getF64Type(), EncodingAttr);

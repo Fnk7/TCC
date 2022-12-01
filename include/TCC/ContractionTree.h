@@ -66,6 +66,8 @@ using ChildNodesTy = SmallVector<NodePtr, 2>;
 class SizeSymbol;
 using SizeID = int64_t;
 using SizePtr = SizeSymbol *;
+using SizesTy2 = SmallVector<SizePtr, 4>;
+using ShapeTy = SizesTy2;
 // SizeID map to SizeSymbol
 using SizesMapTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 class SizeSymbol : public Symbol {
@@ -73,7 +75,6 @@ private:
   SizeID ID;
   std::string Name;
   bool Implicit;
-  SmallVector<SizePtr> Aliases;
 
   class EqualityStorage {
   public:
@@ -81,7 +82,7 @@ private:
     SizeID UID = -1;
     int64_t UpperBound = 0;
     int64_t LowerBound = 0;
-    SmallVector<SizePtr> Aliases;
+    SizesTy2 Aliases;
     EqualityStorage(ArrayRef<SizePtr> Aliases) : Aliases(Aliases) {}
   };
   EqualityStorage *EqualityInfo;
@@ -154,19 +155,17 @@ public:
   }
 };
 
-using SizesTy = SmallVector<SizePtr, 4>;
-
 class InputTensor : public Symbol {
 private:
   std::string Name;
-  SizesTy Sizes;
+  ShapeTy Shape;
 
 public:
-  InputTensor(StringRef Name, SizesTy Sizes)
-      : Symbol(SK_InTenser), Name(Name), Sizes(Sizes) {}
+  InputTensor(StringRef Name, ShapeTy Shape)
+      : Symbol(SK_InTenser), Name(Name), Shape(Shape) {}
   StringRef getName() { return Name; }
-  SizesTy &getSizes() { return Sizes; }
-  int getDimension() { return Sizes.size(); }
+  ShapeTy &getShape() { return Shape; }
+  int64_t getDimension() { return Shape.size(); }
   // For LLVM RTTI
   static bool classof(const Symbol *S) { return S->getKind() == SK_InTenser; }
   // dump
@@ -217,18 +216,18 @@ public:
 // RootNode: Write result into tensor, and define indexes.
 class RootNode : public Node {
 private:
-  SizesTy Sizes;
+  ShapeTy Shape;
   IndexesTy IndexDefs;
-  RootNode(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child)
-      : Node(NK_Root, std::move(Child)), Sizes(Sizes), IndexDefs(Indexes) {}
+  RootNode(ShapeTy &Shape, IndexesTy &Indexes, NodePtr Child)
+      : Node(NK_Root, std::move(Child)), Shape(Shape), IndexDefs(Indexes) {}
 
 public:
-  static NodePtr get(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child) {
-    return NodePtr(new RootNode(Sizes, Indexes, std::move(Child)));
+  static NodePtr get(ShapeTy &Shape, IndexesTy &Indexes, NodePtr Child) {
+    return NodePtr(new RootNode(Shape, Indexes, std::move(Child)));
   }
   // Functions
   Node &getChild() { return *Childs[0]; }
-  SizesTy &getSizes() { return Sizes; }
+  ShapeTy &getShape() { return Shape; }
   IndexesTy &getIndexes() { return IndexDefs; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Root; }
@@ -239,19 +238,19 @@ public:
 // ContractionNode: Contract tensor in some axes, where the indexes defined for.
 class ContractionNode : public Node {
 private:
-  SizesTy Sizes;
+  SizesTy2 Sizes;
   IndexesTy IndexDefs;
-  ContractionNode(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child)
+  ContractionNode(SizesTy2 &Sizes, IndexesTy &Indexes, NodePtr Child)
       : Node(NK_Contraction, std::move(Child)), Sizes(Sizes),
         IndexDefs(Indexes) {}
 
 public:
-  static NodePtr get(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child) {
+  static NodePtr get(SizesTy2 &Sizes, IndexesTy &Indexes, NodePtr Child) {
     return NodePtr(new ContractionNode(Sizes, Indexes, std::move(Child)));
   }
   // Funtions
   Node &getChild() { return *Childs[0]; }
-  SizesTy &getSizes() { return Sizes; }
+  SizesTy2 &getSizes() { return Sizes; }
   IndexesTy &getIndexes() { return IndexDefs; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Contraction; }
@@ -387,8 +386,8 @@ public:
   }
   RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
   StringRef getName() { return Name; }
-  SizesTy &getSizes() { return getRootNode().getSizes(); }
-  int getDimension() { return getSizes().size(); }
+  ShapeTy &getShape() { return getRootNode().getShape(); }
+  int64_t getDimension() { return getShape().size(); }
   // For LLVM RTTI
   static bool classof(const Symbol *S) { return S->getKind() == SK_CTensor; }
   // dump
@@ -398,8 +397,7 @@ public:
 class ContractionForest {
   std::string Name;
   // Inputs and outputs and reserves
-  SizesTy InputSizes;
-  SizesTy InputSizeMap;
+  SizesTy2 InputSizes;
   InTensorsTy InputTensors;
   InTensorPtrsTy ReservedInputs;
   CTreePtrsTy OutputCTrees;
@@ -430,13 +428,13 @@ public:
   // Add Tensor
   InTensorPtr addInputTensor(StringRef Name, int Dim) {
     assert(!InTensorsMap.count(Name));
-    SizesTy InputSizes;
     SizeID ID = SizesMap.size();
-    for (int Sz = 0; Sz < Dim; Sz++) {
-      SizesMap.emplace_back(new SizeSymbol(ID));
-      InputSizes.emplace_back(SizesMap.back().get());
+    ShapeTy Shape;
+    for (int Axis = 0; Axis < Dim; Axis++) {
+      SizesMap.emplace_back(new SizeSymbol(ID++));
+      Shape.emplace_back(SizesMap.back().get());
     }
-    InputTensors.emplace_back(new InputTensor(Name, InputSizes));
+    InputTensors.emplace_back(new InputTensor(Name, Shape));
     auto IT = InputTensors.back().get();
     SymbolsMap[IT->getName()] = IT;
     InTensorsMap[IT->getName()] = IT;
@@ -459,7 +457,7 @@ public:
     }
   }
   // Sizes
-  void setSizeEqual(SizesTy &Sz1, SizesTy &Sz2) {
+  void setSizeEqual(SizesTy2 &Sz1, SizesTy2 &Sz2) {
     assert(Sz1.size() == Sz2.size());
     for (size_t i = 0; i < Sz1.size(); i++) {
       if (!Sz1[i]) {
@@ -478,7 +476,7 @@ public:
   int64_t getInputSizeOf(SizePtr Sz) { return Sz->getUID(); }
 
   StringRef getName() { return Name; }
-  SizesTy &getInputSizes() { return InputSizes; }
+  SizesTy2 &getInputSizes() { return InputSizes; }
   InTensorsTy &getInputTensors() { return InputTensors; }
   CTreePtrsTy &getOutputTensors() { return OutputCTrees; }
   CTreesTy &getContractionTrees() { return Trees; }

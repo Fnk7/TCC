@@ -114,15 +114,15 @@ class Parser {
     }
     return Indexes;
   }
-  SizesTy getSizes(IndexesTy &Indexes) {
-    SizesTy Sizes;
+  SizesTy2 getSizes(IndexesTy &Indexes) {
+    SizesTy2 Sizes;
     for (auto index : Indexes) {
       Sizes.emplace_back(IndexSizeMap[index]);
     }
     return Sizes;
   }
 
-  void setSizes(IndexesTy &Indexes, SizesTy &Sizes) {
+  void setSizes(IndexesTy &Indexes, SizesTy2 &Sizes) {
     assert(Indexes.size() == Sizes.size());
     for (size_t i = 0; i < Indexes.size(); i++) {
       IndexSizeMap[Indexes[i]] = Sizes[i];
@@ -256,11 +256,11 @@ NodePtr Parser::parseIndexedTensor() {
   // parse Indexes
   NamedIndexesTy NamedIndexes = parseNamedIndexes();
   IndexesTy Indexes = getIndexes(NamedIndexes);
-  SizesTy Sz1 = getSizes(Indexes);
+  ShapeTy Sz1 = getSizes(Indexes);
   auto T = CF->getTensorOfName(Name);
   if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(T)) {
     // parse indexed tensor
-    CF->setSizeEqual(Sz1, CT->getSizes());
+    CF->setSizeEqual(Sz1, CT->getShape());
     setSizes(Indexes, Sz1);
     return TreeAsLeafNode::get(Indexes, CT);
   } else {
@@ -270,7 +270,7 @@ NodePtr Parser::parseIndexedTensor() {
     if (!IT) {
       IT = CF->addInputTensor(Name, Indexes.size());
     }
-    CF->setSizeEqual(Sz1, IT->getSizes());
+    CF->setSizeEqual(Sz1, IT->getShape());
     setSizes(Indexes, Sz1);
     return InputAsLeafNode::get(Indexes, IT);
   }

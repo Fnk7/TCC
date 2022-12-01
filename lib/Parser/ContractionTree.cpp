@@ -24,7 +24,7 @@ const std::string Node::getKindString(NodeKind K) {
   }
 }
 
-static void dumpSizes(SizesTy &Sizes) {
+static void dumpSizes(SizesTy2 &Sizes) {
   if (Sizes.size()) {
     errs() << "(Sz" << Sizes[0]->getUID();
     for (size_t i = 1; i < Sizes.size(); i++)
@@ -43,13 +43,13 @@ static void dumpIndexes(IndexesTy &Indexes) {
 
 void InputTensor::dump() {
   errs() << Name;
-  dumpSizes(Sizes);
+  dumpSizes(Shape);
 }
 
 void RootNode::dump(int indent) {
   errs().indent(indent);
   errs() << getKind() << " ";
-  dumpSizes(Sizes);
+  dumpSizes(Shape);
   errs() << " -> ";
   dumpIndexes(IndexDefs);
   dumpChilds(indent);
@@ -130,13 +130,13 @@ void ContractionForest::dump() {
     }
   }
   errs() << "\n";
-  errs() << "Input size map: ";
-  for (size_t i = 0; i < InputSizeMap.size(); i++) {
-    if (i != 0)
-      errs() << ", ";
-    errs() << InputSizeMap[i];
-  }
-  errs() << "\n";
+  // errs() << "Input size map: ";
+  // for (size_t i = 0; i < InputSizeMap.size(); i++) {
+  //   if (i != 0)
+  //     errs() << ", ";
+  //   errs() << InputSizeMap[i];
+  // }
+  // errs() << "\n";
   size_t i = 0;
   for (; i < SizesMap.size(); i++) {
     if (!SizesMap[i]->isFirstAppear()) {
