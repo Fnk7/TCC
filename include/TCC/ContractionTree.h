@@ -66,8 +66,8 @@ using ChildNodesTy = SmallVector<NodePtr, 2>;
 class SizeSymbol;
 using SizeID = int64_t;
 using SizePtr = SizeSymbol *;
-using SizesTy2 = SmallVector<SizePtr, 4>;
-using ShapeTy = SizesTy2;
+using SizesTy = SmallVector<SizePtr, 4>;
+using ShapeTy = SizesTy;
 // SizeID map to SizeSymbol
 using SizesMapTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 class SizeSymbol : public Symbol {
@@ -82,8 +82,9 @@ private:
     SizeID UID = -1;
     int64_t UpperBound = 0;
     int64_t LowerBound = 0;
-    SizesTy2 Aliases;
+    SizesTy Aliases;
     EqualityStorage(ArrayRef<SizePtr> Aliases) : Aliases(Aliases) {}
+    void setID(SizeID ID) { this->ID = this->ID < ID ? this->ID : ID; }
   };
   EqualityStorage *EqualityInfo;
 
@@ -117,20 +118,16 @@ public:
       return;
     if (!Sz1.EqualityInfo && Sz2.EqualityInfo) {
       return makeSizeEqual(Sz2, Sz1);
-    } else if (!Sz1.EqualityInfo) {
-      Sz1.EqualityInfo = new EqualityStorage({&Sz1, &Sz2});
-      Sz2.EqualityInfo = Sz1.EqualityInfo;
-      Sz1.EqualityInfo->ID = Sz1.ID < Sz2.ID ? Sz1.ID : Sz2.ID;
     } else if (!Sz2.EqualityInfo) {
-      Sz1.EqualityInfo->Aliases.emplace_back(&Sz2);
+      Sz1.getInfo()->Aliases.emplace_back(&Sz2);
       Sz2.EqualityInfo = Sz1.EqualityInfo;
-      Sz1.EqualityInfo->ID = Sz1.ID < Sz2.ID ? Sz1.ID : Sz2.ID;
+      Sz1.EqualityInfo->setID(Sz2.ID);
     } else {
+      Sz1.EqualityInfo->setID(Sz2.EqualityInfo->ID);
       auto ToDelete = Sz2.EqualityInfo;
       for (auto Alias : Sz2.EqualityInfo->Aliases) {
         Sz1.EqualityInfo->Aliases.emplace_back(Alias);
         Alias->EqualityInfo = Sz1.EqualityInfo;
-        Sz1.EqualityInfo->ID = Sz1.ID < Alias->ID ? Sz1.ID : Alias->ID;
       }
       delete ToDelete;
     }
@@ -138,7 +135,7 @@ public:
   void setUpperBound(int64_t UB) { getInfo()->UpperBound = UB; }
   void setLowerBound(int64_t LB) { getInfo()->LowerBound = LB; }
   bool isFirstAppear() { return ID == getInfo()->ID; }
-  SizeID getUID() { return getInfo()->UID; }
+  SizeID getUID() { return getInfo()->ID; }
   int64_t getUpperBound() { return getInfo()->UpperBound; }
   int64_t getLowerBound() { return getInfo()->LowerBound; }
   // For LLVM RTTI
@@ -238,19 +235,19 @@ public:
 // ContractionNode: Contract tensor in some axes, where the indexes defined for.
 class ContractionNode : public Node {
 private:
-  SizesTy2 Sizes;
+  SizesTy Sizes;
   IndexesTy IndexDefs;
-  ContractionNode(SizesTy2 &Sizes, IndexesTy &Indexes, NodePtr Child)
+  ContractionNode(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child)
       : Node(NK_Contraction, std::move(Child)), Sizes(Sizes),
         IndexDefs(Indexes) {}
 
 public:
-  static NodePtr get(SizesTy2 &Sizes, IndexesTy &Indexes, NodePtr Child) {
+  static NodePtr get(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child) {
     return NodePtr(new ContractionNode(Sizes, Indexes, std::move(Child)));
   }
   // Funtions
   Node &getChild() { return *Childs[0]; }
-  SizesTy2 &getSizes() { return Sizes; }
+  SizesTy &getSizes() { return Sizes; }
   IndexesTy &getIndexes() { return IndexDefs; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Contraction; }
@@ -396,19 +393,16 @@ public:
 
 class ContractionForest {
   std::string Name;
-  // Inputs and outputs and reserves
-  SizesTy2 InputSizes;
-  InTensorsTy InputTensors;
-  InTensorPtrsTy ReservedInputs;
-  CTreePtrsTy OutputCTrees;
-  // Shapes and trees
-  CTreesTy Trees;
   // Symbols
   SymbolsMapTy SymbolsMap;
   // Input Tensors
+  InTensorsTy InputTensors;
   InTensorsMapTy InTensorsMap;
+  InTensorPtrsTy ReservedInputs;
   // Contraction Tree Tensors
+  CTreesTy CTrees;
   CTreesMapTy CTreesMap;
+  CTreePtrsTy OutputCTrees;
   // Sizes
   SizesMapTy SizesMap;
 
@@ -441,8 +435,8 @@ public:
     return IT;
   }
   void addContractionTree(StringRef Name, NodePtr Root) {
-    Trees.emplace_back(new ContractionTree(Name, std::move(Root)));
-    auto CT = Trees.back().get();
+    CTrees.emplace_back(new ContractionTree(Name, std::move(Root)));
+    auto CT = CTrees.back().get();
     SymbolsMap[CT->getName()] = CT;
     CTreesMap[CT->getName()] = CT;
   }
@@ -457,7 +451,7 @@ public:
     }
   }
   // Sizes
-  void setSizeEqual(SizesTy2 &Sz1, SizesTy2 &Sz2) {
+  void setSizeEqual(SizesTy &Sz1, SizesTy &Sz2) {
     assert(Sz1.size() == Sz2.size());
     for (size_t i = 0; i < Sz1.size(); i++) {
       if (!Sz1[i]) {
@@ -476,10 +470,9 @@ public:
   int64_t getInputSizeOf(SizePtr Sz) { return Sz->getUID(); }
 
   StringRef getName() { return Name; }
-  SizesTy2 &getInputSizes() { return InputSizes; }
   InTensorsTy &getInputTensors() { return InputTensors; }
   CTreePtrsTy &getOutputTensors() { return OutputCTrees; }
-  CTreesTy &getContractionTrees() { return Trees; }
+  CTreesTy &getContractionTrees() { return CTrees; }
 
   // TODO:
 

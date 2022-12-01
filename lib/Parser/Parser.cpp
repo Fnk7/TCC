@@ -114,15 +114,15 @@ class Parser {
     }
     return Indexes;
   }
-  SizesTy2 getSizes(IndexesTy &Indexes) {
-    SizesTy2 Sizes;
+  SizesTy getSizes(IndexesTy &Indexes) {
+    SizesTy Sizes;
     for (auto index : Indexes) {
       Sizes.emplace_back(IndexSizeMap[index]);
     }
     return Sizes;
   }
 
-  void setSizes(IndexesTy &Indexes, SizesTy2 &Sizes) {
+  void setSizes(IndexesTy &Indexes, SizesTy &Sizes) {
     assert(Indexes.size() == Sizes.size());
     for (size_t i = 0; i < Indexes.size(); i++) {
       IndexSizeMap[Indexes[i]] = Sizes[i];

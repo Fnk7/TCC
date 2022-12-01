@@ -74,7 +74,7 @@ public:
     auto FT = OB.getFunctionType(InputTypes, ResultTypes);
     auto FuncAttr = SmallVector<NamedAttribute>(
         {OB.getNamedAttr("num_input_sizes",
-                         OB.getI64IntegerAttr(CF.getInputSizes().size())),
+                         OB.getI64IntegerAttr(CF.getNumInputSizs())),
          OB.getNamedAttr("wirtebacks", OB.getI64ArrayAttr(WriteBacks))});
     auto F = OB.create<func::FuncOp>(Loc, CF.getName(), FT, FuncAttr);
     auto EntryB = F.addEntryBlock();

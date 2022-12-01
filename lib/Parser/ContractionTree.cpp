@@ -24,7 +24,7 @@ const std::string Node::getKindString(NodeKind K) {
   }
 }
 
-static void dumpSizes(SizesTy2 &Sizes) {
+static void dumpSizes(SizesTy &Sizes) {
   if (Sizes.size()) {
     errs() << "(Sz" << Sizes[0]->getUID();
     for (size_t i = 1; i < Sizes.size(); i++)
@@ -116,7 +116,7 @@ void ContractionForest::dump() {
   if (SizesMap.size()) {
     errs() << "Sz" << 0;
     for (size_t i = 1; i < SizesMap.size(); i++) {
-      if (!SizesMap[i]->isFirstAppear())
+      if (SizesMap[i]->isFirstAppear())
         errs() << ", Sz" << i;
     }
   }
@@ -152,7 +152,7 @@ void ContractionForest::dump() {
     errs() << "\n";
   }
   errs() << "Contraction Trees:\n";
-  for (auto &Tree : Trees)
+  for (auto &Tree : CTrees)
     Tree->dump();
   errs() << "Result outputs: ";
   if (OutputCTrees.size()) {
