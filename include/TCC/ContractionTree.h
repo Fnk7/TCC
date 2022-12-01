@@ -72,12 +72,12 @@ private:
   int64_t UpperBound;
   int64_t LowerBound;
   SizeID ID;
-  SmallVector<SizePtr> Alias;
+  SmallVector<SizePtr> Aliases;
   bool Implicit;
 
 public:
   SizeSymbol(SizeID ID) : Symbol(SK_Size) {
-    Alias.emplace_back(this);
+    Aliases.emplace_back(this);
     this->ID = ID;
     Name = "Sz." + std::to_string(ID);
     Implicit = true;
@@ -86,37 +86,35 @@ public:
   }
   SizeSymbol(SizeID ID, StringRef Name, int64_t UB = 0, int64_t LB = 0)
       : Symbol(SK_Size), Name(Name) {
-    Alias.emplace_back(this);
+    Aliases.emplace_back(this);
     this->ID = ID;
     Implicit = false;
     UpperBound = UB;
     LowerBound = LB;
   }
   // Member Functions
+  bool operator==(const SizeSymbol &Sz) { return this == &Sz; }
   static bool makeSizeEqual(SizeSymbol &Sz1, SizeSymbol &Sz2) {
+    if (Sz1 == Sz2)
+      return true;
     if (Sz1.Implicit && !Sz2.Implicit) {
       return makeSizeEqual(Sz2, Sz1);
     } else {
-      assert(&Sz1 == Sz1.Alias[0]);
-      assert(&Sz2 == Sz2.Alias[0]);
-      Sz1.Alias.append(Sz2.Alias);
-      Sz2.Alias.clear();
-      Sz2.Alias.emplace_back(&Sz1);
-      // if (!Sz2.UpperBound)
-      //   Sz2.UpperBound = Sz1.UpperBound;
-      // if (!Sz2.LowerBound)
-      //   Sz2.LowerBound = Sz1.LowerBound;
-      // if (Sz2.UpperBound && Sz2.UpperBound != Sz1.UpperBound)
-      //   return false;
-      // if (Sz2.LowerBound && Sz2.LowerBound != Sz1.LowerBound)
-      //   return false;
-      // return true;
+      assert(&Sz1 == Sz1.Aliases[0]);
+      assert(&Sz2 == Sz2.Aliases[0]);
+      size_t NewAlias = Sz1.Aliases.size() + 1;
+      Sz1.Aliases.append(Sz2.Aliases);
+      Sz2.Aliases.clear();
+      Sz2.Aliases.emplace_back(&Sz1);
+      for (; NewAlias < Sz1.Aliases.size(); NewAlias++) {
+        Sz1.Aliases[NewAlias]->Aliases[0] = &Sz1;
+      }
       return true;
     }
   }
   void setUpperBound(int64_t UB) { UpperBound = UB; }
   void setLowerBound(int64_t LB) { LowerBound = LB; }
-  SizeSymbol &get() { return *Alias[0]; }
+  SizeSymbol &get() { return *Aliases[0]; }
   bool isUnique() { return this == &get(); }
   SizeID getUID() { return get().ID; }
   int64_t getUpperBound() { return get().UpperBound; }
