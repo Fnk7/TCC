@@ -94,7 +94,7 @@ class Parser {
     IndexesTy Indexes;
     for (auto &Name : NamedIndexes) {
       assert(!IndexMap.count(Name));
-      auto IS = new IndexSymbol(IndexIDSizeMap.size(), Name);
+      auto IS = new IterIndexSymbol(IndexIDSizeMap.size(), Name);
       IndexMap[IS->getName()] = IS;
       Indexes.emplace_back(IS);
       IndexIDSizeMap.emplace_back(nullptr);
@@ -118,7 +118,8 @@ class Parser {
   SizesTy getSizes(IndexesTy &Indexes) {
     SizesTy Sizes;
     for (auto Idx : Indexes) {
-      Sizes.emplace_back(IndexIDSizeMap[llvm::cast<IndexSymbol>(Idx)->getID()]);
+      Sizes.emplace_back(
+          IndexIDSizeMap[llvm::cast<IterIndexSymbol>(Idx)->getID()]);
     }
     return Sizes;
   }
@@ -126,7 +127,8 @@ class Parser {
   void setSizes(IndexesTy &Indexes, SizesTy &Sizes) {
     assert(Indexes.size() == Sizes.size());
     for (size_t i = 0; i < Indexes.size(); i++) {
-      IndexIDSizeMap[llvm::cast<IndexSymbol>(Indexes[i])->getID()] = Sizes[i];
+      IndexIDSizeMap[llvm::cast<IterIndexSymbol>(Indexes[i])->getID()] =
+          Sizes[i];
     }
   }
 

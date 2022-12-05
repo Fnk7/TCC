@@ -49,13 +49,23 @@ using CTreesMapTy = DenseMap<StringRef, CTreePtr>;
 
 class Symbol {
 public:
-  enum SymbolKind { SK_CTensor, SK_InTenser, SK_Index, SK_ConstIndex, SK_Size };
+  enum SymbolKind {
+    SK_CTensor,
+    SK_InTenser,
+    SK_IterIndex,
+    SK_ConstIndex,
+    SK_Size
+  };
 
 protected:
-  SymbolKind Kind;
-  Symbol(SymbolKind K) : Kind(K) {}
+  const SymbolKind Kind;
+  std::string Name;
+  Symbol(SymbolKind K, StringRef Name) : Kind(K), Name(Name) {}
 
 public:
+  // Member Functions
+  StringRef getName() { return Name; }
+  // For LLVM RTTI
   SymbolKind getKind() const { return Kind; }
 };
 
@@ -73,7 +83,6 @@ using SizesMapTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 class SizeSymbol : public Symbol {
 private:
   SizeID ID;
-  std::string Name;
   bool Implicit;
 
   class EqualityStorage {
@@ -97,13 +106,13 @@ private:
   }
 
 public:
-  SizeSymbol(SizeID ID) : Symbol(SK_Size), ID(ID) {
+  SizeSymbol(SizeID ID) : Symbol(SK_Size, ""), ID(ID) {
     Name = "Sz." + std::to_string(ID);
     Implicit = true;
     EqualityInfo = nullptr;
   }
   SizeSymbol(SizeID ID, StringRef Name, int64_t UB = 0, int64_t LB = 0)
-      : Symbol(SK_Size), ID(ID), Name(Name) {
+      : Symbol(SK_Size, Name), ID(ID) {
     Implicit = false;
     EqualityInfo = nullptr;
     setUpperBound(UB);
@@ -154,40 +163,73 @@ public:
 };
 
 class IndexSymbol;
+class IterIndexSymbol;
 using IndexID = int64_t;
 using IndexTy = SymbolPtr;
 using IndexPtr = IndexSymbol *;
-using IndexDefsTy = SmallVector<std::unique_ptr<IndexSymbol>>;
-using IndexUsesTy = SmallVector<Symbol *>;
+using IndexDefsTy = SmallVector<std::unique_ptr<IterIndexSymbol>>;
+using IndexUsesTy = SmallVector<IndexSymbol *>;
 using IndexesTy = IndexUsesTy;
 class IndexSymbol : public Symbol {
-private:
-  IndexID ID;
-  std::string Name;
-  SizeSymbol *Size;
+protected:
+  SizePtr Size;
+  IndexSymbol(SymbolKind K, StringRef Name) : Symbol(K, Name) {}
 
 public:
-  IndexSymbol(IndexID ID, StringRef Name)
-      : Symbol(SK_Index), ID(ID), Name(Name) {}
+  // Member Functions
+  void setSize(SizePtr Size) { this->Size = Size; }
+  SizePtr getSize() { return Size; }
+  // For LLVM RTTI
+  static bool classof(const Symbol *S) {
+    return S->getKind() >= SK_IterIndex && S->getKind() <= SK_ConstIndex;
+  }
+  // Print
+  void dump();
+};
+
+class IterIndexSymbol : public IndexSymbol {
+private:
+  IndexID ID;
+
+public:
+  IterIndexSymbol(IndexID ID, StringRef Name)
+      : IndexSymbol(SK_IterIndex, Name), ID(ID) {}
   // Member Functions
   IndexID getID() { return ID; }
-  StringRef getName() { return Name; }
-  void setSize(SizeSymbol *Size) { this->Size = Size; }
   // For LLVM RTTI
-  static bool classof(const Symbol *S) { return S->getKind() == SK_Index; }
+  static bool classof(const Symbol *S) { return S->getKind() == SK_IterIndex; }
+  // Print
+  void dump();
+};
+
+class ConstIndexSymbol : public IndexSymbol {
+private:
+  int64_t Value;
+
+public:
+  ConstIndexSymbol(StringRef Name)
+      : IndexSymbol(SK_ConstIndex, Name), Value(-1) {}
+  ConstIndexSymbol(int64_t Value, StringRef Name = "")
+      : IndexSymbol(SK_ConstIndex, Name), Value(Value) {}
+  // Member Functions
+  bool hasValue() { return Value >= 0; }
+  int64_t getValue() {
+    assert(hasValue());
+    return Value;
+  }
+  // For LLVM RTTI
+  static bool classof(const Symbol *S) { return S->getKind() == SK_IterIndex; }
   // Print
   void dump();
 };
 
 class InputTensor : public Symbol {
 private:
-  std::string Name;
   ShapeTy Shape;
 
 public:
   InputTensor(StringRef Name, ShapeTy Shape)
-      : Symbol(SK_InTenser), Name(Name), Shape(Shape) {}
-  StringRef getName() { return Name; }
+      : Symbol(SK_InTenser, Name), Shape(Shape) {}
   ShapeTy &getShape() { return Shape; }
   int64_t getDimension() { return Shape.size(); }
   // For LLVM RTTI
@@ -400,16 +442,14 @@ inline void Node::deleteNode() {
 
 class ContractionTree : public Symbol {
 private:
-  std::string Name;
   NodePtr Root;
 
 public:
   ContractionTree(StringRef Name, NodePtr Root)
-      : Symbol(SK_CTensor), Name(std::string(Name)), Root(std::move(Root)) {
+      : Symbol(SK_CTensor, Name), Root(std::move(Root)) {
     assert(llvm::isa<RootNode>(this->Root.get()));
   }
   RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
-  StringRef getName() { return Name; }
   ShapeTy &getShape() { return getRootNode().getShape(); }
   int64_t getDimension() { return getShape().size(); }
   // For LLVM RTTI
