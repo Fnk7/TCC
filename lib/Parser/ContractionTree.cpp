@@ -113,10 +113,10 @@ void ContractionTree::dump() {
 
 void ContractionForest::dump() {
   errs() << "Input Sizes: ";
-  if (SizesMap.size()) {
+  if (SizeIDSymbolMap.size()) {
     errs() << "Sz" << 0;
-    for (size_t i = 1; i < SizesMap.size(); i++) {
-      if (SizesMap[i]->isFirstAppear())
+    for (size_t i = 1; i < SizeIDSymbolMap.size(); i++) {
+      if (SizeIDSymbolMap[i]->isFirstAppear())
         errs() << ", Sz" << i;
     }
   }
@@ -138,16 +138,16 @@ void ContractionForest::dump() {
   // }
   // errs() << "\n";
   size_t i = 0;
-  for (; i < SizesMap.size(); i++) {
-    if (!SizesMap[i]->isFirstAppear()) {
-      errs() << "Sizes relation: Sz" << i << " = Sz" << SizesMap[i]->getUID();
+  for (; i < SizeIDSymbolMap.size(); i++) {
+    if (!SizeIDSymbolMap[i]->isFirstAppear()) {
+      errs() << "Sizes relation: Sz" << i << " = Sz" << SizeIDSymbolMap[i]->getUID();
       break;
     }
   }
-  if (i < SizesMap.size()) {
-    for (i++; i < SizesMap.size(); i++) {
-      if (!SizesMap[i]->isFirstAppear())
-        errs() << ", Sz" << i << " = Sz" << SizesMap[i]->getUID();
+  if (i < SizeIDSymbolMap.size()) {
+    for (i++; i < SizeIDSymbolMap.size(); i++) {
+      if (!SizeIDSymbolMap[i]->isFirstAppear())
+        errs() << ", Sz" << i << " = Sz" << SizeIDSymbolMap[i]->getUID();
     }
     errs() << "\n";
   }

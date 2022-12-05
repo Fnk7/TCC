@@ -47,9 +47,9 @@ public:
     SmallVector<Type> InputTypes;
     for (auto &IT : ITs) {
       SmallVector<int64_t> Shape(IT->getDimension(), -1);
-      SmallVector<int64_t> Sizes;
+      SmallVector<SizeID> Sizes;
       for (auto Sz : IT->getShape())
-        Sizes.emplace_back(CF.getInputSizeOf(Sz));
+        Sizes.emplace_back(Sz->getUID());
       Attribute EncodingAttr = OB.getI64ArrayAttr(Sizes);
       Type T = RankedTensorType::get(Shape, OB.getF64Type(), EncodingAttr);
       InputTypes.emplace_back(T);
@@ -58,9 +58,9 @@ public:
     SmallVector<int64_t> WriteBacks;
     for (auto *CT : OTs) {
       SmallVector<int64_t> Shape(CT->getDimension(), -1);
-      SmallVector<int64_t> Sizes;
+      SmallVector<SizeID> Sizes;
       for (auto Sz : CT->getShape())
-        Sizes.emplace_back(CF.getInputSizeOf(Sz));
+        Sizes.emplace_back(Sz->getUID());
       Attribute EncodingAttr = OB.getI64ArrayAttr(Sizes);
       Type T = RankedTensorType::get(Shape, OB.getF64Type(), EncodingAttr);
       ResultTypes.emplace_back(T);

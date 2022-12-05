@@ -135,7 +135,8 @@ public:
   void setUpperBound(int64_t UB) { getInfo()->UpperBound = UB; }
   void setLowerBound(int64_t LB) { getInfo()->LowerBound = LB; }
   bool isFirstAppear() { return ID == getInfo()->ID; }
-  SizeID getUID() { return getInfo()->ID; }
+  void setUID(SizeID UID) { getInfo()->UID = UID; }
+  SizeID getUID() { return getInfo()->UID; }
   int64_t getUpperBound() { return getInfo()->UpperBound; }
   int64_t getLowerBound() { return getInfo()->LowerBound; }
   // For LLVM RTTI
@@ -404,7 +405,8 @@ class ContractionForest {
   CTreesMapTy CTreesMap;
   CTreePtrsTy OutputCTrees;
   // Sizes
-  SizesMapTy SizesMap;
+  size_t NumInputSizes;
+  SizesMapTy SizeIDSymbolMap;
 
 public:
   ContractionForest() { Name = "CT"; }
@@ -421,12 +423,13 @@ public:
   }
   // Add Tensor
   InTensorPtr addInputTensor(StringRef Name, int Dim) {
+    assert(!SymbolsMap.count(Name));
     assert(!InTensorsMap.count(Name));
-    SizeID ID = SizesMap.size();
+    SizeID ID = SizeIDSymbolMap.size();
     ShapeTy Shape;
     for (int Axis = 0; Axis < Dim; Axis++) {
-      SizesMap.emplace_back(new SizeSymbol(ID++));
-      Shape.emplace_back(SizesMap.back().get());
+      SizeIDSymbolMap.emplace_back(new SizeSymbol(ID++));
+      Shape.emplace_back(SizeIDSymbolMap.back().get());
     }
     InputTensors.emplace_back(new InputTensor(Name, Shape));
     auto IT = InputTensors.back().get();
@@ -465,7 +468,13 @@ public:
     }
   }
   void resolveInputSizes() {
-    // TODO
+    SizeID UID = 0;
+    for (auto &SizeSym : SizeIDSymbolMap) {
+      if (SizeSym->isFirstAppear()) {
+        SizeSym->setUID(UID++);
+      }
+    }
+    NumInputSizes = UID;
   }
   int64_t getInputSizeOf(SizePtr Sz) { return Sz->getUID(); }
 
@@ -477,12 +486,7 @@ public:
   // TODO:
 
   int getNumInputSizs() {
-    int num = 0;
-    for (auto &Sz : SizesMap) {
-      if (Sz->isFirstAppear())
-        num++;
-    }
-    return num;
+    return NumInputSizes;
   }
 
   int getNumInputTensors() { return InputTensors.size(); }
