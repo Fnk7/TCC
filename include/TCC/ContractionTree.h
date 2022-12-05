@@ -167,9 +167,9 @@ class IterIndexSymbol;
 using IndexID = int64_t;
 using IndexTy = SymbolPtr;
 using IndexPtr = IndexSymbol *;
+using IndexesTy = SmallVector<IndexSymbol *>;
 using IndexDefsTy = SmallVector<std::unique_ptr<IterIndexSymbol>>;
-using IndexUsesTy = SmallVector<IndexSymbol *>;
-using IndexesTy = IndexUsesTy;
+using IndexUsesTy = IndexesTy;
 class IndexSymbol : public Symbol {
 protected:
   SizePtr Size;
@@ -283,18 +283,24 @@ public:
 class RootNode : public Node {
 private:
   ShapeTy Shape;
-  IndexesTy IndexDefs;
-  RootNode(ShapeTy &Shape, IndexesTy &Indexes, NodePtr Child)
-      : Node(NK_Root, std::move(Child)), Shape(Shape), IndexDefs(Indexes) {}
+  IndexDefsTy IndexDefs;
+  RootNode(ShapeTy &Shape, IndexesTy &IndexDefs, NodePtr Child)
+      : Node(NK_Root, std::move(Child)), Shape(Shape) {
+    for (auto IndexDef : IndexDefs) {
+      assert(llvm::isa<IterIndexSymbol>(IndexDef));
+      this->IndexDefs.emplace_back(std::unique_ptr<IterIndexSymbol>(
+          llvm::cast<IterIndexSymbol>(IndexDef)));
+    }
+  }
 
 public:
-  static NodePtr get(ShapeTy &Shape, IndexesTy &Indexes, NodePtr Child) {
-    return NodePtr(new RootNode(Shape, Indexes, std::move(Child)));
+  static NodePtr get(ShapeTy &Shape, IndexesTy &IndexDefs, NodePtr Child) {
+    return NodePtr(new RootNode(Shape, IndexDefs, std::move(Child)));
   }
   // Functions
   Node &getChild() { return *Childs[0]; }
   ShapeTy &getShape() { return Shape; }
-  IndexesTy &getIndexes() { return IndexDefs; }
+  IndexDefsTy &getIndexes() { return IndexDefs; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Root; }
   // dump
@@ -305,19 +311,24 @@ public:
 class ContractionNode : public Node {
 private:
   SizesTy Sizes;
-  IndexesTy IndexDefs;
-  ContractionNode(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child)
-      : Node(NK_Contraction, std::move(Child)), Sizes(Sizes),
-        IndexDefs(Indexes) {}
+  IndexDefsTy IndexDefs;
+  ContractionNode(SizesTy &Sizes, IndexesTy &IndexDefs, NodePtr Child)
+      : Node(NK_Contraction, std::move(Child)), Sizes(Sizes) {
+    for (auto IndexDef : IndexDefs) {
+      assert(llvm::isa<IterIndexSymbol>(IndexDef));
+      this->IndexDefs.emplace_back(std::unique_ptr<IterIndexSymbol>(
+          llvm::cast<IterIndexSymbol>(IndexDef)));
+    }
+  }
 
 public:
-  static NodePtr get(SizesTy &Sizes, IndexesTy &Indexes, NodePtr Child) {
-    return NodePtr(new ContractionNode(Sizes, Indexes, std::move(Child)));
+  static NodePtr get(SizesTy &Sizes, IndexesTy &IndexDefs, NodePtr Child) {
+    return NodePtr(new ContractionNode(Sizes, IndexDefs, std::move(Child)));
   }
   // Funtions
   Node &getChild() { return *Childs[0]; }
   SizesTy &getSizes() { return Sizes; }
-  IndexesTy &getIndexes() { return IndexDefs; }
+  IndexDefsTy &getIndexes() { return IndexDefs; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Contraction; }
   // dump
@@ -368,13 +379,13 @@ public:
 // result.
 class LeafNode : public Node {
 protected:
-  IndexesTy IndexUses;
-  LeafNode(NodeKind Kind, IndexesTy &IndexUses)
+  IndexUsesTy IndexUses;
+  LeafNode(NodeKind Kind, IndexUsesTy &IndexUses)
       : Node(Kind), IndexUses(IndexUses) {}
 
 public:
   // Member Functions
-  IndexesTy &getIndexUses() { return IndexUses; }
+  IndexUsesTy &getIndexUses() { return IndexUses; }
   // For LLVM RTTI
   static bool classof(const Node *N) {
     return N->getKind() == NK_TreeAsLeaf || N->getKind() == NK_InputAsLeaf;
@@ -385,11 +396,11 @@ public:
 class TreeAsLeafNode : public LeafNode {
 private:
   CTreePtr TreeRef;
-  TreeAsLeafNode(IndexesTy &IndexUses, CTreePtr TreeRef)
+  TreeAsLeafNode(IndexUsesTy &IndexUses, CTreePtr TreeRef)
       : LeafNode(NK_TreeAsLeaf, IndexUses), TreeRef(TreeRef) {}
 
 public:
-  static NodePtr get(IndexesTy &IndexUses, CTreePtr TreeRef) {
+  static NodePtr get(IndexUsesTy &IndexUses, CTreePtr TreeRef) {
     return NodePtr(new TreeAsLeafNode(IndexUses, TreeRef));
   }
   // Member Functions
@@ -404,11 +415,11 @@ public:
 class InputAsLeafNode : public LeafNode {
 private:
   InTensorPtr InputRef;
-  InputAsLeafNode(IndexesTy &IndexUses, InTensorPtr InputRef)
+  InputAsLeafNode(IndexUsesTy &IndexUses, InTensorPtr InputRef)
       : LeafNode(NK_InputAsLeaf, IndexUses), InputRef(InputRef) {}
 
 public:
-  static NodePtr get(IndexesTy &IndexUses, InTensorPtr InputRef) {
+  static NodePtr get(IndexUsesTy &IndexUses, InTensorPtr InputRef) {
     return NodePtr(new InputAsLeafNode(IndexUses, InputRef));
   }
   // Member Functions

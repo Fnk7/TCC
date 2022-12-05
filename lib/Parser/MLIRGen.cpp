@@ -34,7 +34,7 @@ public:
 private:
   llvm::DenseMap<StringRef, Value> TreeTensorValueMap;
   llvm::DenseMap<StringRef, Value> InputTensorValueMap;
-  llvm::DenseMap<Value, IndexesTy> ValueIndexesMap;
+  llvm::DenseMap<Value, IndexUsesTy> ValueIndexesMap;
 
 public:
   ModuleOp MLIRGen() {
@@ -135,13 +135,13 @@ private:
   }
   Value generateNode(RootNode &RN) {
     Value V = generateNode(RN.getChild());
-    IndexesTy &InIndexes = ValueIndexesMap[V];
-    IndexesTy &OutIndexes = RN.getIndexes();
+    IndexUsesTy &InIndexes = ValueIndexesMap[V];
+    IndexDefsTy &OutIndexes = RN.getIndexes();
     assert(InIndexes.size() == OutIndexes.size());
     SmallVector<int64_t> AxesMap;
     for (auto Idx : InIndexes) {
       for (size_t Axis = 0; Axis < OutIndexes.size(); Axis++) {
-        if (Idx == OutIndexes[Axis]) {
+        if (Idx == OutIndexes[Axis].get()) {
           AxesMap.emplace_back(Axis);
           break;
         }
@@ -164,14 +164,15 @@ private:
   Value generateNode(ContractionNode &CN) {
     Value V = generateNode(CN.getChild());
     auto InSizes = getTensorSizes(V);
-    IndexesTy &InIndexes = ValueIndexesMap[V];
-    IndexesTy &CtIndexes = CN.getIndexes();
-    IndexesTy OutIndexes;
+    IndexUsesTy &InIndexes = ValueIndexesMap[V];
+    IndexDefsTy &CtIndexes = CN.getIndexes();
+    IndexUsesTy OutIndexes;
     SmallVector<int64_t> OutSizes;
     SmallVector<int64_t> ContractedAxes;
     for (size_t Axis = 0; Axis < InIndexes.size(); Axis++) {
       auto &Idx1 = InIndexes[Axis];
-      if (llvm::none_of(CtIndexes, [&](auto &Idx2) { return Idx1 == Idx2; })) {
+      if (llvm::none_of(CtIndexes,
+                        [&](auto &Idx2) { return Idx1 == Idx2.get(); })) {
         OutSizes.emplace_back(InSizes[Axis]);
         OutIndexes.emplace_back(Idx1);
       } else {
@@ -190,7 +191,7 @@ private:
     auto &Childs = AN.getChilds();
     SmallVector<Value> Operands;
     SmallVector<int64_t> OutSizes;
-    IndexesTy OutIndexes;
+    IndexUsesTy OutIndexes;
     SmallVector<SmallVector<int64_t>> OutAxesMaps(Childs.size());
     for (size_t Ci = 0; Ci < Childs.size(); Ci++) {
       auto &C = Childs[Ci];

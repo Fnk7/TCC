@@ -32,11 +32,19 @@ static void dumpSizes(SizesTy &Sizes) {
     errs() << ")";
   }
 }
-static void dumpIndexes(IndexesTy &Indexes) {
+static void dumpIndexes(IndexUsesTy &Indexes) {
   if (Indexes.size()) {
-    errs() << "(i" << Indexes[0];
+    errs() << "(i" << Indexes[0]->getName();
     for (size_t i = 1; i < Indexes.size(); i++)
-      errs() << ", i" << Indexes[i];
+      errs() << ", i" << Indexes[i]->getName();
+    errs() << ")";
+  }
+}
+static void dumpIndexes(IndexDefsTy &Indexes) {
+  if (Indexes.size()) {
+    errs() << "(i" << Indexes[0]->getID();
+    for (size_t i = 1; i < Indexes.size(); i++)
+      errs() << ", i" << Indexes[i]->getID();
     errs() << ")";
   }
 }
