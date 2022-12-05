@@ -59,8 +59,8 @@ public:
   SymbolKind getKind() const { return Kind; }
 };
 
-using IndexTy = int64_t;
-using IndexesTy = SmallVector<int64_t, 4>;
+// using IndexTy = int64_t;
+// using IndexesTy = SmallVector<int64_t, 4>;
 using ChildNodesTy = SmallVector<NodePtr, 2>;
 
 class SizeSymbol;
@@ -151,6 +151,32 @@ public:
         delete EqualityInfo;
     }
   }
+};
+
+class IndexSymbol;
+using IndexID = int64_t;
+using IndexTy = SymbolPtr;
+using IndexPtr = IndexSymbol *;
+using IndexDefsTy = SmallVector<std::unique_ptr<IndexSymbol>>;
+using IndexUsesTy = SmallVector<Symbol *>;
+using IndexesTy = IndexUsesTy;
+class IndexSymbol : public Symbol {
+private:
+  IndexID ID;
+  std::string Name;
+  SizeSymbol *Size;
+
+public:
+  IndexSymbol(IndexID ID, StringRef Name)
+      : Symbol(SK_Index), ID(ID), Name(Name) {}
+  // Member Functions
+  IndexID getID() { return ID; }
+  StringRef getName() { return Name; }
+  void setSize(SizeSymbol *Size) { this->Size = Size; }
+  // For LLVM RTTI
+  static bool classof(const Symbol *S) { return S->getKind() == SK_Index; }
+  // Print
+  void dump();
 };
 
 class InputTensor : public Symbol {
@@ -485,9 +511,7 @@ public:
 
   // TODO:
 
-  int getNumInputSizs() {
-    return NumInputSizes;
-  }
+  int getNumInputSizs() { return NumInputSizes; }
 
   int getNumInputTensors() { return InputTensors.size(); }
   int getNumOutputTensors() { return OutputCTrees.size(); }

@@ -140,7 +140,8 @@ void ContractionForest::dump() {
   size_t i = 0;
   for (; i < SizeIDSymbolMap.size(); i++) {
     if (!SizeIDSymbolMap[i]->isFirstAppear()) {
-      errs() << "Sizes relation: Sz" << i << " = Sz" << SizeIDSymbolMap[i]->getUID();
+      errs() << "Sizes relation: Sz" << i << " = Sz"
+             << SizeIDSymbolMap[i]->getUID();
       break;
     }
   }
