@@ -27,6 +27,9 @@ enum Token : int {
   Token_Identifier = -4,
   Token_Index = -5,
   Token_Number = -6,
+  Token_Input = -7,
+  Token_Negative = -8,
+  Token_Size = -9
 };
 
 class Lexer {
@@ -73,6 +76,8 @@ public:
         return Token_Keep;
       if (IdOrNum == "index")
         return Token_Index;
+      if (IdOrNum == "size")
+        return Token_Size;
       return Token_Identifier;
     }
     if (LastChar == '-') {
@@ -96,8 +101,8 @@ public:
   std::string getIdentifier() { return IdOrNum; }
 };
 
+using NamesTy = SmallVector<std::string, 4>;
 class Parser {
-  using NamesTy = SmallVector<std::string, 4>;
 
   Lexer &Lx;
   Token CurToken;
@@ -113,7 +118,8 @@ class Parser {
   }
 
   void parseLine();
-  void parseConstIndexes();
+  void parseSizeDefines();
+  void parseConstIndexDefines();
   void parseContractionTree();
   void parseKeepTensors();
   NamesTy parseIndexNames();
@@ -197,13 +203,45 @@ void Parser::parseLine() {
   else if (CurToken == Token_Identifier)
     parseContractionTree();
   else if (CurToken == Token_Index)
-    parseConstIndexes();
+    parseConstIndexDefines();
+  else if (CurToken == Token_Size)
+    parseSizeDefines();
   else if (!isNextLineToken())
     llvm_unreachable("TODO: Error handle.");
   assert(isNextLineToken());
 }
-
-void Parser::parseConstIndexes() {
+void Parser::parseSizeDefines() {
+  LLVM_DEBUG(dbgs() << "Parse size line\n");
+  CurToken = Lx.getNextToken();
+  while (CurToken == Token_Identifier) {
+    auto Name = Lx.getIdentifier();
+    int64_t UB = 0, LB = 0;
+    CurToken = Lx.getNextToken();
+    if (CurToken == Token_Equal) {
+      CurToken = Lx.getNextToken();
+      assert(CurToken == Token_ParentheseOpen && "TODO: Error handle.");
+      CurToken = Lx.getNextToken();
+      if (CurToken == Token_Number) {
+        LB = Lx.getAPInt().getSExtValue();
+        CurToken = Lx.getNextToken();
+      }
+      assert(CurToken == Token_Comma && "TODO: Error handle.");
+      CurToken = Lx.getNextToken();
+      if (CurToken == Token_Number) {
+        UB = Lx.getAPInt().getSExtValue();
+        CurToken = Lx.getNextToken();
+      }
+      assert(CurToken == Token_ParentheseClose && "TODO: Error handle.");
+      CurToken = Lx.getNextToken();
+    }
+    CF->addSize(Name, UB, LB);
+    if (CurToken == Token_Comma)
+      CurToken = Lx.getNextToken();
+    else
+      break;
+  }
+}
+void Parser::parseConstIndexDefines() {
   LLVM_DEBUG(dbgs() << "Parse const index line\n");
   CurToken = Lx.getNextToken();
   while (CurToken == Token_Identifier) {
@@ -243,7 +281,7 @@ void Parser::parseContractionTree() {
   CF->addContractionTree(Name, std::move(Root));
 }
 
-Parser::NamesTy Parser::parseIndexNames() {
+NamesTy Parser::parseIndexNames() {
   NamesTy Names;
   if (CurToken != Token_ParentheseOpen)
     return Names;

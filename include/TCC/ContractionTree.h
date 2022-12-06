@@ -530,6 +530,13 @@ public:
     SymbolsMap[CIS->getName()] = CIS;
     ConstIndexes.emplace_back(std::unique_ptr<ConstIndexSymbol>(CIS));
   }
+  void addSize(StringRef Name, int64_t UB, int64_t LB) {
+    assert(!SymbolsMap.count(Name));
+    SizeID ID = SizeIDSymbolMap.size();
+    auto SS = new SizeSymbol(ID, Name, UB, LB);
+    SizeIDSymbolMap.emplace_back(SS);
+    SymbolsMap[SS->getName()] = SS;
+  }
   // Add Tensor
   InTensorPtr addInputTensor(StringRef Name, int Dim) {
     assert(!SymbolsMap.count(Name));
