@@ -102,6 +102,10 @@ void AdditionNode::dump(int indent) {
   dumpChilds(indent);
   errs().indent(indent) << "}\n";
 }
+void ConstantNode::dump(int indent) {
+  errs().indent(indent);
+  errs() << "Constant " << Value << "\n";
+}
 
 void Node::dump(int indent) {
   if (auto *RN = dyn_cast<RootNode>(this)) {
@@ -120,8 +124,10 @@ void Node::dump(int indent) {
     TLN->dump(indent);
   } else if (auto *ILN = dyn_cast<InputAsLeafNode>(this)) {
     ILN->dump(indent);
-  } else if (auto *NN = dyn_cast<NegativeNode>(this)) {
-    NN->dump(indent);
+  } else if (auto N = dyn_cast<NegativeNode>(this)) {
+    N->dump(indent);
+  } else if (auto N = dyn_cast<ConstantNode>(this)) {
+    N->dump(indent);
   }
 }
 void Node::dumpChilds(int indent) {

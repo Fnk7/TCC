@@ -1,3 +1,4 @@
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
@@ -99,6 +100,7 @@ public:
     LastChar = getNextChar();
     return T;
   }
+  APFloat getAPFloat() { return APFloat(APFloat::IEEEdouble(), IdOrNum); }
   APInt getAPInt() { return APInt(64, IdOrNum, 10); }
   std::string getIdentifier() { return IdOrNum; }
 };
@@ -383,6 +385,10 @@ NodePtr Parser::parseSingleNode() {
     return Child;
   } else if (CurToken == Token_Identifier) {
     return parseIndexedTensor();
+  } else if (CurToken == Token_Number) {
+    auto Value = Lx.getAPFloat().convertToDouble();
+    CurToken = Lx.getNextToken();
+    return ConstantNode::get(Value);
   } else {
     llvm_unreachable("TODO: Expression should begin with sum or identifier or "
                      "open parenthese or negative.");

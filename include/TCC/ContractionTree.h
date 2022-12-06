@@ -252,6 +252,7 @@ public:
     NK_Multiplication,
     NK_Negative,
     NK_Leaf,
+    NK_Constant,
     NK_TreeAsLeaf,
     NK_InputAsLeaf
   };
@@ -469,6 +470,20 @@ public:
   void dump(int);
 };
 
+// NegativeNode:
+class ConstantNode : public Node {
+private:
+  double Value;
+  ConstantNode(double Value) : Node(NK_Constant), Value(Value) {}
+
+public:
+  static NodePtr get(double Value) { return NodePtr(new ConstantNode(Value)); }
+  // For LLVM RTTI
+  static bool classof(const Node *N) { return N->getKind() == NK_Constant; }
+  // dump
+  void dump(int);
+};
+
 // LLVM RTTI unique_ptr release.
 inline void NodeDeleter::operator()(Node *N) { N->deleteNode(); }
 inline void Node::deleteNode() {
@@ -486,6 +501,8 @@ inline void Node::deleteNode() {
   } else if (auto *N = llvm::dyn_cast<InputAsLeafNode>(this)) {
     delete N;
   } else if (auto *N = llvm::dyn_cast<NegativeNode>(this)) {
+    delete N;
+  } else if (auto *N = llvm::dyn_cast<ConstantNode>(this)) {
     delete N;
   } else {
     llvm_unreachable("Deleting Undifined Node");
