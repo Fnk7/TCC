@@ -250,6 +250,7 @@ public:
     NK_Arith,
     NK_Addition,
     NK_Multiplication,
+    NK_Negative,
     NK_Leaf,
     NK_TreeAsLeaf,
     NK_InputAsLeaf
@@ -443,6 +444,20 @@ public:
   }
   // Member Functions
   InTensorPtr getInput() { return InputRef; }
+  // For LLVM RTTI
+  static bool classof(const Node *N) { return N->getKind() == NK_InputAsLeaf; }
+  // dump
+  void dump(int);
+};
+
+// NegativeNode: 
+class NegativeNode : public Node {
+private:
+  NegativeNode(NodePtr Child) : Node(NK_Negative, std::move(Child)) {}
+public:
+  static NodePtr get(NodePtr Child) {
+    return NodePtr(new NegativeNode(std::move(Child)));
+  }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_InputAsLeaf; }
   // dump

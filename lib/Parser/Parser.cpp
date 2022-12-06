@@ -88,7 +88,7 @@ public:
         setNumberStr(false);
         return Token_Number;
       } else {
-        llvm_unreachable("TODO: to support negative.\n");
+        return Token_Negative;
       }
     }
     if (isdigit(LastChar)) {
@@ -127,6 +127,8 @@ class Parser {
   void parseKeepTensors();
   NamesTy parseIndexNames();
   NodePtr parseAddition();
+  NodePtr parseSingleNode();
+  NodePtr parseNegative();
   NodePtr parseMultiplication();
   NodePtr parseIndexedTensor();
   NodePtr parseContraction();
@@ -359,21 +361,36 @@ NodePtr Parser::parseAddition() {
   return AdditionNode::get(Childs);
 }
 
+NodePtr Parser::parseSingleNode() {
+  if (CurToken == Token_Contraction) {
+    return parseContraction();
+  } else if (CurToken == Token_Negative) {
+    return parseNegative();
+  } else if (CurToken == Token_ParentheseOpen) {
+    CurToken = Lx.getNextToken();
+    auto Child = parseAddition();
+    assert(CurToken == Token_ParentheseClose);
+    CurToken = Lx.getNextToken();
+    return Child;
+  } else if (CurToken == Token_Identifier) {
+    return parseIndexedTensor();
+  } else {
+    llvm_unreachable("TODO: Expression should begin with sum or identifier or "
+                     "open parenthese or negative.");
+  }
+}
+
+NodePtr Parser::parseNegative() {
+  assert(CurToken == Token_Negative);
+  CurToken = Lx.getNextToken();
+  assert(CurToken != Token_Negative);
+  return parseSingleNode();
+}
+
 NodePtr Parser::parseMultiplication() {
   ChildNodesTy Childs;
   while (true) {
-    if (CurToken == Token_Contraction)
-      Childs.emplace_back(parseContraction());
-    else if (CurToken == Token_Identifier)
-      Childs.emplace_back(parseIndexedTensor());
-    else if (CurToken == Token_ParentheseOpen) {
-      CurToken = Lx.getNextToken();
-      Childs.emplace_back(parseAddition());
-      assert(CurToken == Token_ParentheseClose);
-      CurToken = Lx.getNextToken();
-    } else
-      assert(
-          "Expression should begin with sum or identifier or open parenthese.");
+    Childs.emplace_back(parseSingleNode());
     if (CurToken != Token_Multiplication)
       break;
     CurToken = Lx.getNextToken();
