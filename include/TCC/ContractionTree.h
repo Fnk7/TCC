@@ -6,6 +6,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/Debug.h"
 
 using llvm::raw_ostream;
 
@@ -207,10 +208,11 @@ private:
   int64_t Value;
 
 public:
-  ConstIndexSymbol(StringRef Name)
-      : IndexSymbol(SK_ConstIndex, Name), Value(-1) {}
-  ConstIndexSymbol(int64_t Value, StringRef Name = "")
+  static const int64_t Undefined = -1;
+  ConstIndexSymbol(StringRef Name, int64_t Value = Undefined)
       : IndexSymbol(SK_ConstIndex, Name), Value(Value) {}
+  ConstIndexSymbol(int64_t Value)
+      : IndexSymbol(SK_ConstIndex, ""), Value(Value) {}
   // Member Functions
   bool hasValue() { return Value >= 0; }
   int64_t getValue() {
@@ -469,10 +471,15 @@ public:
   void dump();
 };
 
+#define DEBUG_TYPE "TCForest"
+
+using ConstIndexesTy = SmallVector<std::unique_ptr<ConstIndexSymbol>>;
 class ContractionForest {
   std::string Name;
   // Symbols
   SymbolsMapTy SymbolsMap;
+  // Const Indexes
+  ConstIndexesTy ConstIndexes;
   // Input Tensors
   InTensorsTy InputTensors;
   InTensorsMapTy InTensorsMap;
@@ -489,7 +496,7 @@ public:
   ContractionForest() { Name = "CT"; }
   void dump();
   // Get Tensor
-  SymbolPtr getTensorOfName(StringRef Name) {
+  SymbolPtr getSymbolOfName(StringRef Name) {
     return SymbolsMap.count(Name) ? SymbolsMap[Name] : nullptr;
   }
   InTensorPtr getInputTensor(StringRef Name) {
@@ -497,6 +504,15 @@ public:
   }
   CTreePtr getContractionTree(StringRef Name) {
     return CTreesMap.count(Name) ? CTreesMap[Name] : nullptr;
+  }
+  void addConstIndex(StringRef Name, int64_t Value) {
+    LLVM_DEBUG(llvm::dbgs() << "Add const index: " << Name);
+    LLVM_DEBUG(if (Value >= 0) llvm::dbgs() << " = " << Value;);
+    LLVM_DEBUG(llvm::dbgs() << "\n");
+    assert(!SymbolsMap.count(Name) && "TODO: Error handle.");
+    auto CIS = new ConstIndexSymbol(Name, Value);
+    SymbolsMap[CIS->getName()] = CIS;
+    ConstIndexes.emplace_back(std::unique_ptr<ConstIndexSymbol>(CIS));
   }
   // Add Tensor
   InTensorPtr addInputTensor(StringRef Name, int Dim) {
@@ -567,6 +583,9 @@ public:
   int getNumInputTensors() { return InputTensors.size(); }
   int getNumOutputTensors() { return OutputCTrees.size(); }
 };
+
+#undef DEBUG_TYPE
+
 } // namespace contraction
 
 #endif

@@ -1,9 +1,13 @@
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "TCC/Parser.h"
+
+#define DEBUG_TYPE "TCParser"
 
 using namespace llvm;
 
@@ -21,6 +25,8 @@ enum Token : int {
   Token_Contraction = -2,
   Token_Keep = -3,
   Token_Identifier = -4,
+  Token_Index = -5,
+  Token_Number = -6,
 };
 
 class Lexer {
@@ -28,12 +34,20 @@ class Lexer {
   StringRef Buffer;
   int LastChar;
   size_t Position;
-  std::string Identifier;
+  std::string IdOrNum;
 
   inline int getNextChar() {
     if (Position >= Buffer.size())
       return EOF;
     return Buffer[Position++];
+  }
+
+  void setNumberStr(bool Pos = true) {
+    IdOrNum = Pos ? "" : "-";
+    do {
+      IdOrNum += (char)LastChar;
+      LastChar = getNextChar();
+    } while (isdigit(LastChar) || LastChar == '.');
   }
 
 public:
@@ -48,22 +62,38 @@ public:
     while (LastChar != '\n' && isspace(LastChar))
       LastChar = getNextChar();
     if (isalpha(LastChar)) {
-      Identifier = "";
+      IdOrNum = "";
       do {
-        Identifier += (char)LastChar;
+        IdOrNum += (char)LastChar;
         LastChar = getNextChar();
       } while (isalnum(LastChar) || LastChar == '_');
-      if (Identifier == "sum")
+      if (IdOrNum == "sum")
         return Token_Contraction;
-      if (Identifier == "keep")
+      if (IdOrNum == "keep")
         return Token_Keep;
+      if (IdOrNum == "index")
+        return Token_Index;
       return Token_Identifier;
+    }
+    if (LastChar == '-') {
+      LastChar = getNextChar();
+      if (isdigit(LastChar)) {
+        setNumberStr(false);
+        return Token_Number;
+      } else {
+        llvm_unreachable("TODO: to support negative.\n");
+      }
+    }
+    if (isdigit(LastChar)) {
+      setNumberStr();
+      return Token_Number;
     }
     Token T{LastChar};
     LastChar = getNextChar();
     return T;
   }
-  std::string getIdentifier() { return Identifier; }
+  APInt getAPInt() { return APInt(64, IdOrNum, 10); }
+  std::string getIdentifier() { return IdOrNum; }
 };
 
 class Parser {
@@ -82,8 +112,10 @@ class Parser {
   }
 
   void parseLine();
-  void parseKeepTensors();
+  void parseConstIndexes();
   void parseContractionTree();
+  void parseKeepTensors();
+  IndexesTy parseIndexes();
   NamedIndexesTy parseNamedIndexes();
   NodePtr parseAddition();
   NodePtr parseMultiplication();
@@ -154,9 +186,33 @@ void Parser::parseLine() {
     parseKeepTensors();
   else if (CurToken == Token_Identifier)
     parseContractionTree();
-  else
-    assert("Line should begin with keep or tensor identifier.");
+  else if (CurToken == Token_Index)
+    parseConstIndexes();
+  else if (!isNextLineToken())
+    llvm_unreachable("TODO: Error handle.");
   assert(isNextLineToken());
+}
+
+void Parser::parseConstIndexes() {
+  LLVM_DEBUG(dbgs() << "Parse const index line\n");
+  CurToken = Lx.getNextToken();
+  while (CurToken == Token_Identifier) {
+    auto Name = Lx.getIdentifier();
+    int64_t Value = ConstIndexSymbol::Undefined;
+    CurToken = Lx.getNextToken();
+    if (CurToken == Token_Equal) {
+      CurToken = Lx.getNextToken();
+      assert(CurToken == Token_Number && "TODO: Error handle.");
+      Value = Lx.getAPInt().getSExtValue();
+      assert(Value >= 0 && "TODO: Error handle.");
+      CurToken = Lx.getNextToken();
+    }
+    CF->addConstIndex(Name, Value);
+    if (CurToken == Token_Comma)
+      CurToken = Lx.getNextToken();
+    else
+      break;
+  }
 }
 
 void Parser::parseContractionTree() {
@@ -191,7 +247,7 @@ Parser::NamedIndexesTy Parser::parseNamedIndexes() {
     else
       break;
   }
-  assert(CurToken == Token_ParentheseClose);
+  assert(CurToken == Token_ParentheseClose && "TODO: Error handle.");
   CurToken = Lx.getNextToken();
   return NamedIndexes;
 }
@@ -260,7 +316,7 @@ NodePtr Parser::parseIndexedTensor() {
   NamedIndexesTy NamedIndexes = parseNamedIndexes();
   IndexesTy Indexes = getIndexes(NamedIndexes);
   ShapeTy Sz1 = getSizes(Indexes);
-  auto T = CF->getTensorOfName(Name);
+  auto T = CF->getSymbolOfName(Name);
   if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(T)) {
     // parse indexed tensor
     CF->setSizeEqual(Sz1, CT->getShape());
@@ -308,3 +364,5 @@ std::unique_ptr<ContractionForest> parseInputFile(StringRef FileName) {
   return CF;
 }
 } // namespace contraction
+
+#undef DEBUG_TYPE
