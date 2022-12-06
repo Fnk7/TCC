@@ -78,6 +78,8 @@ public:
         return Token_Index;
       if (IdOrNum == "size")
         return Token_Size;
+      if (IdOrNum == "input")
+        return Token_Input;
       return Token_Identifier;
     }
     if (LastChar == '-') {
@@ -119,7 +121,8 @@ class Parser {
 
   void parseLine();
   void parseSizeDefines();
-  void parseConstIndexDefines();
+  void parseInputDefines();
+  void parseIndexDefines();
   void parseContractionTree();
   void parseKeepTensors();
   NamesTy parseIndexNames();
@@ -203,9 +206,11 @@ void Parser::parseLine() {
   else if (CurToken == Token_Identifier)
     parseContractionTree();
   else if (CurToken == Token_Index)
-    parseConstIndexDefines();
+    parseIndexDefines();
   else if (CurToken == Token_Size)
     parseSizeDefines();
+  else if (CurToken == Token_Input)
+    parseInputDefines();
   else if (!isNextLineToken())
     llvm_unreachable("TODO: Error handle.");
   assert(isNextLineToken());
@@ -241,8 +246,8 @@ void Parser::parseSizeDefines() {
       break;
   }
 }
-void Parser::parseConstIndexDefines() {
-  LLVM_DEBUG(dbgs() << "Parse const index line\n");
+void Parser::parseIndexDefines() {
+  LLVM_DEBUG(dbgs() << "Parse index line\n");
   CurToken = Lx.getNextToken();
   while (CurToken == Token_Identifier) {
     auto Name = Lx.getIdentifier();
@@ -256,6 +261,48 @@ void Parser::parseConstIndexDefines() {
       CurToken = Lx.getNextToken();
     }
     CF->addConstIndex(Name, Value);
+    if (CurToken == Token_Comma)
+      CurToken = Lx.getNextToken();
+    else
+      break;
+  }
+}
+
+void Parser::parseInputDefines() {
+  LLVM_DEBUG(dbgs() << "Parse input line\n");
+  CurToken = Lx.getNextToken();
+  while (CurToken == Token_Identifier) {
+    auto Name = Lx.getIdentifier();
+    CurToken = Lx.getNextToken();
+    ShapeTy Shape;
+    if (CurToken == Token_ParentheseOpen) {
+      CurToken = Lx.getNextToken();
+      while (true) {
+        if (CurToken == Token_Identifier) {
+          if (auto Size = CF->getSymbolOfName(Lx.getIdentifier())) {
+            auto Sz0 = CF->addImplicitSize();
+            Shape.emplace_back(Sz0);
+            auto Sz1 = cast<SizeSymbol>(Size);
+            SizeSymbol::makeSizeEqual(*Sz0, *Sz1);
+          } else {
+            Shape.emplace_back(CF->addSize(Name));
+          }
+          CurToken = Lx.getNextToken();
+        } else if (CurToken == Token_Multiplication) {
+          Shape.emplace_back(CF->addImplicitSize());
+          CurToken = Lx.getNextToken();
+        } else {
+          break;
+        }
+        if (CurToken == Token_Comma)
+          CurToken = Lx.getNextToken();
+        else
+          break;
+      }
+      assert(CurToken == Token_ParentheseClose);
+      CurToken = Lx.getNextToken();
+    }
+    CF->addInputTensor(Name, Shape);
     if (CurToken == Token_Comma)
       CurToken = Lx.getNextToken();
     else

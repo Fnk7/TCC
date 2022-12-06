@@ -146,6 +146,7 @@ public:
   void setLowerBound(int64_t LB) { getInfo()->LowerBound = LB; }
   bool isFirstAppear() { return ID == getInfo()->ID; }
   void setUID(SizeID UID) { getInfo()->UID = UID; }
+  SizeID getID() { return getInfo()->ID; }
   SizeID getUID() { return getInfo()->UID; }
   int64_t getUpperBound() { return getInfo()->UpperBound; }
   int64_t getLowerBound() { return getInfo()->LowerBound; }
@@ -530,14 +531,30 @@ public:
     SymbolsMap[CIS->getName()] = CIS;
     ConstIndexes.emplace_back(std::unique_ptr<ConstIndexSymbol>(CIS));
   }
-  void addSize(StringRef Name, int64_t UB, int64_t LB) {
+  SizePtr addImplicitSize() {
+    SizeID ID = SizeIDSymbolMap.size();
+    auto SS = new SizeSymbol(ID);
+    SizeIDSymbolMap.emplace_back(SS);
+    return SS;
+  }
+  SizePtr addSize(StringRef Name, int64_t UB = 0, int64_t LB = 0) {
     assert(!SymbolsMap.count(Name));
     SizeID ID = SizeIDSymbolMap.size();
     auto SS = new SizeSymbol(ID, Name, UB, LB);
     SizeIDSymbolMap.emplace_back(SS);
     SymbolsMap[SS->getName()] = SS;
+    return SS;
   }
   // Add Tensor
+  InTensorPtr addInputTensor(StringRef Name, ShapeTy Shape) {
+    assert(!SymbolsMap.count(Name));
+    assert(!InTensorsMap.count(Name));
+    auto IT = new InputTensor(Name, Shape);
+    InputTensors.emplace_back(IT);
+    SymbolsMap[IT->getName()] = IT;
+    InTensorsMap[IT->getName()] = IT;
+    return IT;
+  }
   InTensorPtr addInputTensor(StringRef Name, int Dim) {
     assert(!SymbolsMap.count(Name));
     assert(!InTensorsMap.count(Name));
