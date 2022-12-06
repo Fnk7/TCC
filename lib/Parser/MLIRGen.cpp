@@ -228,13 +228,13 @@ private:
   Value generateNode(TreeAsLeafNode &TALN) {
     auto CT = TALN.getTree();
     Value V = TreeTensorValueMap[CT->getName()];
-    ValueIndexesMap[V] = TALN.getIndexUses();
+    ValueIndexesMap[V] = TALN.getIterIndexUses();
     return V;
   }
   Value generateNode(InputAsLeafNode &IALN) {
     auto IT = IALN.getInput();
     Value V = InputTensorValueMap[IT->getName()];
-    ValueIndexesMap[V] = IALN.getIndexUses();
+    ValueIndexesMap[V] = IALN.getIterIndexUses();
     return V;
   }
 };

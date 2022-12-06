@@ -174,7 +174,7 @@ using IndexUsesTy = IndexesTy;
 class IndexSymbol : public Symbol {
 protected:
   SizePtr Size;
-  IndexSymbol(SymbolKind K, StringRef Name) : Symbol(K, Name) {}
+  IndexSymbol(SymbolKind K, StringRef Name) : Symbol(K, Name), Size(nullptr) {}
 
 public:
   // Member Functions
@@ -220,7 +220,7 @@ public:
     return Value;
   }
   // For LLVM RTTI
-  static bool classof(const Symbol *S) { return S->getKind() == SK_IterIndex; }
+  static bool classof(const Symbol *S) { return S->getKind() == SK_ConstIndex; }
   // Print
   void dump();
 };
@@ -285,19 +285,24 @@ public:
 class RootNode : public Node {
 private:
   ShapeTy Shape;
+  IndexesTy Indexes;
   IndexDefsTy IndexDefs;
-  RootNode(ShapeTy &Shape, IndexesTy &IndexDefs, NodePtr Child)
-      : Node(NK_Root, std::move(Child)), Shape(Shape) {
-    for (auto IndexDef : IndexDefs) {
-      assert(llvm::isa<IterIndexSymbol>(IndexDef));
-      this->IndexDefs.emplace_back(std::unique_ptr<IterIndexSymbol>(
-          llvm::cast<IterIndexSymbol>(IndexDef)));
+  RootNode(IndexesTy &Indexes, NodePtr Child)
+      : Node(NK_Root, std::move(Child)), Indexes(Indexes) {
+    for (auto Index : Indexes) {
+      assert(Index->getSize() && "Size is inferenced!");
+      Shape.emplace_back(Index->getSize());
+      if (auto IIS = llvm::cast<IterIndexSymbol>(Index)) {
+        IndexDefs.emplace_back(std::unique_ptr<IterIndexSymbol>(IIS));
+      } else {
+        llvm_unreachable("TODO: Const Index cant used by result!");
+      }
     }
   }
 
 public:
-  static NodePtr get(ShapeTy &Shape, IndexesTy &IndexDefs, NodePtr Child) {
-    return NodePtr(new RootNode(Shape, IndexDefs, std::move(Child)));
+  static NodePtr get(IndexesTy &Indexes, NodePtr Child) {
+    return NodePtr(new RootNode(Indexes, std::move(Child)));
   }
   // Functions
   Node &getChild() { return *Childs[0]; }
@@ -314,18 +319,20 @@ class ContractionNode : public Node {
 private:
   SizesTy Sizes;
   IndexDefsTy IndexDefs;
-  ContractionNode(SizesTy &Sizes, IndexesTy &IndexDefs, NodePtr Child)
-      : Node(NK_Contraction, std::move(Child)), Sizes(Sizes) {
+  ContractionNode(IndexesTy &IndexDefs, NodePtr Child)
+      : Node(NK_Contraction, std::move(Child)) {
     for (auto IndexDef : IndexDefs) {
+      assert(IndexDef->getSize() && "Size is inferenced!");
+      Sizes.emplace_back(IndexDef->getSize());
       assert(llvm::isa<IterIndexSymbol>(IndexDef));
-      this->IndexDefs.emplace_back(std::unique_ptr<IterIndexSymbol>(
-          llvm::cast<IterIndexSymbol>(IndexDef)));
+      auto IIS = llvm::cast<IterIndexSymbol>(IndexDef);
+      this->IndexDefs.emplace_back(std::unique_ptr<IterIndexSymbol>(IIS));
     }
   }
 
 public:
-  static NodePtr get(SizesTy &Sizes, IndexesTy &IndexDefs, NodePtr Child) {
-    return NodePtr(new ContractionNode(Sizes, IndexDefs, std::move(Child)));
+  static NodePtr get(IndexesTy &IndexDefs, NodePtr Child) {
+    return NodePtr(new ContractionNode(IndexDefs, std::move(Child)));
   }
   // Funtions
   Node &getChild() { return *Childs[0]; }
@@ -388,6 +395,15 @@ protected:
 public:
   // Member Functions
   IndexUsesTy &getIndexUses() { return IndexUses; }
+  IndexUsesTy getIterIndexUses() {
+    IndexUsesTy IIndexUses;
+    for (auto IndexUse : IndexUses) {
+      if (llvm::isa<IterIndexSymbol>(IndexUse)) {
+        IIndexUses.emplace_back(IndexUse);
+      }
+    }
+    return IIndexUses;
+  }
   // For LLVM RTTI
   static bool classof(const Node *N) {
     return N->getKind() == NK_TreeAsLeaf || N->getKind() == NK_InputAsLeaf;

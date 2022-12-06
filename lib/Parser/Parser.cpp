@@ -97,15 +97,16 @@ public:
 };
 
 class Parser {
-  using NamedIndexesTy = SmallVector<std::string, 4>;
+  using NamesTy = SmallVector<std::string, 4>;
 
   Lexer &Lx;
   Token CurToken;
 
-  SmallVector<SizePtr> IndexIDSizeMap;
-  DenseMap<StringRef, IndexPtr> IndexMap;
-
   std::unique_ptr<ContractionForest> CF;
+
+  // Indexes
+  IndexID IID;
+  DenseMap<StringRef, IndexPtr> IndexesMap;
 
   inline bool isNextLineToken() {
     return CurToken == Token_NewLine || CurToken == Token_EOF;
@@ -115,52 +116,61 @@ class Parser {
   void parseConstIndexes();
   void parseContractionTree();
   void parseKeepTensors();
-  IndexesTy parseIndexes();
-  NamedIndexesTy parseNamedIndexes();
+  NamesTy parseIndexNames();
   NodePtr parseAddition();
   NodePtr parseMultiplication();
   NodePtr parseIndexedTensor();
   NodePtr parseContraction();
 
-  IndexesTy insertIndexesMap(NamedIndexesTy &NamedIndexes) {
-    IndexesTy Indexes;
-    for (auto &Name : NamedIndexes) {
-      assert(!IndexMap.count(Name));
-      auto IS = new IterIndexSymbol(IndexIDSizeMap.size(), Name);
-      IndexMap[IS->getName()] = IS;
-      Indexes.emplace_back(IS);
-      IndexIDSizeMap.emplace_back(nullptr);
+  IndexesTy insertIndexDefines(NamesTy &Names, bool AllDef = true) {
+    IndexesTy IndexDefs;
+    for (auto &Name : Names) {
+      if (auto CIS = CF->getSymbolOfName(Name)) {
+        assert(!AllDef && "TODO: Error handle.");
+        assert(isa<ConstIndexSymbol>(CIS) && "TODO: Error handle.");
+        IndexDefs.emplace_back(cast<ConstIndexSymbol>(CIS));
+      } else {
+        assert(!IndexesMap.count(Name) && "TODO: Error handle.");
+        auto IIS = new IterIndexSymbol(IID++, Name);
+        IndexesMap[IIS->getName()] = IIS;
+        IndexDefs.emplace_back(IIS);
+      }
     }
-    return Indexes;
+    return IndexDefs;
   }
-  void eraseIndexesMap(NamedIndexesTy &NamedIndexes) {
-    for (auto &Name : NamedIndexes) {
-      assert(IndexMap.count(Name));
-      IndexMap.erase(Name);
+  void eraseIndexDefines(NamesTy &Names) {
+    for (auto &Name : Names) {
+      if (auto CIS = CF->getSymbolOfName(Name)) {
+        assert(isa<ConstIndexSymbol>(CIS) && "Must be.");
+        continue;
+      }
+      assert(IndexesMap.count(Name) && "Must count!");
+      IndexesMap.erase(Name);
     }
   }
-  IndexesTy getIndexes(NamedIndexesTy &NamedIndexes) {
-    IndexesTy Indexes;
-    for (auto &Name : NamedIndexes) {
-      assert(IndexMap.count(Name));
-      Indexes.emplace_back(IndexMap[Name]);
+  IndexUsesTy getIndexUses(NamesTy &Names) {
+    IndexUsesTy IndexUses;
+    for (auto &Name : Names) {
+      if (auto CIS = CF->getSymbolOfName(Name)) {
+        assert(isa<ConstIndexSymbol>(CIS) && "TODO: Error handle.");
+        IndexUses.emplace_back(cast<IndexSymbol>(CIS));
+      } else {
+        assert(IndexesMap.count(Name) && "TODO: Error handle.");
+        IndexUses.emplace_back(IndexesMap[Name]);
+      }
     }
-    return Indexes;
+    return IndexUses;
   }
-  SizesTy getSizes(IndexesTy &Indexes) {
-    SizesTy Sizes;
-    for (auto Idx : Indexes) {
-      Sizes.emplace_back(
-          IndexIDSizeMap[llvm::cast<IterIndexSymbol>(Idx)->getID()]);
-    }
-    return Sizes;
-  }
-
-  void setSizes(IndexesTy &Indexes, SizesTy &Sizes) {
-    assert(Indexes.size() == Sizes.size());
-    for (size_t i = 0; i < Indexes.size(); i++) {
-      IndexIDSizeMap[llvm::cast<IterIndexSymbol>(Indexes[i])->getID()] =
-          Sizes[i];
+  void inferenceIndexSizes(ShapeTy &Shape, IndexUsesTy &IndexUses) {
+    assert(Shape.size() == IndexUses.size() && "TODO: Error handle.");
+    for (auto Pack : llvm::zip(Shape, IndexUses)) {
+      auto Size = std::get<0>(Pack);
+      auto Index = std::get<1>(Pack);
+      if (Index->getSize()) {
+        SizeSymbol::makeSizeEqual(*Size, *(Index->getSize()));
+      } else {
+        Index->setSize(Size);
+      }
     }
   }
 
@@ -220,27 +230,26 @@ void Parser::parseContractionTree() {
   auto Name = std::string(Lx.getIdentifier());
   CurToken = Lx.getNextToken();
   // parse Indexes
-  IndexIDSizeMap.clear();
-  NamedIndexesTy NamedIndexes = parseNamedIndexes();
-  auto Indexes = insertIndexesMap(NamedIndexes);
+  IID = 0;
+  NamesTy Names = parseIndexNames();
+  auto Indexes = insertIndexDefines(Names, false);
   // parse expressions
   assert(CurToken == Token_Equal);
   CurToken = Lx.getNextToken();
   auto Child = parseAddition();
-  eraseIndexesMap(NamedIndexes);
+  eraseIndexDefines(Names);
   // create tree
-  auto Sizes = getSizes(Indexes);
-  auto Root = RootNode::get(Sizes, Indexes, std::move(Child));
+  auto Root = RootNode::get(Indexes, std::move(Child));
   CF->addContractionTree(Name, std::move(Root));
 }
 
-Parser::NamedIndexesTy Parser::parseNamedIndexes() {
-  NamedIndexesTy NamedIndexes;
+Parser::NamesTy Parser::parseIndexNames() {
+  NamesTy Names;
   if (CurToken != Token_ParentheseOpen)
-    return NamedIndexes;
+    return Names;
   CurToken = Lx.getNextToken();
   while (CurToken == Token_Identifier) {
-    NamedIndexes.emplace_back(std::string(Lx.getIdentifier()));
+    Names.emplace_back(Lx.getIdentifier());
     CurToken = Lx.getNextToken();
     if (CurToken == Token_Comma)
       CurToken = Lx.getNextToken();
@@ -249,7 +258,7 @@ Parser::NamedIndexesTy Parser::parseNamedIndexes() {
   }
   assert(CurToken == Token_ParentheseClose && "TODO: Error handle.");
   CurToken = Lx.getNextToken();
-  return NamedIndexes;
+  return Names;
 }
 
 NodePtr Parser::parseAddition() {
@@ -295,17 +304,16 @@ NodePtr Parser::parseContraction() {
   assert(CurToken == Token_ParentheseOpen);
   CurToken = Lx.getNextToken();
   // parse Indexes
-  NamedIndexesTy NamedIndexes = parseNamedIndexes();
-  IndexesTy Indexes = insertIndexesMap(NamedIndexes);
+  NamesTy Names = parseIndexNames();
+  IndexesTy IndexDefs = insertIndexDefines(Names);
   CurToken = Lx.getNextToken();
   // parse expression
   auto child = parseAddition();
   assert(CurToken == Token_ParentheseClose);
   CurToken = Lx.getNextToken();
-  eraseIndexesMap(NamedIndexes);
+  eraseIndexDefines(Names);
   // create Node
-  auto Sizes = getSizes(Indexes);
-  return ContractionNode::get(Sizes, Indexes, std::move(child));
+  return ContractionNode::get(IndexDefs, std::move(child));
 }
 
 NodePtr Parser::parseIndexedTensor() {
@@ -313,25 +321,22 @@ NodePtr Parser::parseIndexedTensor() {
   auto Name = std::string(Lx.getIdentifier());
   CurToken = Lx.getNextToken();
   // parse Indexes
-  NamedIndexesTy NamedIndexes = parseNamedIndexes();
-  IndexesTy Indexes = getIndexes(NamedIndexes);
-  ShapeTy Sz1 = getSizes(Indexes);
+  auto Names = parseIndexNames();
+  auto IndexUses = getIndexUses(Names);
   auto T = CF->getSymbolOfName(Name);
   if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(T)) {
     // parse indexed tensor
-    CF->setSizeEqual(Sz1, CT->getShape());
-    setSizes(Indexes, Sz1);
-    return TreeAsLeafNode::get(Indexes, CT);
+    inferenceIndexSizes(CT->getShape(), IndexUses);
+    return TreeAsLeafNode::get(IndexUses, CT);
   } else {
     // parse Input tensor
     assert(!T || llvm::isa<InputTensor>(T));
     auto IT = llvm::cast_if_present<InputTensor>(T);
     if (!IT) {
-      IT = CF->addInputTensor(Name, Indexes.size());
+      IT = CF->addInputTensor(Name, IndexUses.size());
     }
-    CF->setSizeEqual(Sz1, IT->getShape());
-    setSizes(Indexes, Sz1);
-    return InputAsLeafNode::get(Indexes, IT);
+    inferenceIndexSizes(IT->getShape(), IndexUses);
+    return InputAsLeafNode::get(IndexUses, IT);
   }
 }
 
