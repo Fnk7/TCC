@@ -349,16 +349,25 @@ NamesTy Parser::parseIndexNames() {
 }
 
 NodePtr Parser::parseAddition() {
+  SmallVector<bool> AddOrSub(1, true);
   ChildNodesTy Childs;
   while (true) {
     Childs.emplace_back(parseMultiplication());
-    if (CurToken != Token_Addition)
+    if (CurToken == Token_Addition) {
+      AddOrSub.emplace_back(true);
+      CurToken = Lx.getNextToken();
+    } else if (CurToken == Token_Negative) {
+      AddOrSub.emplace_back(false);
+      CurToken = Lx.getNextToken();
+      assert(CurToken != Token_Negative &&
+             "TODO: double negative, too complex.");
+    } else {
       break;
-    CurToken = Lx.getNextToken();
+    }
   }
   if (Childs.size() == 1)
     return std::move(Childs[0]);
-  return AdditionNode::get(Childs);
+  return AdditionNode::get(Childs, AddOrSub);
 }
 
 NodePtr Parser::parseSingleNode() {

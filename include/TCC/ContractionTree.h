@@ -360,14 +360,18 @@ public:
 // AdditionNode: tensor addition, more than elementwise.
 class AdditionNode : public ArithNode {
 private:
-  AdditionNode(ChildNodesTy &Childs) : ArithNode(NK_Addition, Childs) {}
+  SmallVector<bool> AddOrSub;
+  AdditionNode(ChildNodesTy &Childs, SmallVector<bool> &AddOrSub)
+      : ArithNode(NK_Addition, Childs), AddOrSub(AddOrSub) {}
 
 public:
-  static NodePtr get(ChildNodesTy &Childs) {
-    return NodePtr(new AdditionNode(Childs));
+  static NodePtr get(ChildNodesTy &Childs, SmallVector<bool> &AddOrSub) {
+    return NodePtr(new AdditionNode(Childs, AddOrSub));
   }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Addition; }
+  // dump
+  void dump(int);
 };
 
 // AdditionNode: tensor multiplication, more than elementwise.

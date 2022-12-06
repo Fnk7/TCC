@@ -91,18 +91,25 @@ void NegativeNode::dump(int indent) {
   errs() << "Negative";
   dumpChilds(indent);
 }
+void AdditionNode::dump(int indent) {
+  errs().indent(indent);
+  errs() << "Addition [";
+  for (auto Add : AddOrSub) {
+    errs() << (Add ? "+" : "-") << ",";
+  }
+  errs() << "]\n";
+  errs().indent(indent) << "{";
+  dumpChilds(indent);
+  errs().indent(indent) << "}\n";
+}
 
 void Node::dump(int indent) {
   if (auto *RN = dyn_cast<RootNode>(this)) {
     RN->dump(indent);
   } else if (auto *CN = dyn_cast<ContractionNode>(this)) {
     CN->dump(indent);
-  } else if (getKind() == NK_Addition) {
-    errs().indent(indent);
-    errs() << "Addition {";
-    dumpChilds(indent);
-    errs().indent(indent);
-    errs() << "}\n";
+  } else if (auto *N = dyn_cast<AdditionNode>(this)) {
+    N->dump(indent);
   } else if (getKind() == NK_Multiplication) {
     errs().indent(indent);
     errs() << "Multiplication {";
