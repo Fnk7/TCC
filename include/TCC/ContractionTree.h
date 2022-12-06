@@ -450,16 +450,17 @@ public:
   void dump(int);
 };
 
-// NegativeNode: 
+// NegativeNode:
 class NegativeNode : public Node {
 private:
   NegativeNode(NodePtr Child) : Node(NK_Negative, std::move(Child)) {}
+
 public:
   static NodePtr get(NodePtr Child) {
     return NodePtr(new NegativeNode(std::move(Child)));
   }
   // For LLVM RTTI
-  static bool classof(const Node *N) { return N->getKind() == NK_InputAsLeaf; }
+  static bool classof(const Node *N) { return N->getKind() == NK_Negative; }
   // dump
   void dump(int);
 };
@@ -479,6 +480,8 @@ inline void Node::deleteNode() {
   } else if (auto *N = llvm::dyn_cast<TreeAsLeafNode>(this)) {
     delete N;
   } else if (auto *N = llvm::dyn_cast<InputAsLeafNode>(this)) {
+    delete N;
+  } else if (auto *N = llvm::dyn_cast<NegativeNode>(this)) {
     delete N;
   } else {
     llvm_unreachable("Deleting Undifined Node");

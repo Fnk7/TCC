@@ -19,6 +19,8 @@ const std::string Node::getKindString(NodeKind K) {
     return "TreeRef";
   case NK_InputAsLeaf:
     return "InputRef";
+  case NK_Negative:
+    return "Negative";
   default:
     return "Undifined";
   }
@@ -84,6 +86,11 @@ void InputAsLeafNode::dump(int indent) {
   dumpIndexes(IndexUses);
   dumpChilds(indent);
 }
+void NegativeNode::dump(int indent) {
+  errs().indent(indent);
+  errs() << "Negative";
+  dumpChilds(indent);
+}
 
 void Node::dump(int indent) {
   if (auto *RN = dyn_cast<RootNode>(this)) {
@@ -106,6 +113,8 @@ void Node::dump(int indent) {
     TLN->dump(indent);
   } else if (auto *ILN = dyn_cast<InputAsLeafNode>(this)) {
     ILN->dump(indent);
+  } else if (auto *NN = dyn_cast<NegativeNode>(this)) {
+    NN->dump(indent);
   }
 }
 void Node::dumpChilds(int indent) {

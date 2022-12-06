@@ -384,7 +384,8 @@ NodePtr Parser::parseNegative() {
   assert(CurToken == Token_Negative);
   CurToken = Lx.getNextToken();
   assert(CurToken != Token_Negative);
-  return parseSingleNode();
+  auto Child = parseSingleNode();
+  return NegativeNode::get(std::move(Child));
 }
 
 NodePtr Parser::parseMultiplication() {
