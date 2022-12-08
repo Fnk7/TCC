@@ -124,10 +124,12 @@ class Parser {
   void parseLine();
   void parseSizeDefines();
   void parseInputDefines();
-  void parseIndexDefines();
+  void parseParamIndexDefines();
   void parseContractionTree();
   void parseKeepTensors();
   IndexUsesTy parseIndexUses();
+  IndexDefsTy parseIterIndexDefines();
+  void eraseIterIndexDefines(IndexDefsTy &IndexDefs);
   NamesTy parseIndexNames();
   NodePtr parseAddition();
   NodePtr parseSingleNode();
@@ -152,16 +154,6 @@ class Parser {
     }
     return IndexDefs;
   }
-  void eraseIndexDefines(NamesTy &Names) {
-    for (auto &Name : Names) {
-      if (auto CIS = CF->getSymbolOfName(Name)) {
-        assert(isa<ParamIndexSymbol>(CIS) && "Must be.");
-        continue;
-      }
-      assert(IndexesMap.count(Name) && "Must count!");
-      IndexesMap.erase(Name);
-    }
-  }
   IndexUsesTy getIndexUses(NamesTy &Names) {
     IndexUsesTy IndexUses;
     for (auto &Name : Names) {
@@ -180,6 +172,8 @@ class Parser {
     for (auto Pack : llvm::zip(Shape, IndexUses)) {
       auto Size = std::get<0>(Pack);
       auto Index = std::get<1>(Pack);
+      if (Index->isImplicit())
+        continue;
       if (Index->getSize()) {
         SizeSymbol::makeSizeEqual(*Size, *(Index->getSize()));
       } else {
@@ -211,7 +205,7 @@ void Parser::parseLine() {
   else if (CurToken == Token_Identifier)
     parseContractionTree();
   else if (CurToken == Token_Index)
-    parseIndexDefines();
+    parseParamIndexDefines();
   else if (CurToken == Token_Size)
     parseSizeDefines();
   else if (CurToken == Token_Input)
@@ -253,7 +247,7 @@ void Parser::parseSizeDefines() {
 }
 
 // Done 12-08
-void Parser::parseIndexDefines() {
+void Parser::parseParamIndexDefines() {
   LLVM_DEBUG(dbgs() << "Parse index line\n");
   CurToken = Lxr.getNextToken();
   while (CurToken == Token_Identifier) {
@@ -323,15 +317,14 @@ void Parser::parseContractionTree() {
   CurToken = Lxr.getNextToken();
   // parse Indexes
   IID = 0;
-  NamesTy Names = parseIndexNames();
-  auto Indexes = insertIndexDefines(Names, false);
+  IndexDefsTy IndexDefs = parseIterIndexDefines();
   // parse expressions
   assert(CurToken == Token_Equal);
   CurToken = Lxr.getNextToken();
   auto Child = parseAddition();
-  eraseIndexDefines(Names);
+  eraseIterIndexDefines(IndexDefs);
   // create tree
-  auto Root = RootNode::get(Indexes, std::move(Child));
+  auto Root = RootNode::get(IndexDefs, std::move(Child));
   CF->addContractionTree(Name, std::move(Root));
 }
 
@@ -419,20 +412,49 @@ NodePtr Parser::parseMultiplication() {
   return MultiplicationNode::get(Childs);
 }
 
+// Done 12-08
+IndexDefsTy Parser::parseIterIndexDefines() {
+  IndexDefsTy IndexDefs;
+  NamesTy Names;
+  if (CurToken != Token_ParentheseOpen)
+    return IndexDefs;
+  CurToken = Lxr.getNextToken();
+  while (CurToken == Token_Identifier) {
+    auto Name = Lxr.getIdentifier();
+    assert(!IndexesMap.count(Name) && "TODO: Error handle.");
+    auto IIndex = new IterIndexSymbol(IID++, Name);
+    IndexesMap[IIndex->getName()] = IIndex;
+    IndexDefs.emplace_back(IIndex);
+    CurToken = Lxr.getNextToken();
+    if (CurToken == Token_Comma)
+      CurToken = Lxr.getNextToken();
+    else
+      break;
+  }
+  assert(CurToken == Token_ParentheseClose && "TODO: Error handle.");
+  CurToken = Lxr.getNextToken();
+  return IndexDefs;
+}
+void Parser::eraseIterIndexDefines(IndexDefsTy &IndexDefs) {
+  for (auto &IndexDef : IndexDefs) {
+    assert(IndexesMap.erase(IndexDef->getName()));
+  }
+}
+
+// Done 12-08
 NodePtr Parser::parseContraction() {
   assert(CurToken == Token_Contraction);
   CurToken = Lxr.getNextToken();
   assert(CurToken == Token_ParentheseOpen);
   CurToken = Lxr.getNextToken();
   // parse Indexes
-  NamesTy Names = parseIndexNames();
-  IndexesTy IndexDefs = insertIndexDefines(Names);
+  IndexDefsTy IndexDefs = parseIterIndexDefines();
   CurToken = Lxr.getNextToken();
   // parse expression
   auto child = parseAddition();
   assert(CurToken == Token_ParentheseClose);
   CurToken = Lxr.getNextToken();
-  eraseIndexDefines(Names);
+  eraseIterIndexDefines(IndexDefs);
   // create Node
   return ContractionNode::get(IndexDefs, std::move(child));
 }

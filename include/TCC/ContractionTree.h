@@ -180,6 +180,7 @@ protected:
 
 public:
   // Member Functions
+  bool isImplicit() { return getName().substr(0, 3) == "ci#";}
   void setSize(SizePtr Size) { this->Size = Size; }
   SizePtr getSize() { return Size; }
   // For LLVM RTTI
@@ -289,24 +290,19 @@ public:
 class RootNode : public Node {
 private:
   ShapeTy Shape;
-  IndexesTy Indexes;
   IndexDefsTy IndexDefs;
-  RootNode(IndexesTy &Indexes, NodePtr Child)
-      : Node(NK_Root, std::move(Child)), Indexes(Indexes) {
-    for (auto Index : Indexes) {
-      assert(Index->getSize() && "Size is inferenced!");
-      Shape.emplace_back(Index->getSize());
-      if (auto IIS = llvm::cast<IterIndexSymbol>(Index)) {
-        IndexDefs.emplace_back(std::unique_ptr<IterIndexSymbol>(IIS));
-      } else {
-        llvm_unreachable("TODO: Const Index cant used by result!");
-      }
+  RootNode(IndexDefsTy &IndexDefs, NodePtr Child)
+      : Node(NK_Root, std::move(Child)) {
+    std::move(IndexDefs.begin(), IndexDefs.end(),
+              std::back_inserter(this->IndexDefs));
+    for (auto &IndexDef : this->IndexDefs) {
+      Shape.emplace_back(IndexDef->getSize());
     }
   }
 
 public:
-  static NodePtr get(IndexesTy &Indexes, NodePtr Child) {
-    return NodePtr(new RootNode(Indexes, std::move(Child)));
+  static NodePtr get(IndexDefsTy &IndexDefs, NodePtr Child) {
+    return NodePtr(new RootNode(IndexDefs, std::move(Child)));
   }
   // Functions
   Node &getChild() { return *Childs[0]; }
@@ -323,19 +319,14 @@ class ContractionNode : public Node {
 private:
   SizesTy Sizes;
   IndexDefsTy IndexDefs;
-  ContractionNode(IndexesTy &IndexDefs, NodePtr Child)
+  ContractionNode(IndexDefsTy &IndexDefs, NodePtr Child)
       : Node(NK_Contraction, std::move(Child)) {
-    for (auto IndexDef : IndexDefs) {
-      assert(IndexDef->getSize() && "Size is inferenced!");
-      Sizes.emplace_back(IndexDef->getSize());
-      assert(llvm::isa<IterIndexSymbol>(IndexDef));
-      auto IIS = llvm::cast<IterIndexSymbol>(IndexDef);
-      this->IndexDefs.emplace_back(std::unique_ptr<IterIndexSymbol>(IIS));
-    }
+    std::move(IndexDefs.begin(), IndexDefs.end(),
+              std::back_inserter(this->IndexDefs));
   }
 
 public:
-  static NodePtr get(IndexesTy &IndexDefs, NodePtr Child) {
+  static NodePtr get(IndexDefsTy &IndexDefs, NodePtr Child) {
     return NodePtr(new ContractionNode(IndexDefs, std::move(Child)));
   }
   // Funtions
