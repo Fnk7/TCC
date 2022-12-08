@@ -180,7 +180,7 @@ protected:
 
 public:
   // Member Functions
-  bool isImplicit() { return getName().substr(0, 3) == "ci#";}
+  bool isImplicit() { return getName().substr(0, 3) == "ci#"; }
   void setSize(SizePtr Size) { this->Size = Size; }
   SizePtr getSize() { return Size; }
   // For LLVM RTTI
@@ -548,12 +548,6 @@ public:
   SymbolPtr getSymbolOfName(StringRef Name) {
     return SymbolsMap.count(Name) ? SymbolsMap[Name] : nullptr;
   }
-  InTensorPtr getInputTensor(StringRef Name) {
-    return InTensorsMap.count(Name) ? InTensorsMap[Name] : nullptr;
-  }
-  CTreePtr getContractionTree(StringRef Name) {
-    return CTreesMap.count(Name) ? CTreesMap[Name] : nullptr;
-  }
   // Done 12-08
   void addParamIndexDefine(int64_t Value, StringRef Name = "") {
     if (!Name.empty()) {
@@ -594,15 +588,6 @@ public:
     return getParamIndex(ConstName);
   }
 
-  void addConstIndex(StringRef Name, int64_t Value) {
-    LLVM_DEBUG(llvm::dbgs() << "Add const index: " << Name);
-    LLVM_DEBUG(if (Value >= 0) llvm::dbgs() << " = " << Value;);
-    LLVM_DEBUG(llvm::dbgs() << "\n");
-    assert(!SymbolsMap.count(Name) && "TODO: Error handle.");
-    auto CIS = new ParamIndexSymbol(Name, Value);
-    SymbolsMap[CIS->getName()] = CIS;
-    ParamIndices.emplace_back(std::unique_ptr<ParamIndexSymbol>(CIS));
-  }
   SizePtr addImplicitSize() {
     SizeID ID = SizeIDSymbolMap.size();
     auto SS = new SizeSymbol(ID);
@@ -650,9 +635,10 @@ public:
   }
   // Add Keep
   void addKeep(StringRef Name) {
-    if (auto CT = getContractionTree(Name)) {
+    auto Sym = getSymbolOfName(Name);
+    if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(Sym)) {
       OutputCTrees.emplace_back(CT);
-    } else if (auto IT = getInputTensor(Name)) {
+    } else if (auto IT = llvm::dyn_cast_if_present<InputTensor>(Sym)) {
       ReservedInputs.emplace_back(IT);
     } else {
       llvm_unreachable("Input or CTree Tensor not defined!");

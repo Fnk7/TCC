@@ -138,35 +138,6 @@ class Parser {
   NodePtr parseIndexedTensor();
   NodePtr parseContraction();
 
-  IndexesTy insertIndexDefines(NamesTy &Names, bool AllDef = true) {
-    IndexesTy IndexDefs;
-    for (auto &Name : Names) {
-      if (auto CIS = CF->getSymbolOfName(Name)) {
-        assert(!AllDef && "TODO: Error handle.");
-        assert(isa<ParamIndexSymbol>(CIS) && "TODO: Error handle.");
-        IndexDefs.emplace_back(cast<ParamIndexSymbol>(CIS));
-      } else {
-        assert(!IndexesMap.count(Name) && "TODO: Error handle.");
-        auto IIS = new IterIndexSymbol(IID++, Name);
-        IndexesMap[IIS->getName()] = IIS;
-        IndexDefs.emplace_back(IIS);
-      }
-    }
-    return IndexDefs;
-  }
-  IndexUsesTy getIndexUses(NamesTy &Names) {
-    IndexUsesTy IndexUses;
-    for (auto &Name : Names) {
-      if (auto CIS = CF->getSymbolOfName(Name)) {
-        assert(isa<ParamIndexSymbol>(CIS) && "TODO: Error handle.");
-        IndexUses.emplace_back(cast<IndexSymbol>(CIS));
-      } else {
-        assert(IndexesMap.count(Name) && "TODO: Error handle.");
-        IndexUses.emplace_back(IndexesMap[Name]);
-      }
-    }
-    return IndexUses;
-  }
   void inferenceIndexSizes(ShapeTy &Shape, IndexUsesTy &IndexUses) {
     assert(Shape.size() == IndexUses.size() && "TODO: Error handle.");
     for (auto Pack : llvm::zip(Shape, IndexUses)) {
