@@ -28,9 +28,9 @@ const std::string Node::getKindString(NodeKind K) {
 
 static void dumpSizes(SizesTy &Sizes) {
   if (Sizes.size()) {
-    errs() << "(Sz" << Sizes[0]->getID();
+    errs() << "(" << Sizes[0];
     for (size_t i = 1; i < Sizes.size(); i++)
-      errs() << ", Sz" << Sizes[i]->getID();
+      errs() << ", " << Sizes[i];
     errs() << ")";
   }
 }
@@ -97,8 +97,7 @@ void AdditionNode::dump(int indent) {
   for (auto Add : AddOrSub) {
     errs() << (Add ? "+" : "-") << ",";
   }
-  errs() << "]\n";
-  errs().indent(indent) << "{";
+  errs() << "] {";
   dumpChilds(indent);
   errs().indent(indent) << "}\n";
 }
@@ -141,63 +140,103 @@ void ContractionTree::dump() {
   Root->dump();
 }
 
+void SizeSymbol::dump() {
+  errs() << this;
+  if (getUpperBound()) {
+    errs() << " in (" << getLowerBound() << ", " << getUpperBound() << ")";
+  }
+}
+
+void SizeSymbol::dumpAliases() {
+  bool Comma = false;
+  errs() << this;
+  auto Aliases = getInfo()->Aliases;
+  for (auto Alias : Aliases) {
+    if (Alias == this || Alias->isImplicit())
+      continue;
+    errs() << (Comma ? ", " : " alias (");
+    errs() << Alias;
+    Comma = true;
+  }
+  errs() << (Comma ? ")" : " none");
+}
+
 void ContractionForest::dump() {
-  errs() << "Input Sizes: ";
-  if (SizeIDSymbolMap.size()) {
-    errs() << "Sz" << 0;
-    for (size_t i = 1; i < SizeIDSymbolMap.size(); i++) {
-      if (SizeIDSymbolMap[i]->isFirstAppear())
-        errs() << ", Sz" << i;
+  errs() << "Input sizes: ";
+  if (ArgSizes.size()) {
+    bool Comma = false;
+    for (auto Size : ArgSizes) {
+      errs() << (Comma ? ", " : "");
+      Size->dump();
+      Comma = true;
     }
   }
   errs() << "\n";
-  errs() << "Input tensors: ";
-  if (InputTensors.size()) {
-    InputTensors[0]->dump();
-    for (size_t i = 1; i < InputTensors.size(); i++) {
-      errs() << ", ";
-      InputTensors[i]->dump();
-    }
-  }
-  errs() << "\n";
-  // errs() << "Input size map: ";
-  // for (size_t i = 0; i < InputSizeMap.size(); i++) {
-  //   if (i != 0)
-  //     errs() << ", ";
-  //   errs() << InputSizeMap[i];
-  // }
-  // errs() << "\n";
-  size_t i = 0;
-  for (; i < SizeIDSymbolMap.size(); i++) {
-    if (!SizeIDSymbolMap[i]->isFirstAppear()) {
-      errs() << "Sizes relation: Sz" << i << " = Sz"
-             << SizeIDSymbolMap[i]->getID();
-      break;
-    }
-  }
-  if (i < SizeIDSymbolMap.size()) {
-    for (i++; i < SizeIDSymbolMap.size(); i++) {
-      if (!SizeIDSymbolMap[i]->isFirstAppear())
-        errs() << ", Sz" << i << " = Sz" << SizeIDSymbolMap[i]->getUID();
+  if (ArgIndices.size()) {
+    errs() << "Input indices: ";
+    bool Comma = false;
+    for (auto Index : ArgIndices) {
+      if (Comma)
+        errs() << ", ";
+      errs() << Index->getName();
+      Comma = true;
     }
     errs() << "\n";
+  }
+  errs() << "Input tensors: ";
+  if (ArgTensors.size()) {
+    ArgTensors[0]->dump();
+    for (size_t i = 1; i < InputTensors.size(); i++) {
+      errs() << ", ";
+      ArgTensors[i]->dump();
+    }
+  }
+  errs() << "\n";
+  {
+    bool Comma = false;
+    for (auto Size : ArgSizes) {
+      if (Size->isImplicit() || !Size->hasAliases())
+        continue;
+      errs() << (Comma ? ", " : "Sizes aliases: ");
+      Size->dumpAliases();
+      Comma = true;
+    }
+    errs() << (Comma ? "\n" : "");
+  }
+  {
+    bool Comma = false;
+    for (auto Index : ConstIndices) {
+      if (Index->isImplicit())
+        continue;
+      errs() << (Comma ? ", " : "Constant indices: ");
+      errs() << Index->getName() << " = " << Index->getValue();
+      Comma = true;
+    }
+    errs() << (Comma ? "\n" : "");
   }
   errs() << "Contraction Trees:\n";
   for (auto &Tree : CTrees)
     Tree->dump();
   errs() << "Result outputs: ";
   if (OutputCTrees.size()) {
-    errs() << OutputCTrees[0]->getName();
-    for (size_t i = 1; i < OutputCTrees.size(); i++) {
-      errs() << ", " << OutputCTrees[i]->getName();
+    bool Comma = false;
+    for (auto CT : OutputCTrees) {
+      if (Comma)
+        errs() << ", ";
+      errs() << CT->getName();
+      dumpSizes(CT->getShape());
+      Comma = true;
     }
   }
   errs() << "\n";
   if (ReservedInputs.size()) {
     errs() << "Reserved inputs: ";
-    errs() << ReservedInputs[0]->getName();
-    for (size_t i = 1; i < ReservedInputs.size(); i++) {
-      errs() << ", " << ReservedInputs[i]->getName();
+    bool Comma = false;
+    for (auto RI : ReservedInputs) {
+      if (Comma)
+        errs() << ", ";
+      errs() << RI->getName();
+      Comma = true;
     }
     errs() << "\n";
   }

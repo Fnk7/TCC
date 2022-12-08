@@ -88,6 +88,7 @@ private:
 
   class EqualityStorage {
   public:
+    std::string Name;
     SizeID ID;
     SizeID UID = -1;
     int64_t UpperBound = 0;
@@ -95,6 +96,10 @@ private:
     SizesTy Aliases;
     EqualityStorage(ArrayRef<SizePtr> Aliases) : Aliases(Aliases) {}
     void setID(SizeID ID) { this->ID = this->ID < ID ? this->ID : ID; }
+    void setLowerBound(int64_t LB) { LB = LowerBound > LB ? LowerBound : LB; }
+    void setUpperBound(int64_t UB) {
+      UpperBound = UpperBound && UpperBound < UB ? UpperBound : UB;
+    }
   };
   EqualityStorage *EqualityInfo;
 
@@ -102,6 +107,8 @@ private:
     if (!EqualityInfo) {
       EqualityInfo = new EqualityStorage{{this}};
       EqualityInfo->ID = ID;
+      if (!isImplicit())
+        EqualityInfo->Name = Name;
     }
     return EqualityInfo;
   }
@@ -128,23 +135,38 @@ public:
     if (!Sz1.EqualityInfo && Sz2.EqualityInfo) {
       return makeSizeEqual(Sz2, Sz1);
     } else if (!Sz2.EqualityInfo) {
-      Sz1.getInfo()->Aliases.emplace_back(&Sz2);
-      Sz2.EqualityInfo = Sz1.EqualityInfo;
-      Sz1.EqualityInfo->setID(Sz2.ID);
-    } else {
-      Sz1.EqualityInfo->setID(Sz2.EqualityInfo->ID);
-      auto ToDelete = Sz2.EqualityInfo;
-      for (auto Alias : Sz2.EqualityInfo->Aliases) {
-        Sz1.EqualityInfo->Aliases.emplace_back(Alias);
-        Alias->EqualityInfo = Sz1.EqualityInfo;
+      auto Info = Sz1.getInfo();
+      Info->Aliases.emplace_back(&Sz2);
+      Sz2.EqualityInfo = Info;
+      Info->setID(Sz2.ID);
+      if (Info->Name.empty() && !Sz2.isImplicit()) {
+        Info->Name = Sz2.Name;
       }
-      delete ToDelete;
+    } else {
+      auto Info1 = Sz1.EqualityInfo;
+      auto Info2 = Sz2.EqualityInfo;
+      Info1->setID(Info2->ID);
+      Info1->setUpperBound(Info2->UpperBound);
+      Info1->setLowerBound(Info2->LowerBound);
+      if (Info1->Name.empty()) {
+        Info1->Name = Info2->Name;
+      }
+      for (auto Alias : Sz2.EqualityInfo->Aliases) {
+        Info1->Aliases.emplace_back(Alias);
+        Alias->EqualityInfo = Info1;
+      }
+      delete Info2;
     }
   }
   void setUpperBound(int64_t UB) { getInfo()->UpperBound = UB; }
   void setLowerBound(int64_t LB) { getInfo()->LowerBound = LB; }
   bool isFirstAppear() { return ID == getInfo()->ID; }
-  void setUID(SizeID UID) { getInfo()->UID = UID; }
+  void setUID(SizeID UID) {
+    getInfo()->UID = UID;
+    if (getInfo()->Name.empty())
+      getInfo()->Name = "sz#" + std::to_string(UID);
+  }
+  StringRef getUName() { return getInfo()->Name; }
   auto getID() { return getInfo()->ID; }
   auto getUID() { return getInfo()->UID; }
   auto getUpperBound() { return getInfo()->UpperBound; }
@@ -153,7 +175,26 @@ public:
   // For LLVM RTTI
   static bool classof(const Symbol *S) { return S->getKind() == SK_Size; }
   // Print
+  bool hasAliases() {
+    auto Aliases = getInfo()->Aliases;
+    for (auto Alias : Aliases) {
+      if (Alias == this)
+        continue;
+      if (!Alias->isImplicit())
+        return true;
+    }
+    return false;
+  }
   void dump();
+  void dumpAliases();
+  friend llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, SizePtr Size) {
+    if (Size->isImplicit() && Size->getUID() >= 0) {
+      OS << Size->getUName();
+    } else {
+      OS << Size->getName();
+    }
+    return OS;
+  }
   // Destructor
   ~SizeSymbol() {
     if (EqualityInfo) {
