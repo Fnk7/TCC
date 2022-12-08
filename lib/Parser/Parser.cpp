@@ -108,7 +108,7 @@ public:
 using NamesTy = SmallVector<std::string, 4>;
 class Parser {
 
-  Lexer &Lx;
+  Lexer &Lxr;
   Token CurToken;
 
   std::unique_ptr<ContractionForest> CF;
@@ -140,8 +140,8 @@ class Parser {
     for (auto &Name : Names) {
       if (auto CIS = CF->getSymbolOfName(Name)) {
         assert(!AllDef && "TODO: Error handle.");
-        assert(isa<ConstIndexSymbol>(CIS) && "TODO: Error handle.");
-        IndexDefs.emplace_back(cast<ConstIndexSymbol>(CIS));
+        assert(isa<ParamIndexSymbol>(CIS) && "TODO: Error handle.");
+        IndexDefs.emplace_back(cast<ParamIndexSymbol>(CIS));
       } else {
         assert(!IndexesMap.count(Name) && "TODO: Error handle.");
         auto IIS = new IterIndexSymbol(IID++, Name);
@@ -154,7 +154,7 @@ class Parser {
   void eraseIndexDefines(NamesTy &Names) {
     for (auto &Name : Names) {
       if (auto CIS = CF->getSymbolOfName(Name)) {
-        assert(isa<ConstIndexSymbol>(CIS) && "Must be.");
+        assert(isa<ParamIndexSymbol>(CIS) && "Must be.");
         continue;
       }
       assert(IndexesMap.count(Name) && "Must count!");
@@ -165,7 +165,7 @@ class Parser {
     IndexUsesTy IndexUses;
     for (auto &Name : Names) {
       if (auto CIS = CF->getSymbolOfName(Name)) {
-        assert(isa<ConstIndexSymbol>(CIS) && "TODO: Error handle.");
+        assert(isa<ParamIndexSymbol>(CIS) && "TODO: Error handle.");
         IndexUses.emplace_back(cast<IndexSymbol>(CIS));
       } else {
         assert(IndexesMap.count(Name) && "TODO: Error handle.");
@@ -188,16 +188,16 @@ class Parser {
   }
 
 public:
-  Parser(Lexer &lexer) : Lx(lexer) {}
+  Parser(Lexer &Lxr) : Lxr(Lxr) {}
   std::unique_ptr<ContractionForest> parseContractionForest();
 };
 
 std::unique_ptr<ContractionForest> Parser::parseContractionForest() {
   CF = std::make_unique<ContractionForest>();
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   while (CurToken != Token_EOF) {
     parseLine();
-    CurToken = Lx.getNextToken();
+    CurToken = Lxr.getNextToken();
   }
   // TODO: After Parse
   CF->resolveInputSizes();
@@ -221,52 +221,54 @@ void Parser::parseLine() {
 }
 void Parser::parseSizeDefines() {
   LLVM_DEBUG(dbgs() << "Parse size line\n");
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   while (CurToken == Token_Identifier) {
-    auto Name = Lx.getIdentifier();
+    auto Name = Lxr.getIdentifier();
     int64_t UB = 0, LB = 0;
-    CurToken = Lx.getNextToken();
+    CurToken = Lxr.getNextToken();
     if (CurToken == Token_Equal) {
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
       assert(CurToken == Token_ParentheseOpen && "TODO: Error handle.");
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
       if (CurToken == Token_Number) {
-        LB = Lx.getAPInt().getSExtValue();
-        CurToken = Lx.getNextToken();
+        LB = Lxr.getAPInt().getSExtValue();
+        CurToken = Lxr.getNextToken();
       }
       assert(CurToken == Token_Comma && "TODO: Error handle.");
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
       if (CurToken == Token_Number) {
-        UB = Lx.getAPInt().getSExtValue();
-        CurToken = Lx.getNextToken();
+        UB = Lxr.getAPInt().getSExtValue();
+        CurToken = Lxr.getNextToken();
       }
       assert(CurToken == Token_ParentheseClose && "TODO: Error handle.");
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
     }
     CF->addSize(Name, UB, LB);
     if (CurToken == Token_Comma)
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
     else
       break;
   }
 }
+
+// Done 12-08
 void Parser::parseIndexDefines() {
   LLVM_DEBUG(dbgs() << "Parse index line\n");
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   while (CurToken == Token_Identifier) {
-    auto Name = Lx.getIdentifier();
-    int64_t Value = ConstIndexSymbol::Undefined;
-    CurToken = Lx.getNextToken();
+    auto Name = Lxr.getIdentifier();
+    int64_t Value = ParamIndexSymbol::Undefined;
+    CurToken = Lxr.getNextToken();
     if (CurToken == Token_Equal) {
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
       assert(CurToken == Token_Number && "TODO: Error handle.");
-      Value = Lx.getAPInt().getSExtValue();
+      Value = Lxr.getAPInt().getSExtValue();
       assert(Value >= 0 && "TODO: Error handle.");
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
     }
-    CF->addConstIndex(Name, Value);
+    CF->addParamIndexDefine(Value, Name);
     if (CurToken == Token_Comma)
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
     else
       break;
   }
@@ -274,16 +276,16 @@ void Parser::parseIndexDefines() {
 
 void Parser::parseInputDefines() {
   LLVM_DEBUG(dbgs() << "Parse input line\n");
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   while (CurToken == Token_Identifier) {
-    auto Name = Lx.getIdentifier();
-    CurToken = Lx.getNextToken();
+    auto Name = Lxr.getIdentifier();
+    CurToken = Lxr.getNextToken();
     ShapeTy Shape;
     if (CurToken == Token_ParentheseOpen) {
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
       while (true) {
         if (CurToken == Token_Identifier) {
-          if (auto Size = CF->getSymbolOfName(Lx.getIdentifier())) {
+          if (auto Size = CF->getSymbolOfName(Lxr.getIdentifier())) {
             auto Sz0 = CF->addImplicitSize();
             Shape.emplace_back(Sz0);
             auto Sz1 = cast<SizeSymbol>(Size);
@@ -291,24 +293,24 @@ void Parser::parseInputDefines() {
           } else {
             Shape.emplace_back(CF->addSize(Name));
           }
-          CurToken = Lx.getNextToken();
+          CurToken = Lxr.getNextToken();
         } else if (CurToken == Token_Multiplication) {
           Shape.emplace_back(CF->addImplicitSize());
-          CurToken = Lx.getNextToken();
+          CurToken = Lxr.getNextToken();
         } else {
           break;
         }
         if (CurToken == Token_Comma)
-          CurToken = Lx.getNextToken();
+          CurToken = Lxr.getNextToken();
         else
           break;
       }
       assert(CurToken == Token_ParentheseClose);
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
     }
     CF->addInputTensor(Name, Shape);
     if (CurToken == Token_Comma)
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
     else
       break;
   }
@@ -316,15 +318,15 @@ void Parser::parseInputDefines() {
 
 void Parser::parseContractionTree() {
   // get Name
-  auto Name = std::string(Lx.getIdentifier());
-  CurToken = Lx.getNextToken();
+  auto Name = std::string(Lxr.getIdentifier());
+  CurToken = Lxr.getNextToken();
   // parse Indexes
   IID = 0;
   NamesTy Names = parseIndexNames();
   auto Indexes = insertIndexDefines(Names, false);
   // parse expressions
   assert(CurToken == Token_Equal);
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   auto Child = parseAddition();
   eraseIndexDefines(Names);
   // create tree
@@ -336,17 +338,17 @@ NamesTy Parser::parseIndexNames() {
   NamesTy Names;
   if (CurToken != Token_ParentheseOpen)
     return Names;
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   while (CurToken == Token_Identifier) {
-    Names.emplace_back(Lx.getIdentifier());
-    CurToken = Lx.getNextToken();
+    Names.emplace_back(Lxr.getIdentifier());
+    CurToken = Lxr.getNextToken();
     if (CurToken == Token_Comma)
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
     else
       break;
   }
   assert(CurToken == Token_ParentheseClose && "TODO: Error handle.");
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   return Names;
 }
 
@@ -357,10 +359,10 @@ NodePtr Parser::parseAddition() {
     Childs.emplace_back(parseMultiplication());
     if (CurToken == Token_Addition) {
       AddOrSub.emplace_back(true);
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
     } else if (CurToken == Token_Negative) {
       AddOrSub.emplace_back(false);
-      CurToken = Lx.getNextToken();
+      CurToken = Lxr.getNextToken();
       assert(CurToken != Token_Negative &&
              "TODO: double negative, too complex.");
     } else {
@@ -378,16 +380,16 @@ NodePtr Parser::parseSingleNode() {
   } else if (CurToken == Token_Negative) {
     return parseNegative();
   } else if (CurToken == Token_ParentheseOpen) {
-    CurToken = Lx.getNextToken();
+    CurToken = Lxr.getNextToken();
     auto Child = parseAddition();
     assert(CurToken == Token_ParentheseClose);
-    CurToken = Lx.getNextToken();
+    CurToken = Lxr.getNextToken();
     return Child;
   } else if (CurToken == Token_Identifier) {
     return parseIndexedTensor();
   } else if (CurToken == Token_Number) {
-    auto Value = Lx.getAPFloat().convertToDouble();
-    CurToken = Lx.getNextToken();
+    auto Value = Lxr.getAPFloat().convertToDouble();
+    CurToken = Lxr.getNextToken();
     return ConstantNode::get(Value);
   } else {
     llvm_unreachable("TODO: Expression should begin with sum or identifier or "
@@ -397,7 +399,7 @@ NodePtr Parser::parseSingleNode() {
 
 NodePtr Parser::parseNegative() {
   assert(CurToken == Token_Negative);
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   assert(CurToken != Token_Negative);
   auto Child = parseSingleNode();
   return NegativeNode::get(std::move(Child));
@@ -409,7 +411,7 @@ NodePtr Parser::parseMultiplication() {
     Childs.emplace_back(parseSingleNode());
     if (CurToken != Token_Multiplication)
       break;
-    CurToken = Lx.getNextToken();
+    CurToken = Lxr.getNextToken();
   }
   if (Childs.size() == 1)
     return std::move(Childs[0]);
@@ -418,17 +420,17 @@ NodePtr Parser::parseMultiplication() {
 
 NodePtr Parser::parseContraction() {
   assert(CurToken == Token_Contraction);
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   assert(CurToken == Token_ParentheseOpen);
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   // parse Indexes
   NamesTy Names = parseIndexNames();
   IndexesTy IndexDefs = insertIndexDefines(Names);
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   // parse expression
   auto child = parseAddition();
   assert(CurToken == Token_ParentheseClose);
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   eraseIndexDefines(Names);
   // create Node
   return ContractionNode::get(IndexDefs, std::move(child));
@@ -436,8 +438,8 @@ NodePtr Parser::parseContraction() {
 
 NodePtr Parser::parseIndexedTensor() {
   // get Name
-  auto Name = std::string(Lx.getIdentifier());
-  CurToken = Lx.getNextToken();
+  auto Name = std::string(Lxr.getIdentifier());
+  CurToken = Lxr.getNextToken();
   // parse Indexes
   auto Names = parseIndexNames();
   auto IndexUses = getIndexUses(Names);
@@ -460,17 +462,17 @@ NodePtr Parser::parseIndexedTensor() {
 
 void Parser::parseKeepTensors() {
   assert(CurToken == Token_Keep);
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
   while (CurToken == Token_Identifier) {
-    auto Name = Lx.getIdentifier();
+    auto Name = Lxr.getIdentifier();
     CF->addKeep(Name);
-    CurToken = Lx.getNextToken();
+    CurToken = Lxr.getNextToken();
     if (CurToken != Token_Comma)
       break;
-    CurToken = Lx.getNextToken();
+    CurToken = Lxr.getNextToken();
   }
   assert(isNextLineToken());
-  CurToken = Lx.getNextToken();
+  CurToken = Lxr.getNextToken();
 }
 } // namespace parser
 

@@ -54,12 +54,13 @@ public:
     SK_CTensor,
     SK_InTenser,
     SK_IterIndex,
-    SK_ConstIndex,
+    SK_ParamIndex,
     SK_Size
   };
 
 protected:
   const SymbolKind Kind;
+  int UsedCount = 0;
   std::string Name;
   Symbol(SymbolKind K, StringRef Name) : Kind(K), Name(Name) {}
 
@@ -183,7 +184,7 @@ public:
   SizePtr getSize() { return Size; }
   // For LLVM RTTI
   static bool classof(const Symbol *S) {
-    return S->getKind() >= SK_IterIndex && S->getKind() <= SK_ConstIndex;
+    return S->getKind() >= SK_IterIndex && S->getKind() <= SK_ParamIndex;
   }
   // Print
   void dump();
@@ -204,16 +205,16 @@ public:
   void dump();
 };
 
-class ConstIndexSymbol : public IndexSymbol {
+class ParamIndexSymbol;
+using ParamIndexPtr = ParamIndexSymbol *;
+class ParamIndexSymbol : public IndexSymbol {
 private:
   int64_t Value;
 
 public:
   static const int64_t Undefined = -1;
-  ConstIndexSymbol(StringRef Name, int64_t Value = Undefined)
-      : IndexSymbol(SK_ConstIndex, Name), Value(Value) {}
-  ConstIndexSymbol(int64_t Value)
-      : IndexSymbol(SK_ConstIndex, ""), Value(Value) {}
+  ParamIndexSymbol(StringRef Name, int64_t Value)
+      : IndexSymbol(SK_ParamIndex, Name), Value(Value) {}
   // Member Functions
   bool hasValue() { return Value >= 0; }
   int64_t getValue() {
@@ -221,7 +222,7 @@ public:
     return Value;
   }
   // For LLVM RTTI
-  static bool classof(const Symbol *S) { return S->getKind() == SK_ConstIndex; }
+  static bool classof(const Symbol *S) { return S->getKind() == SK_ParamIndex; }
   // Print
   void dump();
 };
@@ -529,13 +530,12 @@ public:
 
 #define DEBUG_TYPE "TCForest"
 
-using ConstIndexesTy = SmallVector<std::unique_ptr<ConstIndexSymbol>>;
+using ParamIndicesHoldTy = SmallVector<std::unique_ptr<ParamIndexSymbol>>;
 class ContractionForest {
   std::string Name;
   // Symbols
   SymbolsMapTy SymbolsMap;
   // Const Indexes
-  ConstIndexesTy ConstIndexes;
   // Input Tensors
   InTensorsTy InputTensors;
   InTensorsMapTy InTensorsMap;
@@ -547,6 +547,8 @@ class ContractionForest {
   // Sizes
   size_t NumInputSizes;
   SizesMapTy SizeIDSymbolMap;
+  // For resource release
+  ParamIndicesHoldTy ParamIndices;
 
 public:
   ContractionForest() { Name = "CT"; }
@@ -561,14 +563,54 @@ public:
   CTreePtr getContractionTree(StringRef Name) {
     return CTreesMap.count(Name) ? CTreesMap[Name] : nullptr;
   }
+  // Done 12-08
+  void addParamIndexDefine(int64_t Value, StringRef Name = "") {
+    if (!Name.empty()) {
+      LLVM_DEBUG(llvm::dbgs() << "Add param index: " << Name);
+      LLVM_DEBUG(if (Value >= 0) llvm::dbgs() << " = " << Value);
+      LLVM_DEBUG(llvm::dbgs() << "\n");
+      assert(!SymbolsMap.count(Name) && "TODO: Error handle.");
+      auto PIndex = new ParamIndexSymbol(Name, Value);
+      // For later use
+      SymbolsMap[PIndex->getName()] = PIndex;
+      // For resource release
+      ParamIndices.emplace_back(PIndex);
+    }
+    if (Value >= 0) {
+      // Const Index Define
+      LLVM_DEBUG(llvm::dbgs() << "Add const index: " << Value << "\n");
+      std::string ConstName = "ConstIndex#" + std::to_string(Value);
+      if (!SymbolsMap.count(ConstName)) {
+        auto PIndex = new ParamIndexSymbol(ConstName, Value);
+        SymbolsMap[PIndex->getName()] = PIndex;
+        ParamIndices.emplace_back(PIndex);
+      }
+    }
+  }
+  // Done: 12-08
+  auto getParamIndex(StringRef Name) {
+    auto Sym = getSymbolOfName(Name);
+    assert(Sym && llvm::isa<ParamIndexSymbol>(Sym));
+    return llvm::cast<ParamIndexSymbol>(Sym);
+  }
+  // Done: 12-08
+  auto getParamIndex(int64_t Value) {
+    assert(Value >= 0);
+    std::string ConstName = "ConstIndex#" + std::to_string(Value);
+    if (!SymbolsMap.count(ConstName)) {
+      addParamIndexDefine(Value);
+    }
+    return getParamIndex(ConstName);
+  }
+
   void addConstIndex(StringRef Name, int64_t Value) {
     LLVM_DEBUG(llvm::dbgs() << "Add const index: " << Name);
     LLVM_DEBUG(if (Value >= 0) llvm::dbgs() << " = " << Value;);
     LLVM_DEBUG(llvm::dbgs() << "\n");
     assert(!SymbolsMap.count(Name) && "TODO: Error handle.");
-    auto CIS = new ConstIndexSymbol(Name, Value);
+    auto CIS = new ParamIndexSymbol(Name, Value);
     SymbolsMap[CIS->getName()] = CIS;
-    ConstIndexes.emplace_back(std::unique_ptr<ConstIndexSymbol>(CIS));
+    ParamIndices.emplace_back(std::unique_ptr<ParamIndexSymbol>(CIS));
   }
   SizePtr addImplicitSize() {
     SizeID ID = SizeIDSymbolMap.size();
