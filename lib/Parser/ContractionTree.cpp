@@ -34,19 +34,27 @@ static void dumpSizes(SizesTy &Sizes) {
     errs() << ")";
   }
 }
-static void dumpIndexes(IndexUsesTy &Indexes) {
-  if (Indexes.size()) {
-    errs() << "(i" << Indexes[0]->getName();
-    for (size_t i = 1; i < Indexes.size(); i++)
-      errs() << ", i" << Indexes[i]->getName();
-    errs() << ")";
+static void dumpIndexes(IndexUsesTy &IndexUses) {
+  bool Comma = false;
+  for (auto Index : IndexUses) {
+    errs() << (Comma ? ", " : "(");
+    if (auto PIndex = dyn_cast<ParamIndexSymbol>(Index)) {
+      if (PIndex->isImplicit())
+        errs() << PIndex->getValue();
+      else
+        errs() << PIndex->getName();
+    } else if (auto IIndex = dyn_cast<IterIndexSymbol>(Index)) {
+      errs() << "i#" << IIndex->getID();
+    }
+    Comma = true;
   }
+  errs() << (Comma ? ")" : "");
 }
 static void dumpIndexes(IndexDefsTy &Indexes) {
   if (Indexes.size()) {
-    errs() << "(i" << Indexes[0]->getID();
+    errs() << "(i#" << Indexes[0]->getID();
     for (size_t i = 1; i < Indexes.size(); i++)
-      errs() << ", i" << Indexes[i]->getID();
+      errs() << ", i#" << Indexes[i]->getID();
     errs() << ")";
   }
 }
