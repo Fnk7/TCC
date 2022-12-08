@@ -41,4 +41,14 @@ def PermuteOp : Contraction_Op<"permute", []> {
   let results = (outs F64Tensor : $result);
 }
 
+def SliceOp : Contraction_Op<"slice", []> {
+  let arguments = (ins F64Tensor : $input, Variadic<Index> : $indices, I64ArrayAttr : $axes);
+  let results = (outs F64Tensor : $output);
+}
+
+def DiagonalOp : Contraction_Op<"diagonal", []> {
+  let arguments = (ins F64Tensor : $input, I64ArrayAttr : $axes);
+  let results = (outs F64Tensor : $output);
+}
+
 #endif
