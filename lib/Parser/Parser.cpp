@@ -166,7 +166,7 @@ std::unique_ptr<ContractionForest> Parser::parseContractionForest() {
     CurToken = Lxr.getNextToken();
   }
   // TODO: After Parse
-  CF->resolveInputSizes();
+  CF->finishForestConstruct();
   return std::move(CF);
 }
 

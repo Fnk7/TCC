@@ -36,7 +36,7 @@ using SymbolsMapTy = DenseMap<StringRef, SymbolPtr>;
 class InputTensor;
 using InTensorsTy = SmallVector<std::unique_ptr<InputTensor>>;
 using InTensorPtr = InputTensor *;
-using InTensorPtrsTy = SmallVector<InTensorPtr>;
+using InputTensorPtrsTy = SmallVector<InTensorPtr>;
 using InTensorsMapTy = DenseMap<StringRef, InTensorPtr>;
 
 // ContractionTree - Line of the Contraction Expression, which do
@@ -118,6 +118,7 @@ public:
     setLowerBound(LB);
   }
   // Member Functions
+  bool isImplicit() { return Name.substr(0, 3) == "sz#"; }
   bool operator==(const SizeSymbol &Sz) {
     return EqualityInfo && EqualityInfo == Sz.EqualityInfo;
   }
@@ -144,10 +145,11 @@ public:
   void setLowerBound(int64_t LB) { getInfo()->LowerBound = LB; }
   bool isFirstAppear() { return ID == getInfo()->ID; }
   void setUID(SizeID UID) { getInfo()->UID = UID; }
-  SizeID getID() { return getInfo()->ID; }
-  SizeID getUID() { return getInfo()->UID; }
-  int64_t getUpperBound() { return getInfo()->UpperBound; }
-  int64_t getLowerBound() { return getInfo()->LowerBound; }
+  auto getID() { return getInfo()->ID; }
+  auto getUID() { return getInfo()->UID; }
+  auto getUpperBound() { return getInfo()->UpperBound; }
+  auto getLowerBound() { return getInfo()->LowerBound; }
+  auto getAliases() { return getInfo()->Aliases; }
   // For LLVM RTTI
   static bool classof(const Symbol *S) { return S->getKind() == SK_Size; }
   // Print
@@ -520,24 +522,32 @@ public:
 
 using SizesHoldTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 using ParamIndicesHoldTy = SmallVector<std::unique_ptr<ParamIndexSymbol>>;
+using InputTensorsHoldTy = SmallVector<std::unique_ptr<InputTensor>>;
+using SizePtrsTy = SmallVector<SizePtr>;
+using ParamIndexPtrsTy = SmallVector<ParamIndexSymbol *>;
 class ContractionForest {
   std::string Name;
   // Symbols
   SymbolsMapTy SymbolsMap;
   // Const Indexes
   // Input Tensors
-  InTensorsTy InputTensors;
+
   InTensorsMapTy InTensorsMap;
-  InTensorPtrsTy ReservedInputs;
+  InputTensorPtrsTy ReservedInputs;
   // Contraction Tree Tensors
   CTreesTy CTrees;
   CTreesMapTy CTreesMap;
   CTreePtrsTy OutputCTrees;
-  // Sizes
-  size_t NumInputSizes;
   // For resource release
   SizesHoldTy SizeIDSymbolMap;
   ParamIndicesHoldTy ParamIndices;
+  InputTensorsHoldTy InputTensors;
+  // Function Argument
+  SizePtrsTy ArgSizes;
+  ParamIndexPtrsTy ArgIndices;
+  InputTensorPtrsTy ArgTensors;
+  // Others
+  ParamIndexPtrsTy ConstIndices;
 
 public:
   ContractionForest() { Name = "CT"; }
@@ -658,14 +668,23 @@ public:
       }
     }
   }
-  void resolveInputSizes() {
-    SizeID UID = 0;
-    for (auto &SizeSym : SizeIDSymbolMap) {
-      if (SizeSym->isFirstAppear()) {
-        SizeSym->setUID(UID++);
+  void finishForestConstruct() {
+    for (auto &Size : SizeIDSymbolMap) {
+      if (Size->isFirstAppear()) {
+        Size->setUID(ArgSizes.size());
+        ArgSizes.emplace_back(Size.get());
       }
     }
-    NumInputSizes = UID;
+    for (auto &Index : ParamIndices) {
+      if (!Index->hasValue()) {
+        ArgIndices.emplace_back(Index.get());
+      } else {
+        ConstIndices.emplace_back(Index.get());
+      }
+    }
+    for (auto &InTensor : InputTensors) {
+      ArgTensors.emplace_back(InTensor.get());
+    }
   }
   int64_t getInputSizeOf(SizePtr Sz) { return Sz->getUID(); }
 
@@ -676,7 +695,7 @@ public:
 
   // TODO:
 
-  int getNumInputSizs() { return NumInputSizes; }
+  int getNumInputSizs() { return ArgSizes.size(); }
 
   int getNumInputTensors() { return InputTensors.size(); }
   int getNumOutputTensors() { return OutputCTrees.size(); }
