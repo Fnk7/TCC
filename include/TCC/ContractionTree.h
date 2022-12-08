@@ -85,7 +85,6 @@ using SizesMapTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 class SizeSymbol : public Symbol {
 private:
   SizeID ID;
-  bool Implicit;
 
   class EqualityStorage {
   public:
@@ -109,13 +108,11 @@ private:
 
 public:
   SizeSymbol(SizeID ID) : Symbol(SK_Size, ""), ID(ID) {
-    Name = "Sz." + std::to_string(ID);
-    Implicit = true;
+    Name = "sz#" + std::to_string(ID);
     EqualityInfo = nullptr;
   }
   SizeSymbol(SizeID ID, StringRef Name, int64_t UB = 0, int64_t LB = 0)
       : Symbol(SK_Size, Name), ID(ID) {
-    Implicit = false;
     EqualityInfo = nullptr;
     setUpperBound(UB);
     setLowerBound(LB);
@@ -521,6 +518,7 @@ public:
 
 #define DEBUG_TYPE "TCForest"
 
+using SizesHoldTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 using ParamIndicesHoldTy = SmallVector<std::unique_ptr<ParamIndexSymbol>>;
 class ContractionForest {
   std::string Name;
@@ -537,13 +535,20 @@ class ContractionForest {
   CTreePtrsTy OutputCTrees;
   // Sizes
   size_t NumInputSizes;
-  SizesMapTy SizeIDSymbolMap;
   // For resource release
+  SizesHoldTy SizeIDSymbolMap;
   ParamIndicesHoldTy ParamIndices;
 
 public:
   ContractionForest() { Name = "CT"; }
   void dump();
+
+  // Done 12-08
+  void insertSymbol(SymbolPtr Sym) {
+    LLVM_DEBUG(llvm::dbgs() << "Insert " << Sym->getName() << "\n");
+    SymbolsMap[Sym->getName()] = Sym;
+  }
+  // Done 12-08
   // Get Tensor
   SymbolPtr getSymbolOfName(StringRef Name) {
     return SymbolsMap.count(Name) ? SymbolsMap[Name] : nullptr;
@@ -557,7 +562,7 @@ public:
       assert(!SymbolsMap.count(Name) && "TODO: Error handle.");
       auto PIndex = new ParamIndexSymbol(Name, Value);
       // For later use
-      SymbolsMap[PIndex->getName()] = PIndex;
+      insertSymbol(PIndex);
       // For resource release
       ParamIndices.emplace_back(PIndex);
     }
@@ -567,7 +572,7 @@ public:
       std::string ConstName = "ci#" + std::to_string(Value);
       if (!SymbolsMap.count(ConstName)) {
         auto PIndex = new ParamIndexSymbol(ConstName, Value);
-        SymbolsMap[PIndex->getName()] = PIndex;
+        insertSymbol(PIndex);
         ParamIndices.emplace_back(PIndex);
       }
     }
@@ -588,49 +593,44 @@ public:
     return getParamIndex(ConstName);
   }
 
-  SizePtr addImplicitSize() {
+  // Done 12-08
+  SizePtr addSizeDefine() {
     SizeID ID = SizeIDSymbolMap.size();
     auto SS = new SizeSymbol(ID);
     SizeIDSymbolMap.emplace_back(SS);
     return SS;
   }
-  SizePtr addSize(StringRef Name, int64_t UB = 0, int64_t LB = 0) {
+  SizePtr addSizeDefine(StringRef Name, int64_t UB = 0, int64_t LB = 0) {
     assert(!SymbolsMap.count(Name));
     SizeID ID = SizeIDSymbolMap.size();
     auto SS = new SizeSymbol(ID, Name, UB, LB);
     SizeIDSymbolMap.emplace_back(SS);
-    SymbolsMap[SS->getName()] = SS;
+    insertSymbol(SS);
     return SS;
   }
-  // Add Tensor
-  InTensorPtr addInputTensor(StringRef Name, ShapeTy Shape) {
+
+  // Done 12-08
+  InTensorPtr addInputTensorDefine(StringRef Name, ShapeTy Shape) {
     assert(!SymbolsMap.count(Name));
     assert(!InTensorsMap.count(Name));
     auto IT = new InputTensor(Name, Shape);
     InputTensors.emplace_back(IT);
-    SymbolsMap[IT->getName()] = IT;
+    insertSymbol(IT);
     InTensorsMap[IT->getName()] = IT;
     return IT;
   }
-  InTensorPtr addInputTensor(StringRef Name, int Dim) {
-    assert(!SymbolsMap.count(Name));
-    assert(!InTensorsMap.count(Name));
-    SizeID ID = SizeIDSymbolMap.size();
+  InTensorPtr addInputTensorDefine(StringRef Name, int Dim) {
     ShapeTy Shape;
-    for (int Axis = 0; Axis < Dim; Axis++) {
-      SizeIDSymbolMap.emplace_back(new SizeSymbol(ID++));
-      Shape.emplace_back(SizeIDSymbolMap.back().get());
+    for (int Axis = 0; Axis < Dim; ++Axis) {
+      Shape.emplace_back(addSizeDefine());
     }
-    InputTensors.emplace_back(new InputTensor(Name, Shape));
-    auto IT = InputTensors.back().get();
-    SymbolsMap[IT->getName()] = IT;
-    InTensorsMap[IT->getName()] = IT;
-    return IT;
+    return addInputTensorDefine(Name, Shape);
   }
+
   void addContractionTree(StringRef Name, NodePtr Root) {
     CTrees.emplace_back(new ContractionTree(Name, std::move(Root)));
     auto CT = CTrees.back().get();
-    SymbolsMap[CT->getName()] = CT;
+    insertSymbol(CT);
     CTreesMap[CT->getName()] = CT;
   }
   // Add Keep

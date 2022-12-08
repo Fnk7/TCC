@@ -209,7 +209,7 @@ void Parser::parseSizeDefines() {
       assert(CurToken == Token_ParentheseClose && "TODO: Error handle.");
       CurToken = Lxr.getNextToken();
     }
-    CF->addSize(Name, UB, LB);
+    CF->addSizeDefine(Name, UB, LB);
     if (CurToken == Token_Comma)
       CurToken = Lxr.getNextToken();
     else
@@ -251,17 +251,16 @@ void Parser::parseInputDefines() {
       CurToken = Lxr.getNextToken();
       while (true) {
         if (CurToken == Token_Identifier) {
-          if (auto Size = CF->getSymbolOfName(Lxr.getIdentifier())) {
-            auto Sz0 = CF->addImplicitSize();
-            Shape.emplace_back(Sz0);
-            auto Sz1 = cast<SizeSymbol>(Size);
-            SizeSymbol::makeSizeEqual(*Sz0, *Sz1);
+          auto Name = Lxr.getIdentifier();
+          if (auto Sym = CF->getSymbolOfName(Name)) {
+            auto Size = cast<SizeSymbol>(Sym);
+            Shape.emplace_back(Size);
           } else {
-            Shape.emplace_back(CF->addSize(Name));
+            Shape.emplace_back(CF->addSizeDefine(Name));
           }
           CurToken = Lxr.getNextToken();
         } else if (CurToken == Token_Multiplication) {
-          Shape.emplace_back(CF->addImplicitSize());
+          Shape.emplace_back(CF->addSizeDefine());
           CurToken = Lxr.getNextToken();
         } else {
           break;
@@ -274,7 +273,7 @@ void Parser::parseInputDefines() {
       assert(CurToken == Token_ParentheseClose);
       CurToken = Lxr.getNextToken();
     }
-    CF->addInputTensor(Name, Shape);
+    CF->addInputTensorDefine(Name, Shape);
     if (CurToken == Token_Comma)
       CurToken = Lxr.getNextToken();
     else
@@ -483,7 +482,7 @@ NodePtr Parser::parseIndexedTensor() {
     assert(!T || llvm::isa<InputTensor>(T));
     auto IT = llvm::cast_if_present<InputTensor>(T);
     if (!IT) {
-      IT = CF->addInputTensor(Name, IndexUses.size());
+      IT = CF->addInputTensorDefine(Name, IndexUses.size());
     }
     inferenceIndexSizes(IT->getShape(), IndexUses);
     return InputAsLeafNode::get(IndexUses, IT);
