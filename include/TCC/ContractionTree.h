@@ -579,7 +579,7 @@ public:
     if (Value >= 0) {
       // Const Index Define
       LLVM_DEBUG(llvm::dbgs() << "Add const index: " << Value << "\n");
-      std::string ConstName = "ConstIndex#" + std::to_string(Value);
+      std::string ConstName = "ci#" + std::to_string(Value);
       if (!SymbolsMap.count(ConstName)) {
         auto PIndex = new ParamIndexSymbol(ConstName, Value);
         SymbolsMap[PIndex->getName()] = PIndex;
@@ -596,7 +596,7 @@ public:
   // Done: 12-08
   auto getParamIndex(int64_t Value) {
     assert(Value >= 0);
-    std::string ConstName = "ConstIndex#" + std::to_string(Value);
+    std::string ConstName = "ci#" + std::to_string(Value);
     if (!SymbolsMap.count(ConstName)) {
       addParamIndexDefine(Value);
     }

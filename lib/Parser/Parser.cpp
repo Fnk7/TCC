@@ -127,6 +127,7 @@ class Parser {
   void parseIndexDefines();
   void parseContractionTree();
   void parseKeepTensors();
+  IndexUsesTy parseIndexUses();
   NamesTy parseIndexNames();
   NodePtr parseAddition();
   NodePtr parseSingleNode();
@@ -436,20 +437,56 @@ NodePtr Parser::parseContraction() {
   return ContractionNode::get(IndexDefs, std::move(child));
 }
 
+// Done 12-08
+IndexUsesTy Parser::parseIndexUses() {
+  IndexUsesTy IndexUses;
+  if (CurToken != Token_ParentheseOpen)
+    return IndexUses;
+  CurToken = Lxr.getNextToken();
+  while (true) {
+    if (CurToken == Token_Identifier) {
+      // Iter index
+      auto Name = Lxr.getIdentifier();
+      if (IndexesMap.count(Name)) {
+        IndexUses.emplace_back(IndexesMap[Name]);
+      } else {
+        // Param Index
+        auto PIndex = CF->getParamIndex(Name);
+        IndexUses.emplace_back(PIndex);
+      }
+    } else if (CurToken == Token_Number) {
+      // Const index
+      auto Value = Lxr.getAPInt().getSExtValue();
+      assert(Value >= 0);
+      auto PIndex = CF->getParamIndex(Value);
+      IndexUses.emplace_back(PIndex);
+    } else
+      break;
+    CurToken = Lxr.getNextToken();
+    if (CurToken == Token_Comma)
+      CurToken = Lxr.getNextToken();
+    else
+      break;
+  }
+  assert(CurToken == Token_ParentheseClose && "TODO: Error handle.");
+  CurToken = Lxr.getNextToken();
+  return IndexUses;
+}
+
+// Done 12-08
 NodePtr Parser::parseIndexedTensor() {
-  // get Name
+  // Parse tensor
   auto Name = std::string(Lxr.getIdentifier());
   CurToken = Lxr.getNextToken();
-  // parse Indexes
-  auto Names = parseIndexNames();
-  auto IndexUses = getIndexUses(Names);
+  // Parse indices
+  auto IndexUses = parseIndexUses();
   auto T = CF->getSymbolOfName(Name);
   if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(T)) {
-    // parse indexed tensor
+    // Parse contracted tensor
     inferenceIndexSizes(CT->getShape(), IndexUses);
     return TreeAsLeafNode::get(IndexUses, CT);
   } else {
-    // parse Input tensor
+    // Parse input tensor
     assert(!T || llvm::isa<InputTensor>(T));
     auto IT = llvm::cast_if_present<InputTensor>(T);
     if (!IT) {
