@@ -59,21 +59,21 @@ public:
     M = ModuleOp::create(Loc);
     OB.setInsertionPointToEnd(M.getBody());
     // create mlir function
-    InTensorsTy &ITs = CF.getInputTensors();
-    CTreePtrsTy &OTs = CF.getOutputTensors();
+    auto &ArgTensors = CF.getArgTensors();
+    auto &RetTensors = CF.getRetTensors();
     SmallVector<Type> InputTypes;
-    for (auto &IT : ITs) {
+    for (auto &IT : ArgTensors) {
       auto Ty = getTensorTypeOfShape(IT->getShape());
       InputTypes.emplace_back(Ty);
     }
     SmallVector<Type> ResultTypes;
     SmallVector<int64_t> WriteBacks;
-    for (auto *CT : OTs) {
+    for (auto *CT : RetTensors) {
       auto Ty = getTensorTypeOfShape(CT->getShape());
       ResultTypes.emplace_back(Ty);
-      int64_t ITIdx = ITs.size() - 1;
+      int64_t ITIdx = ArgTensors.size() - 1;
       for (; ITIdx >= 0; ITIdx--) {
-        if (CT->getName() == ITs[ITIdx]->getName())
+        if (CT->getName() == ArgTensors[ITIdx]->getName())
           break;
       }
       WriteBacks.emplace_back(ITIdx);
@@ -87,8 +87,8 @@ public:
     auto EntryB = F.addEntryBlock();
     OB.setInsertionPointToEnd(EntryB);
     // Map input tensor to mlir value
-    for (size_t i = 0; i < ITs.size(); i++) {
-      SymbolValueMap[ITs[i]->getName()] = EntryB->getArgument(i);
+    for (size_t i = 0; i < ArgTensors.size(); i++) {
+      SymbolValueMap[ArgTensors[i]->getName()] = EntryB->getArgument(i);
     }
     for (auto Index : CF.getArgIndices()) {
       SymbolValueMap[Index->getName()] =
@@ -106,7 +106,7 @@ public:
     // create mlir return
     // writebacks point to the argument tensor
     SmallVector<Value> ReturnValues;
-    for (auto &CT : OTs) {
+    for (auto &CT : RetTensors) {
       ReturnValues.emplace_back(SymbolValueMap[CT->getName()]);
     }
     OB.create<func::ReturnOp>(Loc, TypeRange(), ReturnValues);

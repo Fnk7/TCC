@@ -752,7 +752,9 @@ public:
 
   auto &getArgSizes() { return ArgSizes; }
   auto &getArgIndices() { return ArgIndices; }
+  auto &getArgTensors() { return InputTensors; }
   auto &getConstIndices() { return ConstIndices; }
+  auto &getRetTensors() { return OutputCTrees; }
 
   // TODO:
 
