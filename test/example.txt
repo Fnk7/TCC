@@ -1,4 +1,4 @@
-size M = (200,400), N
+size M = (200,400), N, K = (200,200)
 index ci, cj = 2
 input B(M,M,N), E(M,L,K)
 A(i,j) = sum((k), B(i,i,j) * -0.5 * C(i,k,ci) * D(j,k,3)) - E(i,j,cj)

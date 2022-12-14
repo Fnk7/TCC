@@ -153,7 +153,11 @@ void ContractionTree::dump() {
 void SizeSymbol::dump() {
   errs() << this;
   if (getUpperBound()) {
-    errs() << " in (" << getLowerBound() << ", " << getUpperBound() << ")";
+    if (isConstant()) {
+      errs() << " = " << getUpperBound();
+    } else {
+      errs() << " in (" << getLowerBound() << ", " << getUpperBound() << ")";
+    }
   }
 }
 

@@ -171,6 +171,9 @@ public:
   auto getUID() { return getInfo()->UID; }
   auto getUpperBound() { return getInfo()->UpperBound; }
   auto getLowerBound() { return getInfo()->LowerBound; }
+  auto isConstant() {
+    return getUpperBound() && getUpperBound() == getLowerBound();
+  }
   auto getAliases() { return getInfo()->Aliases; }
   // For LLVM RTTI
   static bool classof(const Symbol *S) { return S->getKind() == SK_Size; }
