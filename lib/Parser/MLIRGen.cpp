@@ -108,7 +108,6 @@ public:
 
 private:
   void generateContractionTree(ContractionTree &CT) {
-    ValueIndexesMap.clear();
     auto ValueIndices = generateNode(CT.getRootNode());
     SymbolValueMap[CT.getName()] = ValueIndices.first;
   }
