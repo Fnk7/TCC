@@ -33,7 +33,8 @@ public:
 
 private:
   llvm::DenseMap<StringRef, Value> SymbolValueMap;
-  llvm::DenseMap<Value, IndexUsesTy> ValueIndexesMap;
+
+  using IndexedValueTy = std::pair<Value, IndexUsesTy>;
 
 public:
   ModuleOp MLIRGen() {
@@ -108,8 +109,8 @@ public:
 private:
   void generateContractionTree(ContractionTree &CT) {
     ValueIndexesMap.clear();
-    auto Value = generateNode(CT.getRootNode());
-    SymbolValueMap[CT.getName()] = Value;
+    auto ValueIndices = generateNode(CT.getRootNode());
+    SymbolValueMap[CT.getName()] = ValueIndices.first;
   }
 
   auto getTensorTypeOfShape(ShapeTy Shape) {
@@ -122,7 +123,7 @@ private:
     return RankedTensorType::get(TShape, OB.getF64Type(), EncodingAttr);
   }
 
-  Value generateNode(Node &N) {
+  IndexedValueTy generateNode(Node &N) {
     if (isa<RootNode>(N)) {
       return generateNode(cast<RootNode>(N));
     } else if (isa<ContractionNode>(N)) {
@@ -133,8 +134,6 @@ private:
       return generateNode<MulOp>(cast<ArithNode>(N));
     } else if (isa<LeafNode>(N)) {
       return generateNode(cast<LeafNode>(N));
-      // } else if (isa<InputAsLeafNode>(N)) {
-      //   return generateNode(cast<InputAsLeafNode>(N));
     } else if (isa<ConstantNode>(N)) {
       return generateNode(cast<ConstantNode>(N));
     } else if (isa<NegativeNode>(N)) {
@@ -154,21 +153,22 @@ private:
     }
     return Sizes;
   }
-  Value generateNode(RootNode &RN) {
-    Value V = generateNode(RN.getChild());
-    IndexUsesTy &InIndexes = ValueIndexesMap[V];
-    IndexDefsTy &OutIndexes = RN.getIndexes();
-    assert(InIndexes.size() == OutIndexes.size());
+  IndexedValueTy generateNode(RootNode &RN) {
+    auto ValueIndices = generateNode(RN.getChild());
+    Value V = ValueIndices.first;
+    auto &IndexUses = ValueIndices.second;
+    auto &IndexDefs = RN.getIndexes();
+    assert(IndexUses.size() == IndexDefs.size());
     SmallVector<int64_t> AxesMap;
-    for (auto Idx : InIndexes) {
-      for (size_t Axis = 0; Axis < OutIndexes.size(); Axis++) {
-        if (Idx == OutIndexes[Axis].get()) {
+    for (auto Idx : IndexUses) {
+      for (size_t Axis = 0; Axis < IndexDefs.size(); Axis++) {
+        if (Idx == IndexDefs[Axis].get()) {
           AxesMap.emplace_back(Axis);
           break;
         }
       }
     }
-    assert(InIndexes.size() == AxesMap.size());
+    assert(IndexUses.size() == AxesMap.size());
     auto InSizes = getTensorSizes(V);
     SmallVector<int64_t> OutSizes(InSizes.size());
     for (size_t InAxis = 0; InAxis < AxesMap.size(); InAxis++) {
@@ -180,19 +180,20 @@ private:
     auto OutType = RankedTensorType::get(OutShape, OB.getF64Type(), OutAttr);
     auto AxesMapAttr = OB.getI64ArrayAttr(AxesMap);
     V = OB.create<PermuteOp>(Loc, OutType, V, AxesMapAttr);
-    return V;
+    return {V, {}};
   }
-  Value generateNode(ContractionNode &CN) {
-    Value V = generateNode(CN.getChild());
+  IndexedValueTy generateNode(ContractionNode &CN) {
+    auto ValueIndices = generateNode(CN.getChild());
+    Value V = ValueIndices.first;
     auto InSizes = getTensorSizes(V);
-    IndexUsesTy &InIndexes = ValueIndexesMap[V];
-    IndexDefsTy &CtIndexes = CN.getIndexes();
+    auto &IndexUses = ValueIndices.second;
+    auto &IndexDefs = CN.getIndexes();
     IndexUsesTy OutIndexes;
     SmallVector<int64_t> OutSizes;
     SmallVector<int64_t> ContractedAxes;
-    for (size_t Axis = 0; Axis < InIndexes.size(); Axis++) {
-      auto &Idx1 = InIndexes[Axis];
-      if (llvm::none_of(CtIndexes,
+    for (size_t Axis = 0; Axis < IndexUses.size(); Axis++) {
+      auto &Idx1 = IndexUses[Axis];
+      if (llvm::none_of(IndexDefs,
                         [&](auto &Idx2) { return Idx1 == Idx2.get(); })) {
         OutSizes.emplace_back(InSizes[Axis]);
         OutIndexes.emplace_back(Idx1);
@@ -205,10 +206,9 @@ private:
     auto OutType = RankedTensorType::get(OutShape, OB.getF64Type(), OutAttr);
     auto AxesAtrr = OB.getI64ArrayAttr(ContractedAxes);
     V = OB.create<ContractOp>(Loc, OutType, V, AxesAtrr);
-    ValueIndexesMap[V] = OutIndexes;
-    return V;
+    return {V, OutIndexes};
   }
-  template <class T> Value generateNode(ArithNode &AN) {
+  template <class T> IndexedValueTy generateNode(ArithNode &AN) {
     auto &Childs = AN.getChilds();
     SmallVector<Value> Operands;
     SmallVector<int64_t> OutSizes;
@@ -216,10 +216,11 @@ private:
     SmallVector<SmallVector<int64_t>> OutAxesMaps(Childs.size());
     for (size_t Ci = 0; Ci < Childs.size(); Ci++) {
       auto &C = Childs[Ci];
-      Value V = generateNode(*C);
+      auto ValueIndices = generateNode(*C);
+      Value V = ValueIndices.first;
       Operands.emplace_back(V);
       auto Sizes = getTensorSizes(V);
-      auto &Indexes = ValueIndexesMap[V];
+      auto &Indexes = ValueIndices.second;
       auto &AxesMap = OutAxesMaps[Ci];
       for (size_t Axis = 0; Axis < Indexes.size(); Axis++) {
         size_t OutAxis = 0;
@@ -243,10 +244,9 @@ private:
     }
     auto AxesMapsAttr = OB.getArrayAttr(AxesMapAttrs);
     Value V = OB.create<T>(Loc, OutType, Operands, AxesMapsAttr);
-    ValueIndexesMap[V] = OutIndexes;
-    return V;
+    return {V, OutIndexes};
   }
-  Value generateNode(LeafNode &LN) {
+  IndexedValueTy generateNode(LeafNode &LN) {
     StringRef Name;
     if (llvm::isa<TreeAsLeafNode>(LN)) {
       Name = llvm::cast<TreeAsLeafNode>(LN).getTree()->getName();
@@ -303,28 +303,21 @@ private:
         V = OB.create<DiagonalOp>(Loc, DiagType, V, AxesPairsAttr);
       }
     }
-    ValueIndexesMap[V] = UIndexUses;
-    return V;
+    return {V, UIndexUses};
   }
-  Value generateNode(InputAsLeafNode &IALN) {
-    auto IT = IALN.getInput();
-    Value V = SymbolValueMap[IT->getName()];
-    ValueIndexesMap[V] = IALN.getIterIndexUses();
-    return V;
-  }
-  Value generateNode(ConstantNode &CN) {
+  IndexedValueTy generateNode(ConstantNode &CN) {
     auto Attr = OB.getF64FloatAttr(CN.getValue());
     auto Encoding = OB.getI64ArrayAttr({});
     auto ResultType = RankedTensorType::get({}, OB.getF64Type(), Encoding);
     Value V = OB.create<ConstantOp>(Loc, ResultType, Attr);
-    return V;
+    return {V, {}};
   }
-  Value generateNode(NegativeNode &NN) {
-    auto V = generateNode(NN.getChild());
-    auto &IndexUses = ValueIndexesMap[V];
+  IndexedValueTy generateNode(NegativeNode &NN) {
+    auto ValueIndices = generateNode(NN.getChild());
+    Value V = ValueIndices.first;
+    auto &IndexUses = ValueIndices.second;
     V = OB.create<NegOp>(Loc, V.getType(), V);
-    ValueIndexesMap[V] = IndexUses;
-    return V;
+    return {V, IndexUses};
   }
 };
 
