@@ -58,12 +58,16 @@ int main(int argc, char **argv) {
   Ctx.getOrLoadDialect<mlir::func::FuncDialect>();
   Ctx.getOrLoadDialect<mlir::memref::MemRefDialect>();
   Ctx.getOrLoadDialect<mlir::contraction::ContractionDialect>();
+  mlir::PassManager PM(&Ctx);
   auto M = mlir::contraction::MLIRGen(Ctx, *CF);
   if (Emit == DumpMLIR) {
+    mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
+    FuncPM.addPass(mlir::createCanonicalizerPass());
+    FuncPM.addPass(mlir::createCSEPass());
+    mlir::failed(PM.run(*M));
     M->dump();
     return 0;
   }
-  mlir::PassManager PM(&Ctx);
   PM.addPass(mlir::contraction::createLowerToAffinePass());
   mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
   FuncPM.addPass(mlir::contraction::createReturnToArgumentPass());
