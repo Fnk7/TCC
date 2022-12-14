@@ -59,9 +59,13 @@ public:
     M = ModuleOp::create(Loc);
     OB.setInsertionPointToEnd(M.getBody());
     // create mlir function
+    auto &ArgSizes = CF.getArgSizes();
+    auto &ArgIndices = CF.getArgIndices();
     auto &ArgTensors = CF.getArgTensors();
     auto &RetTensors = CF.getRetTensors();
     SmallVector<Type> InputTypes;
+    InputTypes.append(SmallVector<Type>(ArgSizes.size(), OB.getIndexType()));
+    InputTypes.append(SmallVector<Type>(ArgIndices.size(), OB.getIndexType()));
     for (auto &IT : ArgTensors) {
       auto Ty = getTensorTypeOfShape(IT->getShape());
       InputTypes.emplace_back(Ty);
@@ -87,12 +91,20 @@ public:
     auto EntryB = F.addEntryBlock();
     OB.setInsertionPointToEnd(EntryB);
     // Map input tensor to mlir value
-    for (size_t i = 0; i < ArgTensors.size(); i++) {
-      SymbolValueMap[ArgTensors[i]->getName()] = EntryB->getArgument(i);
+    size_t Offset = 0;
+    for (size_t ArgIdx = 0; ArgIdx < ArgSizes.size(); ArgIdx++) {
+      SymbolValueMap[ArgSizes[ArgIdx]->getUName()] =
+          EntryB->getArgument(ArgIdx + Offset);
     }
-    for (auto Index : CF.getArgIndices()) {
-      SymbolValueMap[Index->getName()] =
-          OB.create<arith::ConstantIndexOp>(Loc, 0);
+    Offset += ArgSizes.size();
+    for (size_t ArgIdx = 0; ArgIdx < ArgIndices.size(); ArgIdx++) {
+      SymbolValueMap[ArgIndices[ArgIdx]->getName()] =
+          EntryB->getArgument(ArgIdx + Offset);
+    }
+    Offset += ArgIndices.size();
+    for (size_t ArgIdx = 0; ArgIdx < ArgTensors.size(); ArgIdx++) {
+      SymbolValueMap[ArgTensors[ArgIdx]->getName()] =
+          EntryB->getArgument(ArgIdx + Offset);
     }
     for (auto Index : CF.getConstIndices()) {
       SymbolValueMap[Index->getName()] =
@@ -250,6 +262,7 @@ private:
       Name = llvm::cast<InputAsLeafNode>(LN).getInput()->getName();
     }
     Value V = SymbolValueMap[Name];
+    assert(V);
     IndexUsesTy IIndexUses;
     // U unique
     IndexUsesTy UIndexUses;
