@@ -36,6 +36,23 @@ private:
 
   using IndexedValueTy = std::pair<Value, IndexUsesTy>;
 
+  auto getTensorTypeOfShape(ShapeTy &Shape) {
+    SmallVector<int64_t> TShape;
+    for (auto Size : Shape) {
+      if (Size->isConstant()) {
+        TShape.emplace_back(Size->getUpperBound());
+      } else {
+        TShape.emplace_back(-1);
+      }
+    }
+    SmallVector<int64_t> Encoding;
+    for (auto Size : Shape) {
+      Encoding.emplace_back(Size->getUID());
+    }
+    auto EncodingAttr = OB.getI64ArrayAttr(Encoding);
+    return RankedTensorType::get(TShape, OB.getF64Type(), EncodingAttr);
+  }
+
 public:
   ModuleOp MLIRGen() {
     // create mlir module
@@ -46,24 +63,14 @@ public:
     CTreePtrsTy &OTs = CF.getOutputTensors();
     SmallVector<Type> InputTypes;
     for (auto &IT : ITs) {
-      SmallVector<int64_t> Shape(IT->getDimension(), -1);
-      SmallVector<SizeID> Sizes;
-      for (auto Sz : IT->getShape())
-        Sizes.emplace_back(Sz->getUID());
-      Attribute EncodingAttr = OB.getI64ArrayAttr(Sizes);
-      Type T = RankedTensorType::get(Shape, OB.getF64Type(), EncodingAttr);
-      InputTypes.emplace_back(T);
+      auto Ty = getTensorTypeOfShape(IT->getShape());
+      InputTypes.emplace_back(Ty);
     }
     SmallVector<Type> ResultTypes;
     SmallVector<int64_t> WriteBacks;
     for (auto *CT : OTs) {
-      SmallVector<int64_t> Shape(CT->getDimension(), -1);
-      SmallVector<SizeID> Sizes;
-      for (auto Sz : CT->getShape())
-        Sizes.emplace_back(Sz->getUID());
-      Attribute EncodingAttr = OB.getI64ArrayAttr(Sizes);
-      Type T = RankedTensorType::get(Shape, OB.getF64Type(), EncodingAttr);
-      ResultTypes.emplace_back(T);
+      auto Ty = getTensorTypeOfShape(CT->getShape());
+      ResultTypes.emplace_back(Ty);
       int64_t ITIdx = ITs.size() - 1;
       for (; ITIdx >= 0; ITIdx--) {
         if (CT->getName() == ITs[ITIdx]->getName())
@@ -110,16 +117,6 @@ private:
   void generateContractionTree(ContractionTree &CT) {
     auto ValueIndices = generateNode(CT.getRootNode());
     SymbolValueMap[CT.getName()] = ValueIndices.first;
-  }
-
-  auto getTensorTypeOfShape(ShapeTy Shape) {
-    auto TShape = SmallVector<int64_t>(Shape.size(), -1);
-    SmallVector<int64_t> Encoding;
-    for (auto Size : Shape) {
-      Encoding.emplace_back(Size->getUID());
-    }
-    auto EncodingAttr = OB.getI64ArrayAttr(Encoding);
-    return RankedTensorType::get(TShape, OB.getF64Type(), EncodingAttr);
   }
 
   IndexedValueTy generateNode(Node &N) {

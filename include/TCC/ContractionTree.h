@@ -595,6 +595,7 @@ class ContractionForest {
   ParamIndexPtrsTy ArgIndices;
   InputTensorPtrsTy ArgTensors;
   // Others
+  SizePtrsTy ConstSizes;
   ParamIndexPtrsTy ConstIndices;
 
 public:
@@ -719,9 +720,17 @@ public:
   void finishForestConstruct() {
     for (auto &Size : SizeIDSymbolMap) {
       if (Size->isFirstAppear()) {
-        Size->setUID(ArgSizes.size());
-        ArgSizes.emplace_back(Size.get());
+        if (!Size->isConstant()) {
+          Size->setUID(ArgSizes.size());
+          ArgSizes.emplace_back(Size.get());
+        } else {
+          ConstSizes.emplace_back(Size.get());
+        }
       }
+    }
+    SizeID UID = ArgSizes.size();
+    for (auto Size : ConstSizes) {
+      Size->setUID(UID++);
     }
     for (auto &Index : ParamIndices) {
       if (!Index->hasValue()) {

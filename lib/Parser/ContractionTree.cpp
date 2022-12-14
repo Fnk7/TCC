@@ -176,16 +176,24 @@ void SizeSymbol::dumpAliases() {
 }
 
 void ContractionForest::dump() {
-  errs() << "Input sizes: ";
   if (ArgSizes.size()) {
     bool Comma = false;
     for (auto Size : ArgSizes) {
-      errs() << (Comma ? ", " : "");
+      errs() << (Comma ? ", " : "Input sizes: ");
       Size->dump();
       Comma = true;
     }
+    errs() << (Comma ? "\n" : "");
   }
-  errs() << "\n";
+  if (ConstSizes.size()) {
+    bool Comma = false;
+    for (auto Size : ConstSizes) {
+      errs() << (Comma ? ", " : "Constant sizes: ");
+      Size->dump();
+      Comma = true;
+    }
+    errs() << (Comma ? "\n" : "");
+  }
   if (ArgIndices.size()) {
     errs() << "Input indices: ";
     bool Comma = false;
@@ -196,6 +204,17 @@ void ContractionForest::dump() {
       Comma = true;
     }
     errs() << "\n";
+  }
+  if (ConstIndices.size()) {
+    bool Comma = false;
+    for (auto Index : ConstIndices) {
+      if (Index->isImplicit())
+        continue;
+      errs() << (Comma ? ", " : "Constant indices: ");
+      errs() << Index->getName() << " = " << Index->getValue();
+      Comma = true;
+    }
+    errs() << (Comma ? "\n" : "");
   }
   errs() << "Input tensors: ";
   if (ArgTensors.size()) {
@@ -213,17 +232,6 @@ void ContractionForest::dump() {
         continue;
       errs() << (Comma ? ", " : "Sizes aliases: ");
       Size->dumpAliases();
-      Comma = true;
-    }
-    errs() << (Comma ? "\n" : "");
-  }
-  {
-    bool Comma = false;
-    for (auto Index : ConstIndices) {
-      if (Index->isImplicit())
-        continue;
-      errs() << (Comma ? ", " : "Constant indices: ");
-      errs() << Index->getName() << " = " << Index->getValue();
       Comma = true;
     }
     errs() << (Comma ? "\n" : "");
