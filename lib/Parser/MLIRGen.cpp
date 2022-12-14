@@ -32,8 +32,7 @@ public:
       : CF(CF), OB(&Ctx), Loc(UnknownLoc::get(&Ctx)){};
 
 private:
-  llvm::DenseMap<StringRef, Value> TreeTensorValueMap;
-  llvm::DenseMap<StringRef, Value> InputTensorValueMap;
+  llvm::DenseMap<StringRef, Value> SymbolValueMap;
   llvm::DenseMap<Value, IndexUsesTy> ValueIndexesMap;
 
 public:
@@ -81,7 +80,15 @@ public:
     OB.setInsertionPointToEnd(EntryB);
     // Map input tensor to mlir value
     for (size_t i = 0; i < ITs.size(); i++) {
-      InputTensorValueMap[ITs[i]->getName()] = EntryB->getArgument(i);
+      SymbolValueMap[ITs[i]->getName()] = EntryB->getArgument(i);
+    }
+    for (auto Index : CF.getArgIndices()) {
+      SymbolValueMap[Index->getName()] =
+          OB.create<arith::ConstantIndexOp>(Loc, 0);
+    }
+    for (auto Index : CF.getConstIndices()) {
+      SymbolValueMap[Index->getName()] =
+          OB.create<arith::ConstantIndexOp>(Loc, Index->getValue());
     }
     // Generate Contraction Dialect of trees
     auto &CTs = CF.getContractionTrees();
@@ -92,7 +99,7 @@ public:
     // writebacks point to the argument tensor
     SmallVector<Value> ReturnValues;
     for (auto &CT : OTs) {
-      ReturnValues.emplace_back(TreeTensorValueMap[CT->getName()]);
+      ReturnValues.emplace_back(SymbolValueMap[CT->getName()]);
     }
     OB.create<func::ReturnOp>(Loc, TypeRange(), ReturnValues);
     return M;
@@ -102,7 +109,17 @@ private:
   void generateContractionTree(ContractionTree &CT) {
     ValueIndexesMap.clear();
     auto Value = generateNode(CT.getRootNode());
-    TreeTensorValueMap[CT.getName()] = Value;
+    SymbolValueMap[CT.getName()] = Value;
+  }
+
+  auto getTensorTypeOfShape(ShapeTy Shape) {
+    auto TShape = SmallVector<int64_t>(Shape.size(), -1);
+    SmallVector<int64_t> Encoding;
+    for (auto Size : Shape) {
+      Encoding.emplace_back(Size->getUID());
+    }
+    auto EncodingAttr = OB.getI64ArrayAttr(Encoding);
+    return RankedTensorType::get(TShape, OB.getF64Type(), EncodingAttr);
   }
 
   Value generateNode(Node &N) {
@@ -114,10 +131,14 @@ private:
       return generateNode<AddOp>(cast<ArithNode>(N));
     } else if (isa<MultiplicationNode>(N)) {
       return generateNode<MulOp>(cast<ArithNode>(N));
-    } else if (isa<TreeAsLeafNode>(N)) {
-      return generateNode(cast<TreeAsLeafNode>(N));
-    } else if (isa<InputAsLeafNode>(N)) {
-      return generateNode(cast<InputAsLeafNode>(N));
+    } else if (isa<LeafNode>(N)) {
+      return generateNode(cast<LeafNode>(N));
+      // } else if (isa<InputAsLeafNode>(N)) {
+      //   return generateNode(cast<InputAsLeafNode>(N));
+    } else if (isa<ConstantNode>(N)) {
+      return generateNode(cast<ConstantNode>(N));
+    } else if (isa<NegativeNode>(N)) {
+      return generateNode(cast<NegativeNode>(N));
     } else {
       errs() << "Generate Node of Kind: " << N.getKind() << "\n";
       llvm_unreachable("Undefined Node Kind\n");
@@ -225,16 +246,84 @@ private:
     ValueIndexesMap[V] = OutIndexes;
     return V;
   }
-  Value generateNode(TreeAsLeafNode &TALN) {
-    auto CT = TALN.getTree();
-    Value V = TreeTensorValueMap[CT->getName()];
-    ValueIndexesMap[V] = TALN.getIterIndexUses();
+  Value generateNode(LeafNode &LN) {
+    StringRef Name;
+    if (llvm::isa<TreeAsLeafNode>(LN)) {
+      Name = llvm::cast<TreeAsLeafNode>(LN).getTree()->getName();
+    } else if (llvm::isa<InputAsLeafNode>(LN)) {
+      Name = llvm::cast<InputAsLeafNode>(LN).getInput()->getName();
+    }
+    Value V = SymbolValueMap[Name];
+    IndexUsesTy IIndexUses;
+    // U unique
+    IndexUsesTy UIndexUses;
+    {
+      auto &IndexUses = LN.getIndexUses();
+      ShapeTy SliceShape;
+      SmallVector<int64_t> SliceAxes;
+      SmallVector<Value> PIndexValues;
+      for (size_t IU = 0; IU < IndexUses.size(); ++IU) {
+        auto Index = IndexUses[IU];
+        if (auto PIndex = llvm::dyn_cast<ParamIndexSymbol>(Index)) {
+          SliceAxes.emplace_back(IU);
+          PIndexValues.emplace_back(SymbolValueMap[PIndex->getName()]);
+        } else if (auto IIndex = llvm::dyn_cast<IterIndexSymbol>(Index)) {
+          IIndexUses.emplace_back(IIndex);
+          SliceShape.emplace_back(IIndex->getSize());
+        } else {
+          llvm_unreachable("");
+        }
+      }
+      if (SliceAxes.size()) {
+        auto SliceType = getTensorTypeOfShape(SliceShape);
+        auto SliceAttr = OB.getI64ArrayAttr(SliceAxes);
+        V = OB.create<SliceOp>(Loc, SliceType, V, PIndexValues, SliceAttr);
+      }
+    }
+    {
+      DenseMap<IndexPtr, SmallVector<int64_t>> IndexPosMap;
+      ShapeTy DiagShape;
+      for (size_t IU = 0; IU < IIndexUses.size(); ++IU) {
+        auto Index = IIndexUses[IU];
+        if (!IndexPosMap.count(Index)) {
+          UIndexUses.emplace_back(Index);
+          DiagShape.emplace_back(Index->getSize());
+        }
+        IndexPosMap[Index].emplace_back(IU);
+      }
+      SmallVector<Attribute> AxesPairs;
+      for (auto Index : UIndexUses) {
+        if (IndexPosMap[Index].size() >= 2) {
+          AxesPairs.emplace_back(OB.getI64ArrayAttr(IndexPosMap[Index]));
+        }
+      }
+      if (AxesPairs.size()) {
+        auto DiagType = getTensorTypeOfShape(DiagShape);
+        auto AxesPairsAttr = OB.getArrayAttr(AxesPairs);
+        V = OB.create<DiagonalOp>(Loc, DiagType, V, AxesPairsAttr);
+      }
+    }
+    ValueIndexesMap[V] = UIndexUses;
     return V;
   }
   Value generateNode(InputAsLeafNode &IALN) {
     auto IT = IALN.getInput();
-    Value V = InputTensorValueMap[IT->getName()];
+    Value V = SymbolValueMap[IT->getName()];
     ValueIndexesMap[V] = IALN.getIterIndexUses();
+    return V;
+  }
+  Value generateNode(ConstantNode &CN) {
+    auto Attr = OB.getF64FloatAttr(CN.getValue());
+    auto Encoding = OB.getI64ArrayAttr({});
+    auto ResultType = RankedTensorType::get({}, OB.getF64Type(), Encoding);
+    Value V = OB.create<ConstantOp>(Loc, ResultType, Attr);
+    return V;
+  }
+  Value generateNode(NegativeNode &NN) {
+    auto V = generateNode(NN.getChild());
+    auto &IndexUses = ValueIndexesMap[V];
+    V = OB.create<NegOp>(Loc, V.getType(), V);
+    ValueIndexesMap[V] = IndexUses;
     return V;
   }
 };

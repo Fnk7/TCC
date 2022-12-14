@@ -21,6 +21,8 @@ const std::string Node::getKindString(NodeKind K) {
     return "InputRef";
   case NK_Negative:
     return "Negative";
+  case NK_Constant:
+    return "Constant";
   default:
     return "Undifined";
   }

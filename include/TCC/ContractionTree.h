@@ -496,6 +496,8 @@ public:
   static NodePtr get(NodePtr Child) {
     return NodePtr(new NegativeNode(std::move(Child)));
   }
+  // Member Function
+  Node &getChild() { return *Childs[0]; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Negative; }
   // dump
@@ -510,6 +512,8 @@ private:
 
 public:
   static NodePtr get(double Value) { return NodePtr(new ConstantNode(Value)); }
+  // Member Functions
+  auto getValue() { return Value; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Constant; }
   // dump
@@ -733,6 +737,10 @@ public:
   InTensorsTy &getInputTensors() { return InputTensors; }
   CTreePtrsTy &getOutputTensors() { return OutputCTrees; }
   CTreesTy &getContractionTrees() { return CTrees; }
+
+  auto &getArgSizes() { return ArgSizes; }
+  auto &getArgIndices() { return ArgIndices; }
+  auto &getConstIndices() { return ConstIndices; }
 
   // TODO:
 
