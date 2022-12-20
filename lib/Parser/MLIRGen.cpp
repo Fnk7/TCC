@@ -82,13 +82,17 @@ public:
       }
       WriteBacks.emplace_back(ITIdx);
     }
-    auto FT = OB.getFunctionType(InputTypes, ResultTypes);
+    auto FuncType = OB.getFunctionType(InputTypes, ResultTypes);
     auto FuncAttr = SmallVector<NamedAttribute>(
         {OB.getNamedAttr("num_input_sizes",
-                         OB.getI64IntegerAttr(CF.getNumInputSizs())),
+                         OB.getI64IntegerAttr(ArgSizes.size())),
+         OB.getNamedAttr("num_input_indices",
+                         OB.getI64IntegerAttr(ArgIndices.size())),
+         OB.getNamedAttr("num_input_tensors",
+                         OB.getI64IntegerAttr(ArgTensors.size())),
          OB.getNamedAttr("wirtebacks", OB.getI64ArrayAttr(WriteBacks))});
-    auto F = OB.create<func::FuncOp>(Loc, CF.getName(), FT, FuncAttr);
-    auto EntryB = F.addEntryBlock();
+    auto Func = OB.create<func::FuncOp>(Loc, CF.getName(), FuncType, FuncAttr);
+    auto EntryB = Func.addEntryBlock();
     OB.setInsertionPointToEnd(EntryB);
     // Map input tensor to mlir value
     size_t Offset = 0;
@@ -302,11 +306,11 @@ private:
       }
       SmallVector<Attribute> AxesPairs;
       for (auto Index : UIndexUses) {
-        if (IndexPosMap[Index].size() >= 2) {
-          AxesPairs.emplace_back(OB.getI64ArrayAttr(IndexPosMap[Index]));
-        }
+        // if (IndexPosMap[Index].size() >= 2) {
+        AxesPairs.emplace_back(OB.getI64ArrayAttr(IndexPosMap[Index]));
+        // }
       }
-      if (AxesPairs.size()) {
+      if (UIndexUses.size() < IIndexUses.size()) {
         auto DiagType = getTensorTypeOfShape(DiagShape);
         auto AxesPairsAttr = OB.getArrayAttr(AxesPairs);
         V = OB.create<DiagonalOp>(Loc, DiagType, V, AxesPairsAttr);

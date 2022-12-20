@@ -128,6 +128,77 @@ struct ReturnOpLowering : public OpConversionPattern<func::ReturnOp> {
   }
 };
 
+struct ConstantOpLowering : public OpConversionPattern<ConstantOp> {
+  using OpConversionPattern<ConstantOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(ConstantOp op, ConstantOp::Adaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto loc = op.getLoc();
+    auto memrefType =
+        MemRefType::get(op.getType().getShape(), op.getType().getElementType());
+    auto allocaOp = rewriter.create<memref::AllocaOp>(loc, memrefType,
+                                                      SmallVector<Value>());
+    auto constOp = rewriter.create<arith::ConstantFloatOp>(
+        loc, adaptor.getValue(), rewriter.getF64Type());
+    rewriter.create<memref::StoreOp>(loc, constOp, allocaOp);
+    rewriter.replaceOp(op, allocaOp.getResult());
+    return success();
+  }
+};
+
+struct ReturnOpLowering2 : public OpConversionPattern<func::ReturnOp> {
+  using OpConversionPattern<func::ReturnOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(func::ReturnOp op, func::ReturnOp::Adaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    rewriter.updateRootInPlace(op,
+                               [&] { op->setOperands(adaptor.getOperands()); });
+    return success();
+  }
+};
+
+struct FuncOpLowering2 : public OpConversionPattern<func::FuncOp> {
+  using OpConversionPattern<func::FuncOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(func::FuncOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto loc = rewriter.getUnknownLoc();
+    auto funcType = op.getFunctionType();
+    TypeConverter::SignatureConversion signature(funcType.getNumInputs());
+    for (const auto &argType : llvm::enumerate(funcType.getInputs())) {
+      auto convertedType = typeConverter->convertType(argType.value());
+      if (!convertedType)
+        return failure();
+      signature.addInputs(argType.index(), convertedType);
+    }
+    SmallVector<Type> resultTypes;
+    for (const auto &resultType : funcType.getResults()) {
+      auto convertedType = typeConverter->convertType(resultType);
+      resultTypes.push_back(convertedType);
+    }
+    auto newFuncType =
+        rewriter.getFunctionType(signature.getConvertedTypes(), resultTypes);
+    auto newFuncOp =
+        rewriter.create<func::FuncOp>(loc, op.getName(), newFuncType);
+    for (const auto &namedAttr : op->getAttrs()) {
+      if (namedAttr.getName() == FunctionOpInterface::getTypeAttrName() ||
+          namedAttr.getName() == SymbolTable::getSymbolAttrName())
+        continue;
+      newFuncOp->setAttr(namedAttr.getName(), namedAttr.getValue());
+    }
+    rewriter.inlineRegionBefore(op.getRegion(), newFuncOp.getRegion(),
+                                newFuncOp.getRegion().end());
+    if (failed(rewriter.convertRegionTypes(&newFuncOp.getRegion(),
+                                           *this->getTypeConverter())))
+      return failure();
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 struct FuncOpLowering : public OpConversionPattern<func::FuncOp> {
   using OpConversionPattern<func::FuncOp>::OpConversionPattern;
 
@@ -141,18 +212,23 @@ struct FuncOpLowering : public OpConversionPattern<func::FuncOp> {
     auto FuncAttr = adaptor.getAttributes();
     auto NISAttr = FuncAttr.get("num_input_sizes").cast<IntegerAttr>();
     auto NumInputSizes = NISAttr.getValue().getSExtValue();
+    auto NIIAttr = FuncAttr.get("num_input_indices").cast<IntegerAttr>();
+    auto NumInputIndices = NIIAttr.getValue().getSExtValue();
     auto WriteBackAttr = FuncAttr.get("wirtebacks").cast<ArrayAttr>();
     auto WriteBacks = unpackIntegerArrayAttr(WriteBackAttr);
-    SmallVector<Type> NewInputTypes(NumInputSizes, rewriter.getIndexType());
+    SmallVector<Type> NewInputTypes(NumInputSizes + NumInputIndices,
+                                    rewriter.getIndexType());
     SmallVector<Type> NewResultTypes;
     auto &R = op.getRegion();
     rewriter.setInsertionPointToStart(&(R.front()));
     Value ZeroOffset = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
-    unsigned ArgIdx = 0;
-    for (; ArgIdx < NumInputSizes; ArgIdx++) {
-      R.insertArgument(ArgIdx, rewriter.getIndexType(), Loc);
-    }
-    for (auto T : InputTypes) {
+    unsigned ArgIdx = NumInputSizes + NumInputIndices;
+    // for (; ArgIdx < NumInputSizes; ArgIdx++) {
+    //   R.insertArgument(ArgIdx, rewriter.getIndexType(), Loc);
+    // }
+    for (; ArgIdx < InputTypes.size(); ArgIdx++) {
+      auto T = InputTypes[ArgIdx];
+      // for (auto T : InputTypes) {
       assert(T.isa<RankedTensorType>());
       auto RTT = T.cast<RankedTensorType>();
       auto ViewOpType = MemRefType::get(RTT.getShape(), RTT.getElementType());
@@ -229,6 +305,166 @@ struct PermuteOpLowering : public OpConversionPattern<PermuteOp> {
       Indexes.emplace_back(InductionVars[Axis]);
     }
     Value ToStore = rewriter.create<memref::LoadOp>(Loc, LoadFrom, Indexes);
+    rewriter.create<memref::StoreOp>(Loc, ToStore, Alloc, InductionVars);
+    rewriter.replaceOp(op, Alloc->getResults());
+    return success();
+  }
+};
+
+struct DiagonalOpLowering : public OpConversionPattern<DiagonalOp> {
+  using OpConversionPattern<DiagonalOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(DiagonalOp op, DiagonalOp::Adaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto Loc = op.getLoc();
+    auto InType = op.getResult().getType().cast<RankedTensorType>();
+    auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
+    auto Sizes = getTensorSizes(InType);
+    SmallVector<Value> SizeValues;
+    auto &B = *(op->getBlock());
+    for (auto &Sz : Sizes) {
+      SizeValues.emplace_back(B.getArgument(Sz));
+    }
+    auto Alloc = rewriter.create<memref::AllocOp>(Loc, OutType, SizeValues);
+    Alloc->moveBefore(&(B.front()));
+    bool NeedDealloc = true;
+    for (auto *U : op.getResult().getUsers()) {
+      if (dyn_cast<func::ReturnOp>(U))
+        NeedDealloc = false;
+    }
+    if (NeedDealloc) {
+      auto Dealloc = rewriter.create<memref::DeallocOp>(Loc, Alloc);
+      Dealloc->moveBefore(&(B.back()));
+    }
+    Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
+    SmallVector<Value> InductionVars;
+    Block *InnerMostBody;
+    for (auto SzValue : SizeValues) {
+      auto AffineFor = rewriter.create<AffineForOp>(
+          Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
+          rewriter.getSymbolIdentityMap(), 1);
+      InnerMostBody = AffineFor.getBody();
+      InductionVars.emplace_back(AffineFor.getInductionVar());
+      rewriter.setInsertionPointToStart(InnerMostBody);
+    }
+    Value LoadFrom = adaptor.getInput();
+    SmallVector<Value> Indexes(
+        op.getOperand().getType().cast<RankedTensorType>().getShape().size());
+    auto AxesMapAttr = op.getAxesPairs();
+    for (auto [IndexValue, AxesAttr] : llvm::zip(InductionVars, AxesMapAttr)) {
+      auto Axes = unpackIntegerArrayAttr(AxesAttr.cast<ArrayAttr>());
+      for (auto Axis : Axes) {
+        Indexes[Axis] = IndexValue;
+      }
+    }
+    Value ToStore = rewriter.create<memref::LoadOp>(Loc, LoadFrom, Indexes);
+    rewriter.create<memref::StoreOp>(Loc, ToStore, Alloc, InductionVars);
+    rewriter.replaceOp(op, Alloc->getResults());
+    return success();
+  }
+};
+
+struct SliceOpLowering : public OpConversionPattern<SliceOp> {
+  using OpConversionPattern<SliceOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(SliceOp op, SliceOp::Adaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto Loc = op.getLoc();
+    auto InType = op.getResult().getType().cast<RankedTensorType>();
+    auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
+    auto Sizes = getTensorSizes(InType);
+    SmallVector<Value> SizeValues;
+    auto &B = *(op->getBlock());
+    for (auto &Sz : Sizes) {
+      SizeValues.emplace_back(B.getArgument(Sz));
+    }
+    auto Alloc = rewriter.create<memref::AllocOp>(Loc, OutType, SizeValues);
+    Alloc->moveBefore(&(B.front()));
+    bool NeedDealloc = true;
+    for (auto *U : op.getResult().getUsers()) {
+      if (dyn_cast<func::ReturnOp>(U))
+        NeedDealloc = false;
+    }
+    if (NeedDealloc) {
+      auto Dealloc = rewriter.create<memref::DeallocOp>(Loc, Alloc);
+      Dealloc->moveBefore(&(B.back()));
+    }
+    Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
+    SmallVector<Value> InductionVars;
+    Block *InnerMostBody;
+    for (auto SzValue : SizeValues) {
+      auto AffineFor = rewriter.create<AffineForOp>(
+          Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
+          rewriter.getSymbolIdentityMap(), 1);
+      InnerMostBody = AffineFor.getBody();
+      InductionVars.emplace_back(AffineFor.getInductionVar());
+      rewriter.setInsertionPointToStart(InnerMostBody);
+    }
+    Value LoadFrom = adaptor.getInput();
+    SmallVector<Value> LoadIndices(
+        op.getOperand(0).getType().cast<RankedTensorType>().getShape().size());
+    auto AxesAttr = op.getAxesAttr();
+    for (auto [Axis, IndexValue] :
+         llvm::zip(unpackIntegerArrayAttr(AxesAttr), op.getIndices())) {
+      LoadIndices[Axis] = IndexValue;
+    }
+    unsigned IndexPos = 0;
+    for (auto IndexValue : InductionVars) {
+      while (LoadIndices[IndexPos]) {
+        IndexPos++;
+      }
+      LoadIndices[IndexPos] = IndexValue;
+    }
+    Value ToStore = rewriter.create<memref::LoadOp>(Loc, LoadFrom, LoadIndices);
+    rewriter.create<memref::StoreOp>(Loc, ToStore, Alloc, InductionVars);
+    rewriter.replaceOp(op, Alloc->getResults());
+    return success();
+  }
+};
+
+struct NegOpLowering : public OpConversionPattern<NegOp> {
+  using OpConversionPattern<NegOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(NegOp op, NegOp::Adaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto Loc = op.getLoc();
+    auto InType = op.getResult().getType().cast<RankedTensorType>();
+    auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
+    auto Sizes = getTensorSizes(InType);
+    SmallVector<Value> SizeValues;
+    auto &B = *(op->getBlock());
+    for (auto &Sz : Sizes) {
+      SizeValues.emplace_back(B.getArgument(Sz));
+    }
+    auto Alloc = rewriter.create<memref::AllocOp>(Loc, OutType, SizeValues);
+    Alloc->moveBefore(&(B.front()));
+    bool NeedDealloc = true;
+    for (auto *U : op.getResult().getUsers()) {
+      if (dyn_cast<func::ReturnOp>(U))
+        NeedDealloc = false;
+    }
+    if (NeedDealloc) {
+      auto Dealloc = rewriter.create<memref::DeallocOp>(Loc, Alloc);
+      Dealloc->moveBefore(&(B.back()));
+    }
+    Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
+    SmallVector<Value> InductionVars;
+    Block *InnerMostBody;
+    for (auto SzValue : SizeValues) {
+      auto AffineFor = rewriter.create<AffineForOp>(
+          Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
+          rewriter.getSymbolIdentityMap(), 1);
+      InnerMostBody = AffineFor.getBody();
+      InductionVars.emplace_back(AffineFor.getInductionVar());
+      rewriter.setInsertionPointToStart(InnerMostBody);
+    }
+    Value LoadFrom = adaptor.getTensor();
+    Value ToStore =
+        rewriter.create<memref::LoadOp>(Loc, LoadFrom, InductionVars);
+    ToStore = rewriter.create<arith::NegFOp>(Loc, ToStore);
     rewriter.create<memref::StoreOp>(Loc, ToStore, Alloc, InductionVars);
     rewriter.replaceOp(op, Alloc->getResults());
     return success();
@@ -329,22 +565,52 @@ struct ContractionLoweringPass
   void runOnOperation() final;
 };
 
+static Value materializeToTensor(OpBuilder &builder, TensorType type,
+                                 ValueRange inputs, Location loc) {
+  assert(inputs.size() == 1);
+  assert(inputs[0].getType().isa<BaseMemRefType>());
+  auto UCCOp = builder.create<UnrealizedConversionCastOp>(
+      loc, SmallVector<Type>(1, type), inputs);
+  return UCCOp.getResult(0);
+}
+
 void ContractionLoweringPass::runOnOperation() {
   ConversionTarget target(getContext());
   target.addLegalDialect<AffineDialect, BuiltinDialect, arith::ArithDialect,
                          memref::MemRefDialect>();
   target.addIllegalDialect<ContractionDialect>();
-  target.addDynamicallyLegalOp<func::FuncOp>([](func::FuncOp op) {
-    return llvm::none_of(op.getResultTypes(),
-                         [](Type T) { return T.isa<RankedTensorType>(); });
+  // target.addLegalOp<func::ReturnOp>();
+  TypeConverter TC;
+  TC.addConversion([](Type type) { return type; });
+  TC.addConversion([](RankedTensorType type) -> Type {
+    return MemRefType::get(type.getShape(), type.getElementType());
   });
-  target.addDynamicallyLegalOp<func::ReturnOp>([](func::ReturnOp op) {
-    return llvm::none_of(op.getOperandTypes(),
-                         [](Type T) { return T.isa<RankedTensorType>(); });
+  TC.addArgumentMaterialization(materializeToTensor);
+  TC.addSourceMaterialization(materializeToTensor);
+  TC.addTargetMaterialization([](OpBuilder &builder, BaseMemRefType type,
+                                 ValueRange inputs, Location loc) -> Value {
+    assert(inputs.size() == 1 && "expected exactly one input");
+    if (inputs[0].getType().isa<TensorType>()) {
+      // Tensor to MemRef cast.
+      auto UCCOp = builder.create<UnrealizedConversionCastOp>(
+          loc, SmallVector<Type>(1, type), inputs);
+      return UCCOp.getResult(0);
+    }
+    llvm_unreachable("only tensor/memref input types supported");
+  });
+  target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op) {
+    return llvm::all_of(op.getFunctionType().getInputs(),
+                        [&](Type T) { return TC.isLegal(T); });
+  });
+  target.addDynamicallyLegalOp<func::ReturnOp>([&](func::ReturnOp op) {
+    return llvm::all_of(op.getOperandTypes(),
+                        [&](Type T) { return TC.isLegal(T); });
   });
   RewritePatternSet patterns(&getContext());
-  patterns.add<FuncOpLowering, ReturnOpLowering, AddOpLowering, MulOpLowering,
-               PermuteOpLowering, ContractOpLowering>(&getContext());
+  patterns.add<FuncOpLowering2, ReturnOpLowering2, AddOpLowering, MulOpLowering,
+               PermuteOpLowering, ContractOpLowering, DiagonalOpLowering,
+               ConstantOpLowering, SliceOpLowering, NegOpLowering>(
+      TC, &getContext());
   if (failed(
           applyPartialConversion(getOperation(), target, std::move(patterns))))
     signalPassFailure();
