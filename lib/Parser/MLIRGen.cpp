@@ -181,15 +181,17 @@ private:
       }
     }
     assert(IndexUses.size() == AxesMap.size());
+    auto inputShape = cast<RankedTensorType>(V.getType()).getShape();
+    auto outputShape = SmallVector<int64_t>(inputShape.size());
     auto InSizes = getTensorSizes(V);
     SmallVector<int64_t> OutSizes(InSizes.size());
     for (size_t InAxis = 0; InAxis < AxesMap.size(); InAxis++) {
       auto OutAxis = AxesMap[InAxis];
       OutSizes[OutAxis] = InSizes[InAxis];
+      outputShape[OutAxis] = inputShape[InAxis];
     }
-    SmallVector<int64_t> OutShape(OutSizes.size(), -1);
     auto OutAttr = OB.getI64ArrayAttr(OutSizes);
-    auto OutType = RankedTensorType::get(OutShape, OB.getF64Type(), OutAttr);
+    auto OutType = RankedTensorType::get(outputShape, OB.getF64Type(), OutAttr);
     auto AxesMapAttr = OB.getI64ArrayAttr(AxesMap);
     V = OB.create<PermuteOp>(Loc, OutType, V, AxesMapAttr);
     return {V, {}};
@@ -247,7 +249,14 @@ private:
         AxesMap.emplace_back(OutAxis);
       }
     }
-    SmallVector<int64_t> OutShape(OutSizes.size(), -1);
+    SmallVector<int64_t> OutShape;
+    for (auto index : OutIndexes) {
+      auto size = index->getSize();
+      if (size->isConstant())
+        OutShape.emplace_back(size->getUpperBound());
+      else
+        OutShape.emplace_back(-1);
+    }
     auto OutAttr = OB.getI64ArrayAttr(OutSizes);
     auto OutType = RankedTensorType::get(OutShape, OB.getF64Type(), OutAttr);
     SmallVector<Attribute, 4> AxesMapAttrs;

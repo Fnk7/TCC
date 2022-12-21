@@ -20,13 +20,49 @@ static SmallVector<int64_t> unpackIntegerArrayAttr(ArrayAttr Attr) {
   }
   return Sizes;
 }
-static SmallVector<int64_t> getTensorSizes(RankedTensorType RTT) {
+static SmallVector<int64_t> getTensorSizeIDs(RankedTensorType RTT) {
   auto Attr = RTT.getEncoding().cast<ArrayAttr>();
   return unpackIntegerArrayAttr(Attr);
 }
 static SmallVector<int64_t> getTensorSizes(Value V) {
   auto RTT = V.getType().cast<RankedTensorType>();
-  return getTensorSizes(RTT);
+  return getTensorSizeIDs(RTT);
+}
+
+static std::tuple<Value, SmallVector<Value>>
+createBufferForTensor(OpBuilder &builder, Value tensorValue) {
+  auto loc = tensorValue.getLoc();
+  auto tensorType = cast<RankedTensorType>(tensorValue.getType());
+  auto memrefType =
+      MemRefType::get(tensorType.getShape(), tensorType.getElementType());
+  auto shape = tensorType.getShape();
+  auto sizeIDs = getTensorSizeIDs(tensorType);
+  assert(shape.size() == sizeIDs.size());
+  auto block = tensorValue.getParentBlock();
+  SmallVector<Value> allocSizes;
+  SmallVector<Value> sizeValues;
+  for (auto [size, sizeID] : llvm::zip(shape, sizeIDs)) {
+    if (size > 0) {
+      auto sizeValue = builder.create<arith::ConstantIndexOp>(loc, size);
+      sizeValues.emplace_back(sizeValue);
+    } else {
+      sizeValues.emplace_back(block->getArgument(sizeID));
+      allocSizes.emplace_back(sizeValues.back());
+    }
+  }
+  bool isAlloca = true;
+  for (auto U : tensorValue.getUsers()) {
+    if (dyn_cast<func::ReturnOp>(U)) {
+      isAlloca = false;
+    }
+  }
+  if (isAlloca) {
+    auto alloca = builder.create<memref::AllocaOp>(loc, memrefType, allocSizes);
+    return {alloca, sizeValues};
+  } else {
+    auto alloc = builder.create<memref::AllocOp>(loc, memrefType, allocSizes);
+    return {alloc, sizeValues};
+  }
 }
 
 template <typename BinaryOp, typename LoweredBinaryOp>
@@ -37,29 +73,11 @@ struct BinaryOpLowering : public OpConversionPattern<BinaryOp> {
   matchAndRewrite(BinaryOp op, typename BinaryOp::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto Loc = op.getLoc();
-    auto InType = cast<RankedTensorType>(op.getResult().getType());
-    auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
-    auto Sizes = getTensorSizes(InType);
-    SmallVector<Value> SizeValues;
-    auto &B = *(op->getBlock());
-    for (auto &Sz : Sizes) {
-      SizeValues.emplace_back(B.getArgument(Sz));
-    }
-    auto Alloc = rewriter.create<memref::AllocOp>(Loc, OutType, SizeValues);
-    Alloc->moveBefore(&(B.front()));
-    bool NeedDealloc = true;
-    for (auto *U : op.getResult().getUsers()) {
-      if (dyn_cast<func::ReturnOp>(U))
-        NeedDealloc = false;
-    }
-    if (NeedDealloc) {
-      auto Dealloc = rewriter.create<memref::DeallocOp>(Loc, Alloc);
-      Dealloc->moveBefore(&(B.back()));
-    }
+    auto [buffer, sizeValues] = createBufferForTensor(rewriter, op.getResult());
     Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
     SmallVector<Value> InductionVars;
     Block *InnerMostBody;
-    for (auto SzValue : SizeValues) {
+    for (auto SzValue : sizeValues) {
       auto AffineFor = rewriter.create<AffineForOp>(
           Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
           rewriter.getSymbolIdentityMap(), 1);
@@ -84,8 +102,8 @@ struct BinaryOpLowering : public OpConversionPattern<BinaryOp> {
     for (size_t Operand = 1; Operand < Loads.size(); Operand++) {
       ToStore = rewriter.create<LoweredBinaryOp>(Loc, ToStore, Loads[Operand]);
     }
-    rewriter.create<memref::StoreOp>(Loc, ToStore, Alloc, InductionVars);
-    rewriter.replaceOp(op, Alloc->getResults());
+    rewriter.create<memref::StoreOp>(Loc, ToStore, buffer, InductionVars);
+    rewriter.replaceOp(op, buffer);
     return success();
   }
 };
@@ -236,7 +254,7 @@ struct FuncOpLowering : public OpConversionPattern<func::FuncOp> {
       auto ArgType = MemRefType::get({(int64_t)-1}, rewriter.getI8Type());
       NewInputTypes.emplace_back(ArgType);
       Arg.setType(ArgType);
-      auto Sizes = getTensorSizes(RTT);
+      auto Sizes = getTensorSizeIDs(RTT);
       SmallVector<Value> SizeValues;
       for (auto &Sz : Sizes) {
         SizeValues.emplace_back(R.getArgument(Sz));
@@ -267,25 +285,7 @@ struct PermuteOpLowering : public OpConversionPattern<PermuteOp> {
   matchAndRewrite(PermuteOp op, PermuteOp::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto Loc = op.getLoc();
-    auto InType = op.getResult().getType().cast<RankedTensorType>();
-    auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
-    auto Sizes = getTensorSizes(InType);
-    SmallVector<Value> SizeValues;
-    auto &B = *(op->getBlock());
-    for (auto &Sz : Sizes) {
-      SizeValues.emplace_back(B.getArgument(Sz));
-    }
-    auto Alloc = rewriter.create<memref::AllocOp>(Loc, OutType, SizeValues);
-    Alloc->moveBefore(&(B.front()));
-    bool NeedDealloc = true;
-    for (auto *U : op.getResult().getUsers()) {
-      if (dyn_cast<func::ReturnOp>(U))
-        NeedDealloc = false;
-    }
-    if (NeedDealloc) {
-      auto Dealloc = rewriter.create<memref::DeallocOp>(Loc, Alloc);
-      Dealloc->moveBefore(&(B.back()));
-    }
+    auto [buffer, SizeValues] = createBufferForTensor(rewriter, op.getResult());
     Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
     SmallVector<Value> InductionVars;
     Block *InnerMostBody;
@@ -305,8 +305,8 @@ struct PermuteOpLowering : public OpConversionPattern<PermuteOp> {
       Indexes.emplace_back(InductionVars[Axis]);
     }
     Value ToStore = rewriter.create<memref::LoadOp>(Loc, LoadFrom, Indexes);
-    rewriter.create<memref::StoreOp>(Loc, ToStore, Alloc, InductionVars);
-    rewriter.replaceOp(op, Alloc->getResults());
+    rewriter.create<memref::StoreOp>(Loc, ToStore, buffer, InductionVars);
+    rewriter.replaceOp(op, buffer);
     return success();
   }
 };
@@ -318,25 +318,7 @@ struct DiagonalOpLowering : public OpConversionPattern<DiagonalOp> {
   matchAndRewrite(DiagonalOp op, DiagonalOp::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto Loc = op.getLoc();
-    auto InType = op.getResult().getType().cast<RankedTensorType>();
-    auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
-    auto Sizes = getTensorSizes(InType);
-    SmallVector<Value> SizeValues;
-    auto &B = *(op->getBlock());
-    for (auto &Sz : Sizes) {
-      SizeValues.emplace_back(B.getArgument(Sz));
-    }
-    auto Alloc = rewriter.create<memref::AllocOp>(Loc, OutType, SizeValues);
-    Alloc->moveBefore(&(B.front()));
-    bool NeedDealloc = true;
-    for (auto *U : op.getResult().getUsers()) {
-      if (dyn_cast<func::ReturnOp>(U))
-        NeedDealloc = false;
-    }
-    if (NeedDealloc) {
-      auto Dealloc = rewriter.create<memref::DeallocOp>(Loc, Alloc);
-      Dealloc->moveBefore(&(B.back()));
-    }
+    auto [Alloc, SizeValues] = createBufferForTensor(rewriter, op.getResult());
     Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
     SmallVector<Value> InductionVars;
     Block *InnerMostBody;
@@ -360,7 +342,7 @@ struct DiagonalOpLowering : public OpConversionPattern<DiagonalOp> {
     }
     Value ToStore = rewriter.create<memref::LoadOp>(Loc, LoadFrom, Indexes);
     rewriter.create<memref::StoreOp>(Loc, ToStore, Alloc, InductionVars);
-    rewriter.replaceOp(op, Alloc->getResults());
+    rewriter.replaceOp(op, Alloc);
     return success();
   }
 };
@@ -372,25 +354,7 @@ struct SliceOpLowering : public OpConversionPattern<SliceOp> {
   matchAndRewrite(SliceOp op, SliceOp::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto Loc = op.getLoc();
-    auto InType = op.getResult().getType().cast<RankedTensorType>();
-    auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
-    auto Sizes = getTensorSizes(InType);
-    SmallVector<Value> SizeValues;
-    auto &B = *(op->getBlock());
-    for (auto &Sz : Sizes) {
-      SizeValues.emplace_back(B.getArgument(Sz));
-    }
-    auto Alloc = rewriter.create<memref::AllocOp>(Loc, OutType, SizeValues);
-    Alloc->moveBefore(&(B.front()));
-    bool NeedDealloc = true;
-    for (auto *U : op.getResult().getUsers()) {
-      if (dyn_cast<func::ReturnOp>(U))
-        NeedDealloc = false;
-    }
-    if (NeedDealloc) {
-      auto Dealloc = rewriter.create<memref::DeallocOp>(Loc, Alloc);
-      Dealloc->moveBefore(&(B.back()));
-    }
+    auto [Alloc, SizeValues] = createBufferForTensor(rewriter, op.getResult());
     Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
     SmallVector<Value> InductionVars;
     Block *InnerMostBody;
@@ -419,7 +383,7 @@ struct SliceOpLowering : public OpConversionPattern<SliceOp> {
     }
     Value ToStore = rewriter.create<memref::LoadOp>(Loc, LoadFrom, LoadIndices);
     rewriter.create<memref::StoreOp>(Loc, ToStore, Alloc, InductionVars);
-    rewriter.replaceOp(op, Alloc->getResults());
+    rewriter.replaceOp(op, Alloc);
     return success();
   }
 };
@@ -433,7 +397,7 @@ struct NegOpLowering : public OpConversionPattern<NegOp> {
     auto Loc = op.getLoc();
     auto InType = op.getResult().getType().cast<RankedTensorType>();
     auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
-    auto Sizes = getTensorSizes(InType);
+    auto Sizes = getTensorSizeIDs(InType);
     SmallVector<Value> SizeValues;
     auto &B = *(op->getBlock());
     for (auto &Sz : Sizes) {
@@ -480,7 +444,7 @@ struct ContractOpLowering : public OpConversionPattern<ContractOp> {
     auto Loc = op.getLoc();
     auto InType = op.getResult().getType().cast<RankedTensorType>();
     auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
-    auto Sizes = getTensorSizes(InType);
+    auto Sizes = getTensorSizeIDs(InType);
     SmallVector<Value> SizeValues;
     auto &B = *(op->getBlock());
     for (auto &Sz : Sizes) {
