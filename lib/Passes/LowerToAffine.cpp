@@ -129,7 +129,9 @@ struct ReturnOpLowering : public OpConversionPattern<func::ReturnOp> {
     auto WriteBackAttr = FuncAttr.get("wirtebacks").cast<ArrayAttr>();
     auto WriteBacks = unpackIntegerArrayAttr(WriteBackAttr);
     auto NISAttr = FuncAttr.get("num_input_sizes").cast<IntegerAttr>();
+    auto NIIAttr = FuncAttr.get("num_input_indices").cast<IntegerAttr>();
     auto Offset = NISAttr.getValue().getSExtValue();
+    Offset += NIIAttr.getValue().getSExtValue();
     assert(WriteBacks.size() == ReturnValues.size());
     SmallVector<Value> NewReturnValues;
     for (auto [WriteBackIdx, ReturnValue] :
@@ -138,8 +140,9 @@ struct ReturnOpLowering : public OpConversionPattern<func::ReturnOp> {
         NewReturnValues.emplace_back(ReturnValue);
       } else {
         auto InputValue = B.getArgument(WriteBackIdx + Offset);
-        auto CopyTo = (*(InputValue.getUsers().begin()))->getResult(0);
-        auto Copy = rewriter.create<memref::CopyOp>(Loc, ReturnValue, CopyTo);
+        // auto CopyTo = (*(InputValue.getUsers().begin()))->getResult(0);
+        auto Copy =
+            rewriter.create<memref::CopyOp>(Loc, ReturnValue, InputValue);
         Copy->moveBefore(&B.back());
         auto Dealloc = rewriter.create<memref::DeallocOp>(Loc, ReturnValue);
         Dealloc->moveBefore(&B.back());
@@ -197,9 +200,15 @@ struct FuncOpLowering2 : public OpConversionPattern<func::FuncOp> {
       signature.addInputs(argType.index(), convertedType);
     }
     SmallVector<Type> resultTypes;
-    for (const auto &resultType : funcType.getResults()) {
-      auto convertedType = typeConverter->convertType(resultType);
-      resultTypes.push_back(convertedType);
+    auto WriteBackAttr =
+        adaptor.getAttributes().get("wirtebacks").cast<ArrayAttr>();
+    auto WriteBacks = unpackIntegerArrayAttr(WriteBackAttr);
+    for (auto [resultType, writeBack] :
+         llvm::zip(funcType.getResults(), WriteBacks)) {
+      if (writeBack < 0) {
+        auto convertedType = typeConverter->convertType(resultType);
+        resultTypes.push_back(convertedType);
+      }
     }
     auto newFuncType =
         rewriter.getFunctionType(signature.getConvertedTypes(), resultTypes);
@@ -495,7 +504,7 @@ void ContractionLoweringPass::runOnOperation() {
                         [&](Type T) { return TC.isLegal(T); });
   });
   RewritePatternSet patterns(&getContext());
-  patterns.add<FuncOpLowering2, ReturnOpLowering2, AddOpLowering, MulOpLowering,
+  patterns.add<FuncOpLowering2, ReturnOpLowering, AddOpLowering, MulOpLowering,
                PermuteOpLowering, ContractOpLowering, DiagonalOpLowering,
                ConstantOpLowering, SliceOpLowering, NegOpLowering>(
       TC, &getContext());
