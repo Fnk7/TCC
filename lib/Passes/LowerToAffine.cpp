@@ -65,6 +65,20 @@ createBufferForTensor(OpBuilder &builder, Value tensorValue) {
   }
 }
 
+static auto createNestedAffineForOps(OpBuilder &builder, Location loc,
+                                     ArrayRef<Value> sizeValues) {
+  Value zeroIndexValue = builder.create<arith::ConstantIndexOp>(loc, 0);
+  SmallVector<Value> inductionValues;
+  for (auto sizeValue : sizeValues) {
+    auto forOp = builder.create<AffineForOp>(
+        loc, zeroIndexValue, builder.getSymbolIdentityMap(), sizeValue,
+        builder.getSymbolIdentityMap(), 1);
+    inductionValues.emplace_back(forOp.getInductionVar());
+    builder.setInsertionPointToStart(forOp.getBody());
+  }
+  return inductionValues;
+}
+
 template <typename BinaryOp, typename LoweredBinaryOp>
 struct BinaryOpLowering : public OpConversionPattern<BinaryOp> {
   using OpConversionPattern<BinaryOp>::OpConversionPattern;
@@ -72,19 +86,9 @@ struct BinaryOpLowering : public OpConversionPattern<BinaryOp> {
   LogicalResult
   matchAndRewrite(BinaryOp op, typename BinaryOp::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
-    auto Loc = op.getLoc();
+    auto loc = op.getLoc();
     auto [buffer, sizeValues] = createBufferForTensor(rewriter, op.getResult());
-    Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
-    SmallVector<Value> InductionVars;
-    Block *InnerMostBody;
-    for (auto SzValue : sizeValues) {
-      auto AffineFor = rewriter.create<AffineForOp>(
-          Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
-          rewriter.getSymbolIdentityMap(), 1);
-      InnerMostBody = AffineFor.getBody();
-      InductionVars.emplace_back(AffineFor.getInductionVar());
-      rewriter.setInsertionPointToStart(InnerMostBody);
-    }
+    auto inductionValues = createNestedAffineForOps(rewriter, loc, sizeValues);
     SmallVector<Value> Loads;
     auto AxesMapsAttr = op.getAxesMaps();
     for (size_t Operand = 0; Operand < AxesMapsAttr.size(); Operand++) {
@@ -93,16 +97,16 @@ struct BinaryOpLowering : public OpConversionPattern<BinaryOp> {
       auto AxesMapAttr = cast<ArrayAttr>(AxesMapsAttr[Operand]);
       auto AxesMap = unpackIntegerArrayAttr(AxesMapAttr);
       for (auto Axis : AxesMap) {
-        Indexes.emplace_back(InductionVars[Axis]);
+        Indexes.emplace_back(inductionValues[Axis]);
       }
-      Value Loaded = rewriter.create<memref::LoadOp>(Loc, LoadFrom, Indexes);
+      Value Loaded = rewriter.create<memref::LoadOp>(loc, LoadFrom, Indexes);
       Loads.emplace_back(Loaded);
     }
     Value ToStore = Loads[0];
     for (size_t Operand = 1; Operand < Loads.size(); Operand++) {
-      ToStore = rewriter.create<LoweredBinaryOp>(Loc, ToStore, Loads[Operand]);
+      ToStore = rewriter.create<LoweredBinaryOp>(loc, ToStore, Loads[Operand]);
     }
-    rewriter.create<memref::StoreOp>(Loc, ToStore, buffer, InductionVars);
+    rewriter.create<memref::StoreOp>(loc, ToStore, buffer, inductionValues);
     rewriter.replaceOp(op, buffer);
     return success();
   }
@@ -286,17 +290,7 @@ struct PermuteOpLowering : public OpConversionPattern<PermuteOp> {
                   ConversionPatternRewriter &rewriter) const final {
     auto Loc = op.getLoc();
     auto [buffer, SizeValues] = createBufferForTensor(rewriter, op.getResult());
-    Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
-    SmallVector<Value> InductionVars;
-    Block *InnerMostBody;
-    for (auto SzValue : SizeValues) {
-      auto AffineFor = rewriter.create<AffineForOp>(
-          Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
-          rewriter.getSymbolIdentityMap(), 1);
-      InnerMostBody = AffineFor.getBody();
-      InductionVars.emplace_back(AffineFor.getInductionVar());
-      rewriter.setInsertionPointToStart(InnerMostBody);
-    }
+    auto InductionVars = createNestedAffineForOps(rewriter, Loc, SizeValues);
     Value LoadFrom = adaptor.getTensor();
     SmallVector<Value> Indexes;
     auto AxesMapAttr = op.getAxesMap();
@@ -319,17 +313,8 @@ struct DiagonalOpLowering : public OpConversionPattern<DiagonalOp> {
                   ConversionPatternRewriter &rewriter) const final {
     auto Loc = op.getLoc();
     auto [Alloc, SizeValues] = createBufferForTensor(rewriter, op.getResult());
-    Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
-    SmallVector<Value> InductionVars;
-    Block *InnerMostBody;
-    for (auto SzValue : SizeValues) {
-      auto AffineFor = rewriter.create<AffineForOp>(
-          Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
-          rewriter.getSymbolIdentityMap(), 1);
-      InnerMostBody = AffineFor.getBody();
-      InductionVars.emplace_back(AffineFor.getInductionVar());
-      rewriter.setInsertionPointToStart(InnerMostBody);
-    }
+    SmallVector<Value> InductionVars =
+        createNestedAffineForOps(rewriter, Loc, SizeValues);
     Value LoadFrom = adaptor.getInput();
     SmallVector<Value> Indexes(
         op.getOperand().getType().cast<RankedTensorType>().getShape().size());
@@ -355,17 +340,8 @@ struct SliceOpLowering : public OpConversionPattern<SliceOp> {
                   ConversionPatternRewriter &rewriter) const final {
     auto Loc = op.getLoc();
     auto [Alloc, SizeValues] = createBufferForTensor(rewriter, op.getResult());
-    Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
-    SmallVector<Value> InductionVars;
-    Block *InnerMostBody;
-    for (auto SzValue : SizeValues) {
-      auto AffineFor = rewriter.create<AffineForOp>(
-          Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
-          rewriter.getSymbolIdentityMap(), 1);
-      InnerMostBody = AffineFor.getBody();
-      InductionVars.emplace_back(AffineFor.getInductionVar());
-      rewriter.setInsertionPointToStart(InnerMostBody);
-    }
+    SmallVector<Value> InductionVars =
+        createNestedAffineForOps(rewriter, Loc, SizeValues);
     Value LoadFrom = adaptor.getInput();
     SmallVector<Value> LoadIndices(
         op.getOperand(0).getType().cast<RankedTensorType>().getShape().size());
@@ -396,17 +372,7 @@ struct NegOpLowering : public OpConversionPattern<NegOp> {
                   ConversionPatternRewriter &rewriter) const final {
     auto Loc = op.getLoc();
     auto [alloc, sizeValues] = createBufferForTensor(rewriter, op.getResult());
-    Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
-    SmallVector<Value> InductionVars;
-    Block *InnerMostBody;
-    for (auto SzValue : sizeValues) {
-      auto AffineFor = rewriter.create<AffineForOp>(
-          Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
-          rewriter.getSymbolIdentityMap(), 1);
-      InnerMostBody = AffineFor.getBody();
-      InductionVars.emplace_back(AffineFor.getInductionVar());
-      rewriter.setInsertionPointToStart(InnerMostBody);
-    }
+    auto InductionVars = createNestedAffineForOps(rewriter, Loc, sizeValues);
     Value LoadFrom = adaptor.getTensor();
     Value ToStore =
         rewriter.create<memref::LoadOp>(Loc, LoadFrom, InductionVars);
@@ -428,16 +394,8 @@ struct ContractOpLowering : public OpConversionPattern<ContractOp> {
     auto InType = op.getResult().getType().cast<RankedTensorType>();
     auto &B = *(op->getBlock());
     Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
-    SmallVector<Value> InductionVars;
-    Block *InnerMostBody;
-    for (auto SzValue : SizeValues) {
-      auto AffineFor = rewriter.create<AffineForOp>(
-          Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
-          rewriter.getSymbolIdentityMap(), 1);
-      InnerMostBody = AffineFor.getBody();
-      InductionVars.emplace_back(AffineFor.getInductionVar());
-      rewriter.setInsertionPointToStart(InnerMostBody);
-    }
+    SmallVector<Value> InductionVars =
+        createNestedAffineForOps(rewriter, Loc, SizeValues);
     // Inner Reduction Loop
     auto Sizes2 = getTensorSizes(op.getOperand());
     auto AxesAttr = op.getAxesAttr();
@@ -461,7 +419,7 @@ struct ContractOpLowering : public OpConversionPattern<ContractOp> {
       } else {
         rewriter.create<AffineYieldOp>(Loc, AffineFor.getResults());
       }
-      InnerMostBody = AffineFor.getBody();
+      auto InnerMostBody = AffineFor.getBody();
       InductionVars2.emplace_back(AffineFor.getInductionVar());
       ReductionVar = AffineFor.getRegionIterArgs()[0];
       rewriter.setInsertionPointToStart(InnerMostBody);
