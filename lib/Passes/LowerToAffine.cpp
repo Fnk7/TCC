@@ -395,29 +395,11 @@ struct NegOpLowering : public OpConversionPattern<NegOp> {
   matchAndRewrite(NegOp op, NegOp::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto Loc = op.getLoc();
-    auto InType = op.getResult().getType().cast<RankedTensorType>();
-    auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
-    auto Sizes = getTensorSizeIDs(InType);
-    SmallVector<Value> SizeValues;
-    auto &B = *(op->getBlock());
-    for (auto &Sz : Sizes) {
-      SizeValues.emplace_back(B.getArgument(Sz));
-    }
-    auto Alloc = rewriter.create<memref::AllocOp>(Loc, OutType, SizeValues);
-    Alloc->moveBefore(&(B.front()));
-    bool NeedDealloc = true;
-    for (auto *U : op.getResult().getUsers()) {
-      if (dyn_cast<func::ReturnOp>(U))
-        NeedDealloc = false;
-    }
-    if (NeedDealloc) {
-      auto Dealloc = rewriter.create<memref::DeallocOp>(Loc, Alloc);
-      Dealloc->moveBefore(&(B.back()));
-    }
+    auto [alloc, sizeValues] = createBufferForTensor(rewriter, op.getResult());
     Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
     SmallVector<Value> InductionVars;
     Block *InnerMostBody;
-    for (auto SzValue : SizeValues) {
+    for (auto SzValue : sizeValues) {
       auto AffineFor = rewriter.create<AffineForOp>(
           Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
           rewriter.getSymbolIdentityMap(), 1);
@@ -429,8 +411,8 @@ struct NegOpLowering : public OpConversionPattern<NegOp> {
     Value ToStore =
         rewriter.create<memref::LoadOp>(Loc, LoadFrom, InductionVars);
     ToStore = rewriter.create<arith::NegFOp>(Loc, ToStore);
-    rewriter.create<memref::StoreOp>(Loc, ToStore, Alloc, InductionVars);
-    rewriter.replaceOp(op, Alloc->getResults());
+    rewriter.create<memref::StoreOp>(Loc, ToStore, alloc, InductionVars);
+    rewriter.replaceOp(op, alloc);
     return success();
   }
 };

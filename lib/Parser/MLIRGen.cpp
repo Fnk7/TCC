@@ -141,9 +141,9 @@ private:
     } else if (isa<ContractionNode>(N)) {
       return generateNode(cast<ContractionNode>(N));
     } else if (isa<AdditionNode>(N)) {
-      return generateNode<AddOp>(cast<ArithNode>(N));
+      return generateNode(cast<AdditionNode>(N));
     } else if (isa<MultiplicationNode>(N)) {
-      return generateNode<MulOp>(cast<ArithNode>(N));
+      return generateNode(cast<MultiplicationNode>(N));
     } else if (isa<LeafNode>(N)) {
       return generateNode(cast<LeafNode>(N));
     } else if (isa<ConstantNode>(N)) {
@@ -165,108 +165,131 @@ private:
     }
     return Sizes;
   }
-  IndexedValueTy generateNode(RootNode &RN) {
-    auto ValueIndices = generateNode(RN.getChild());
-    Value V = ValueIndices.first;
-    auto &IndexUses = ValueIndices.second;
-    auto &IndexDefs = RN.getIndexes();
-    assert(IndexUses.size() == IndexDefs.size());
-    SmallVector<int64_t> AxesMap;
-    for (auto Idx : IndexUses) {
-      for (size_t Axis = 0; Axis < IndexDefs.size(); Axis++) {
-        if (Idx == IndexDefs[Axis].get()) {
-          AxesMap.emplace_back(Axis);
+
+  // 12-21
+  IndexedValueTy generateNode(RootNode &node) {
+    auto valueIndices = generateNode(node.getChild());
+    auto value = valueIndices.first;
+    auto &indexUses = valueIndices.second;
+    auto &indexDefs = node.getIndexes();
+    assert(indexUses.size() == indexDefs.size());
+    SmallVector<int64_t> axesMap;
+    for (auto index : indexUses) {
+      for (auto axis : llvm::seq<int64_t>(0, indexDefs.size())) {
+        if (index == indexDefs[axis].get()) {
+          axesMap.emplace_back(axis);
           break;
         }
       }
     }
-    assert(IndexUses.size() == AxesMap.size());
-    auto inputShape = cast<RankedTensorType>(V.getType()).getShape();
-    auto outputShape = SmallVector<int64_t>(inputShape.size());
-    auto InSizes = getTensorSizes(V);
-    SmallVector<int64_t> OutSizes(InSizes.size());
-    for (size_t InAxis = 0; InAxis < AxesMap.size(); InAxis++) {
-      auto OutAxis = AxesMap[InAxis];
-      OutSizes[OutAxis] = InSizes[InAxis];
-      outputShape[OutAxis] = inputShape[InAxis];
+    assert(indexUses.size() == axesMap.size());
+    ShapeTy shape;
+    for (auto &index : indexDefs) {
+      shape.emplace_back(index->getSize());
     }
-    auto OutAttr = OB.getI64ArrayAttr(OutSizes);
-    auto OutType = RankedTensorType::get(outputShape, OB.getF64Type(), OutAttr);
-    auto AxesMapAttr = OB.getI64ArrayAttr(AxesMap);
-    V = OB.create<PermuteOp>(Loc, OutType, V, AxesMapAttr);
-    return {V, {}};
+    auto outputType = getTensorTypeOfShape(shape);
+    auto axesMapAttr = OB.getI64ArrayAttr(axesMap);
+    value = OB.create<PermuteOp>(Loc, outputType, value, axesMapAttr);
+    return {value, {}};
   }
-  IndexedValueTy generateNode(ContractionNode &CN) {
-    auto ValueIndices = generateNode(CN.getChild());
-    Value V = ValueIndices.first;
-    auto InSizes = getTensorSizes(V);
-    auto &IndexUses = ValueIndices.second;
-    auto &IndexDefs = CN.getIndexes();
-    IndexUsesTy OutIndexes;
-    SmallVector<int64_t> OutSizes;
-    SmallVector<int64_t> ContractedAxes;
-    for (size_t Axis = 0; Axis < IndexUses.size(); Axis++) {
-      auto &Idx1 = IndexUses[Axis];
-      if (llvm::none_of(IndexDefs,
-                        [&](auto &Idx2) { return Idx1 == Idx2.get(); })) {
-        OutSizes.emplace_back(InSizes[Axis]);
-        OutIndexes.emplace_back(Idx1);
+
+  // 12-21
+  IndexedValueTy generateNode(ContractionNode &node) {
+    auto valueIndices = generateNode(node.getChild());
+    auto value = valueIndices.first;
+    auto &indexUses = valueIndices.second;
+    auto &indexDefs = node.getIndexes();
+    ShapeTy outputShape;
+    IndexUsesTy outputIndexUses;
+    SmallVector<int64_t> contractedAxes;
+    for (auto axis : llvm::seq<int64_t>(0, indexUses.size())) {
+      auto index1 = indexUses[axis];
+      if (llvm::none_of(indexDefs,
+                        [&](auto &index2) { return index1 == index2.get(); })) {
+        outputShape.emplace_back(index1->getSize());
+        outputIndexUses.emplace_back(index1);
       } else {
-        ContractedAxes.emplace_back(Axis);
+        contractedAxes.emplace_back(axis);
       }
     }
-    SmallVector<int64_t> OutShape(OutSizes.size(), -1);
-    auto OutAttr = OB.getI64ArrayAttr(OutSizes);
-    auto OutType = RankedTensorType::get(OutShape, OB.getF64Type(), OutAttr);
-    auto AxesAtrr = OB.getI64ArrayAttr(ContractedAxes);
-    V = OB.create<ContractOp>(Loc, OutType, V, AxesAtrr);
-    return {V, OutIndexes};
+    auto outputType = getTensorTypeOfShape(outputShape);
+    auto contractedAxesAtrr = OB.getI64ArrayAttr(contractedAxes);
+    value = OB.create<ContractOp>(Loc, outputType, value, contractedAxesAtrr);
+    return {value, outputIndexUses};
   }
-  template <class T> IndexedValueTy generateNode(ArithNode &AN) {
-    auto &Childs = AN.getChilds();
-    SmallVector<Value> Operands;
-    SmallVector<int64_t> OutSizes;
-    IndexUsesTy OutIndexes;
-    SmallVector<SmallVector<int64_t>> OutAxesMaps(Childs.size());
-    for (size_t Ci = 0; Ci < Childs.size(); Ci++) {
-      auto &C = Childs[Ci];
-      auto ValueIndices = generateNode(*C);
-      Value V = ValueIndices.first;
-      Operands.emplace_back(V);
-      auto Sizes = getTensorSizes(V);
-      auto &Indexes = ValueIndices.second;
-      auto &AxesMap = OutAxesMaps[Ci];
-      for (size_t Axis = 0; Axis < Indexes.size(); Axis++) {
-        size_t OutAxis = 0;
-        for (; OutAxis < OutIndexes.size(); OutAxis++) {
-          if (Indexes[Axis] == OutIndexes[OutAxis])
+
+  static auto getIndexListArrayAttribute(OpBuilder &builder,
+                                         ArrayRef<SmallVector<int64_t>> list) {
+    SmallVector<Attribute, 4> array;
+    for (auto item : list) {
+      array.emplace_back(builder.getI64ArrayAttr(item));
+    }
+    return builder.getArrayAttr(array);
+  }
+
+  // 12-21
+  IndexedValueTy generateNode(AdditionNode &node) {
+    auto &childs = node.getChilds();
+    SmallVector<Value> operands;
+    ShapeTy outputShape;
+    IndexUsesTy outputIndexUses;
+    SmallVector<SmallVector<int64_t>> axesMaps(childs.size());
+    for (auto [child, axesMap] : llvm::zip(childs, axesMaps)) {
+      auto valueIndices = generateNode(*child);
+      auto value = valueIndices.first;
+      auto indexUses = valueIndices.second;
+      operands.emplace_back(value);
+      for (auto index : indexUses) {
+        size_t axis = 0;
+        for (; axis < outputIndexUses.size(); axis++) {
+          if (index == outputIndexUses[axis])
             break;
         }
-        if (OutAxis == OutIndexes.size()) {
-          OutSizes.emplace_back(Sizes[Axis]);
-          OutIndexes.emplace_back(Indexes[Axis]);
+        if (axis == outputIndexUses.size()) {
+          outputShape.emplace_back(index->getSize());
+          outputIndexUses.emplace_back(index);
         }
-        AxesMap.emplace_back(OutAxis);
+        axesMap.emplace_back(axis);
       }
     }
-    SmallVector<int64_t> OutShape;
-    for (auto index : OutIndexes) {
-      auto size = index->getSize();
-      if (size->isConstant())
-        OutShape.emplace_back(size->getUpperBound());
-      else
-        OutShape.emplace_back(-1);
-    }
-    auto OutAttr = OB.getI64ArrayAttr(OutSizes);
-    auto OutType = RankedTensorType::get(OutShape, OB.getF64Type(), OutAttr);
-    SmallVector<Attribute, 4> AxesMapAttrs;
-    for (auto &AxesMap : OutAxesMaps) {
-      AxesMapAttrs.emplace_back(OB.getI64ArrayAttr(AxesMap));
-    }
-    auto AxesMapsAttr = OB.getArrayAttr(AxesMapAttrs);
-    Value V = OB.create<T>(Loc, OutType, Operands, AxesMapsAttr);
-    return {V, OutIndexes};
+    auto outputType = getTensorTypeOfShape(outputShape);
+    auto axesMapsAttr = getIndexListArrayAttribute(OB, axesMaps);
+    auto signsAttr = OB.getBoolArrayAttr(node.getAddOrSub());
+    Value value =
+        OB.create<AddOp>(Loc, outputType, operands, axesMapsAttr, signsAttr);
+    return {value, outputIndexUses};
   }
+
+  IndexedValueTy generateNode(MultiplicationNode &node) {
+    auto &childs = node.getChilds();
+    SmallVector<Value> operands;
+    ShapeTy outputShape;
+    IndexUsesTy outputIndexUses;
+    SmallVector<SmallVector<int64_t>> axesMaps(childs.size());
+    for (auto [child, axesMap] : llvm::zip(childs, axesMaps)) {
+      auto valueIndices = generateNode(*child);
+      auto value = valueIndices.first;
+      auto indexUses = valueIndices.second;
+      operands.emplace_back(value);
+      for (auto index : indexUses) {
+        size_t axis = 0;
+        for (; axis < outputIndexUses.size(); axis++) {
+          if (index == outputIndexUses[axis])
+            break;
+        }
+        if (axis == outputIndexUses.size()) {
+          outputShape.emplace_back(index->getSize());
+          outputIndexUses.emplace_back(index);
+        }
+        axesMap.emplace_back(axis);
+      }
+    }
+    auto outputType = getTensorTypeOfShape(outputShape);
+    auto axesMapsAttr = getIndexListArrayAttribute(OB, axesMaps);
+    Value value = OB.create<MulOp>(Loc, outputType, operands, axesMapsAttr);
+    return {value, outputIndexUses};
+  }
+
   IndexedValueTy generateNode(LeafNode &LN) {
     StringRef Name;
     if (llvm::isa<TreeAsLeafNode>(LN)) {

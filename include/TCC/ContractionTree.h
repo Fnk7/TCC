@@ -96,7 +96,9 @@ private:
     SizesTy Aliases;
     EqualityStorage(ArrayRef<SizePtr> Aliases) : Aliases(Aliases) {}
     void setID(SizeID ID) { this->ID = this->ID < ID ? this->ID : ID; }
-    void setLowerBound(int64_t LB) { LowerBound = LowerBound > LB ? LowerBound : LB; }
+    void setLowerBound(int64_t LB) {
+      LowerBound = LowerBound > LB ? LowerBound : LB;
+    }
     void setUpperBound(int64_t UB) {
       UpperBound = UB && (UpperBound > UB || !UpperBound) ? UB : UpperBound;
     }
@@ -404,6 +406,7 @@ public:
   static NodePtr get(ChildNodesTy &Childs, SmallVector<bool> &AddOrSub) {
     return NodePtr(new AdditionNode(Childs, AddOrSub));
   }
+  auto &getAddOrSub() { return AddOrSub; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Addition; }
   // dump

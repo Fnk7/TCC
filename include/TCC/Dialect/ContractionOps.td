@@ -22,7 +22,7 @@ class Contraction_Op<string mnemonic, list<Trait> traits = []>
     : Op<Contraction_Dialect, mnemonic, traits>;
 
 def AddOp : Contraction_Op<"add", []> {
-  let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps);
+  let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps, BoolArrayAttr:$signs);
   let results = (outs F64Tensor : $result);
 }
 
