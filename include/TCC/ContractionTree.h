@@ -96,9 +96,9 @@ private:
     SizesTy Aliases;
     EqualityStorage(ArrayRef<SizePtr> Aliases) : Aliases(Aliases) {}
     void setID(SizeID ID) { this->ID = this->ID < ID ? this->ID : ID; }
-    void setLowerBound(int64_t LB) { LB = LowerBound > LB ? LowerBound : LB; }
+    void setLowerBound(int64_t LB) { LowerBound = LowerBound > LB ? LowerBound : LB; }
     void setUpperBound(int64_t UB) {
-      UpperBound = UpperBound && UpperBound < UB ? UpperBound : UB;
+      UpperBound = UB && (UpperBound > UB || !UpperBound) ? UB : UpperBound;
     }
   };
   EqualityStorage *EqualityInfo;
