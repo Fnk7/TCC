@@ -350,13 +350,15 @@ private:
     }
     return {V, UIndexUses};
   }
+
   IndexedValueTy generateNode(ConstantNode &CN) {
     auto Attr = OB.getF64FloatAttr(CN.getValue());
-    auto Encoding = OB.getI64ArrayAttr({});
-    auto ResultType = RankedTensorType::get({}, OB.getF64Type(), Encoding);
+    ShapeTy Shape;
+    auto ResultType = getTensorTypeOfShape(Shape);
     Value V = OB.create<ConstantOp>(Loc, ResultType, Attr);
     return {V, {}};
   }
+
   IndexedValueTy generateNode(NegativeNode &NN) {
     auto ValueIndices = generateNode(NN.getChild());
     Value V = ValueIndices.first;

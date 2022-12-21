@@ -424,25 +424,9 @@ struct ContractOpLowering : public OpConversionPattern<ContractOp> {
   matchAndRewrite(ContractOp op, ContractOp::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto Loc = op.getLoc();
+    auto [Alloc, SizeValues] = createBufferForTensor(rewriter, op.getResult());
     auto InType = op.getResult().getType().cast<RankedTensorType>();
-    auto OutType = MemRefType::get(InType.getShape(), InType.getElementType());
-    auto Sizes = getTensorSizeIDs(InType);
-    SmallVector<Value> SizeValues;
     auto &B = *(op->getBlock());
-    for (auto &Sz : Sizes) {
-      SizeValues.emplace_back(B.getArgument(Sz));
-    }
-    auto Alloc = rewriter.create<memref::AllocOp>(Loc, OutType, SizeValues);
-    Alloc->moveBefore(&(B.front()));
-    bool NeedDealloc = true;
-    for (auto *U : op.getResult().getUsers()) {
-      if (dyn_cast<func::ReturnOp>(U))
-        NeedDealloc = false;
-    }
-    if (NeedDealloc) {
-      auto Dealloc = rewriter.create<memref::DeallocOp>(Loc, Alloc);
-      Dealloc->moveBefore(&(B.back()));
-    }
     Value ZeroIndexVar = rewriter.create<arith::ConstantIndexOp>(Loc, 0);
     SmallVector<Value> InductionVars;
     Block *InnerMostBody;
@@ -496,7 +480,7 @@ struct ContractOpLowering : public OpConversionPattern<ContractOp> {
     auto ToAdd = rewriter.create<memref::LoadOp>(Loc, LoadFrom, LoadIndexes);
     Value ToYield = rewriter.create<arith::AddFOp>(Loc, ReductionVar, ToAdd);
     rewriter.create<AffineYieldOp>(Loc, ToYield);
-    rewriter.replaceOp(op, Alloc->getResult(0));
+    rewriter.replaceOp(op, Alloc);
     return success();
   }
 };
