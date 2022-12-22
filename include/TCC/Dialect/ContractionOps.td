@@ -21,42 +21,42 @@ def Contraction_Dialect : Dialect {
 class Contraction_Op<string mnemonic, list<Trait> traits = []>
     : Op<Contraction_Dialect, mnemonic, traits>;
 
-def AddOp : Contraction_Op<"add", []> {
+def AddOp : Contraction_Op<"add", [NoMemoryEffect]> {
   let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps, BoolArrayAttr:$signs);
   let results = (outs F64Tensor : $result);
 }
 
-def MulOp : Contraction_Op<"mul", []> {
+def MulOp : Contraction_Op<"mul", [NoMemoryEffect]> {
   let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps);
   let results = (outs F64Tensor : $result);
 }
 
-def NegOp : Contraction_Op<"neg", []> {
+def NegOp : Contraction_Op<"neg", [NoMemoryEffect]> {
   let arguments = (ins F64Tensor : $tensor);
   let results = (outs F64Tensor : $result);
 }
 
-def ContractOp : Contraction_Op<"contract", []> {
+def ContractOp : Contraction_Op<"contract", [NoMemoryEffect]> {
   let arguments = (ins F64Tensor : $tensor, I64ArrayAttr : $axes);
   let results = (outs F64Tensor : $result);
 }
 
-def PermuteOp : Contraction_Op<"permute", []> {
+def PermuteOp : Contraction_Op<"permute", [NoMemoryEffect]> {
   let arguments = (ins F64Tensor : $tensor, I64ArrayAttr : $axes_map);
   let results = (outs F64Tensor : $result);
 }
 
-def SliceOp : Contraction_Op<"slice", []> {
+def SliceOp : Contraction_Op<"slice", [NoMemoryEffect]> {
   let arguments = (ins F64Tensor : $input, Variadic<Index> : $indices, I64ArrayAttr : $axes);
   let results = (outs F64Tensor : $output);
 }
 
-def DiagonalOp : Contraction_Op<"diagonal", []> {
+def DiagonalOp : Contraction_Op<"diagonal", [NoMemoryEffect]> {
   let arguments = (ins F64Tensor : $input, IndexListArrayAttr : $axes_pairs);
   let results = (outs F64Tensor : $output);
 }
 
-def ConstantOp : Contraction_Op<"constant", []> {
+def ConstantOp : Contraction_Op<"constant", [NoMemoryEffect]> {
   let arguments = (ins F64Attr : $value);
   let results = (outs F64Tensor : $output);
 }
