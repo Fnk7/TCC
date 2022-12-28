@@ -112,7 +112,7 @@ struct AddReorder : public OpRewritePattern<AddOp> {
 
   LogicalResult matchAndRewrite(AddOp op,
                                 PatternRewriter &rewriter) const override {
-    SmallVector<Value> tensors = op.getTensors();
+    SmallVector<Value> tensors = op.getInputs();
     auto newOrder = reorderTensors(tensors);
     bool changed = false;
     for (auto e : llvm::enumerate(newOrder)) {
@@ -161,7 +161,7 @@ struct AddReorder : public OpRewritePattern<AddOp> {
     Value newAddOp = rewriter.create<AddOp>(op.getLoc(), newType, newTensors,
                                             newAxesMapsAttr, newSignsAttr);
     auto permuteAttr = rewriter.getI64ArrayAttr(permuteMap);
-    auto newOp = rewriter.replaceOpWithNewOp<PermuteOp>(op, op.getType(), newAddOp,
+    rewriter.replaceOpWithNewOp<PermuteOp>(op, op.getType(), newAddOp,
                                            permuteAttr);
     return success();
   }
@@ -170,6 +170,20 @@ struct AddReorder : public OpRewritePattern<AddOp> {
 void AddOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
                                         MLIRContext *context) {
   patterns.add<AddReorder>(context);
+}
+
+struct PermutePermuteOptPattern : public OpRewritePattern<PermuteOp> {
+  using OpRewritePattern<PermuteOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(PermuteOp op,
+                                PatternRewriter &rewriter) const override {
+    return failure();
+  }
+};
+
+void PermuteOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                            MLIRContext *context) {
+  patterns.add<PermutePermuteOptPattern>(context);
 }
 
 //===----------------------------------------------------------------------===//

@@ -92,7 +92,7 @@ struct BinaryOpLowering : public OpConversionPattern<BinaryOp> {
     SmallVector<Value> Loads;
     auto AxesMapsAttr = op.getAxesMaps();
     for (size_t Operand = 0; Operand < AxesMapsAttr.size(); Operand++) {
-      Value LoadFrom = adaptor.getTensors()[Operand];
+      Value LoadFrom = adaptor.getInputs()[Operand];
       SmallVector<Value> Indexes;
       auto AxesMapAttr = cast<ArrayAttr>(AxesMapsAttr[Operand]);
       auto AxesMap = unpackIntegerArrayAttr(AxesMapAttr);
@@ -300,7 +300,7 @@ struct PermuteOpLowering : public OpConversionPattern<PermuteOp> {
     auto Loc = op.getLoc();
     auto [buffer, SizeValues] = createBufferForTensor(rewriter, op.getResult());
     auto InductionVars = createNestedAffineForOps(rewriter, Loc, SizeValues);
-    Value LoadFrom = adaptor.getTensor();
+    Value LoadFrom = adaptor.getInput();
     SmallVector<Value> Indexes;
     auto AxesMapAttr = op.getAxesMap();
     auto AxesMap = unpackIntegerArrayAttr(AxesMapAttr);
@@ -382,7 +382,7 @@ struct NegOpLowering : public OpConversionPattern<NegOp> {
     auto Loc = op.getLoc();
     auto [alloc, sizeValues] = createBufferForTensor(rewriter, op.getResult());
     auto InductionVars = createNestedAffineForOps(rewriter, Loc, sizeValues);
-    Value LoadFrom = adaptor.getTensor();
+    Value LoadFrom = adaptor.getInput();
     Value ToStore =
         rewriter.create<memref::LoadOp>(Loc, LoadFrom, InductionVars);
     ToStore = rewriter.create<arith::NegFOp>(Loc, ToStore);
@@ -433,7 +433,7 @@ struct ContractOpLowering : public OpConversionPattern<ContractOp> {
       ReductionVar = AffineFor.getRegionIterArgs()[0];
       rewriter.setInsertionPointToStart(InnerMostBody);
     }
-    Value LoadFrom = adaptor.getTensor();
+    Value LoadFrom = adaptor.getInput();
     SmallVector<Value> LoadIndexes;
     int64_t Idx1 = 0, Idx2 = 0;
     for (int64_t Axis = 0; Axis < (int64_t)(Sizes2.size()); Axis++) {

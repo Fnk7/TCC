@@ -22,29 +22,30 @@ class Contraction_Op<string mnemonic, list<Trait> traits = []>
     : Op<Contraction_Dialect, mnemonic, traits>;
 
 def AddOp : Contraction_Op<"add", [NoMemoryEffect]> {
-  let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps, BoolArrayAttr:$signs);
+  let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps, BoolArrayAttr:$signs);
   let results = (outs F64Tensor : $result);
   let hasCanonicalizer = 1;
 }
 
 def MulOp : Contraction_Op<"mul", [NoMemoryEffect]> {
-  let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps);
+  let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps);
   let results = (outs F64Tensor : $result);
 }
 
 def NegOp : Contraction_Op<"neg", [NoMemoryEffect]> {
-  let arguments = (ins F64Tensor : $tensor);
+  let arguments = (ins F64Tensor : $input);
   let results = (outs F64Tensor : $result);
 }
 
 def ContractOp : Contraction_Op<"contract", [NoMemoryEffect]> {
-  let arguments = (ins F64Tensor : $tensor, I64ArrayAttr : $axes);
+  let arguments = (ins F64Tensor : $input, I64ArrayAttr : $axes);
   let results = (outs F64Tensor : $result);
 }
 
 def PermuteOp : Contraction_Op<"permute", [NoMemoryEffect]> {
-  let arguments = (ins F64Tensor : $tensor, I64ArrayAttr : $axes_map);
+  let arguments = (ins F64Tensor : $input, I64ArrayAttr : $axes_map);
   let results = (outs F64Tensor : $result);
+  let hasCanonicalizer = 1;
 }
 
 def SliceOp : Contraction_Op<"slice", [NoMemoryEffect]> {
