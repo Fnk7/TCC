@@ -100,6 +100,8 @@ static auto permuteTensorType(OpBuilder &builder, TensorType tensorTy,
   auto sizeIDs = getTensorEncodingSizeIDs(tensorTy);
   SmallVector<int64_t> newShape;
   SmallVector<int64_t> newSizeIDs;
+  // permuteMap : [3,0,2,1]
+  // shape/sizeID [s0,s1,s2,s3] -> [s3,s0,s2,s1]
   for (auto axis : permuteMap) {
     newShape.emplace_back(shape[axis]);
     newSizeIDs.emplace_back(sizeIDs[axis]);
@@ -154,8 +156,8 @@ struct AddIndicesCanonicalizePattern : public OpRewritePattern<AddOp> {
     }
     bool isCanonicalized = true;
     int64_t maxAxis = -1;
-    // [[1,2,3],[1,0,2]] -> false
-    // [[0,1,2],[0,3,1]] -> true
+    // [[1,3,2],[1,0,2]] -> false
+    // [[0,1,2],[0,3,2]] -> true
     for (auto &axesMap : axesMaps) {
       bool begin = false;
       for (auto axis : axesMap) {
@@ -175,7 +177,7 @@ struct AddIndicesCanonicalizePattern : public OpRewritePattern<AddOp> {
     if (isCanonicalized) {
       return failure();
     }
-    // [[1,2,3],[1,0,2]] -> [1,2,3,0]
+    // [[1,3,2],[1,0,2]] -> [1,3,2,0]
     SmallVector<int64_t> inverseMap;
     for (auto &axesMap : axesMaps) {
       for (auto axis1 : axesMap) {
@@ -191,17 +193,18 @@ struct AddIndicesCanonicalizePattern : public OpRewritePattern<AddOp> {
         inverseMap.emplace_back(axis1);
       }
     }
-    // [1,2,3,0] -> [3,0,1,2]
+    // [1,3,2,0] -> [3,0,2,1]
     SmallVector<int64_t> permuteMap(inverseMap.size());
     for (auto e : llvm::enumerate(inverseMap)) {
       permuteMap[e.value()] = e.index();
     }
-    // [[1,2,3],[1,0,2]] -> [[0,1,2],[0,3,1]]
+    // [[1,3,2],[1,0,2]] -> [[0,1,2],[0,3,2]]
     for (auto &axesMap : axesMaps) {
       for (auto &axis : axesMap) {
         axis = permuteMap[axis];
       }
     }
+    // [s0,s1,s2,s3] -> [s3,s0,s2,s1]
     auto newType = permuteTensorType(rewriter, op.getType(), permuteMap);
     auto newAxesMapsAttr = getIndexListArrayAttribute(rewriter, axesMaps);
     auto newAddOp = rewriter.create<AddOp>(op.getLoc(), newType, op.getInputs(),
