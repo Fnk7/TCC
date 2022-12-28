@@ -18,7 +18,8 @@ void ContractionDialect::initialize() {
 
 //
 
-static auto unpackIntegerArrayAttr(ArrayAttr arrayAttr) {
+static auto unpackIntegerArrayAttr(Attribute attr) {
+  auto arrayAttr = attr.cast<ArrayAttr>();
   SmallVector<int64_t> values;
   for (auto &value : arrayAttr) {
     values.emplace_back(value.cast<IntegerAttr>().getValue().getSExtValue());
@@ -64,7 +65,7 @@ static bool compareTensorValueOrder(TensorEncodingPair &p1,
   return t1.getDefiningOp()->isProperAncestor(t2.getDefiningOp());
 }
 
-static auto reorderTensors(ArrayRef<Value> tensors) {
+static auto reorderInputTensors(ArrayRef<Value> tensors) {
   using PairWithOrder = std::pair<TensorEncodingPair, size_t>;
   SmallVector<PairWithOrder> pairs;
   for (auto e : llvm::enumerate(tensors)) {
@@ -107,13 +108,13 @@ static auto permuteTensorType(OpBuilder &builder, TensorType tensorTy,
   return RankedTensorType::get(newShape, tensorTy.getElementType(), encoding);
 }
 
-struct AddReorder : public OpRewritePattern<AddOp> {
+struct AddReorderPattern : public OpRewritePattern<AddOp> {
   using OpRewritePattern<AddOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(AddOp op,
                                 PatternRewriter &rewriter) const override {
-    SmallVector<Value> tensors = op.getInputs();
-    auto newOrder = reorderTensors(tensors);
+    SmallVector<Value> inputs = op.getInputs();
+    auto newOrder = reorderInputTensors(inputs);
     bool changed = false;
     for (auto e : llvm::enumerate(newOrder)) {
       if (e.value() != e.index()) {
@@ -125,41 +126,86 @@ struct AddReorder : public OpRewritePattern<AddOp> {
       return failure();
     auto signsAttr = op.getSigns();
     auto axesMapsAttr = op.getAxesMaps();
-    SmallVector<Value> newTensors;
+    SmallVector<Value> newInputs;
     SmallVector<Attribute> newSigns;
-    SmallVector<SmallVector<int64_t>> newAxesMaps;
+    SmallVector<Attribute> newAxesMaps;
     for (auto order : newOrder) {
-      newTensors.emplace_back(tensors[order]);
+      newInputs.emplace_back(inputs[order]);
       newSigns.emplace_back(signsAttr[order]);
-      newAxesMaps.emplace_back(
-          unpackIntegerArrayAttr(axesMapsAttr[order].cast<ArrayAttr>()));
+      newAxesMaps.emplace_back(axesMapsAttr[order]);
     }
     auto newSignsAttr = rewriter.getArrayAttr(newSigns);
-    auto sizeIDs = getTensorEncodingSizeIDs(op.getType());
-    SmallVector<int64_t> inverseMap(sizeIDs.size(), -1);
-    for (auto &axesMap : newAxesMaps) {
-      for (auto &axis : axesMap) {
-        for (auto &ivAxis : inverseMap) {
-          if (ivAxis == -1)
-            ivAxis = axis;
-          if (ivAxis == axis)
-            break;
+    auto newAxesMapsAttr = rewriter.getArrayAttr(newAxesMaps);
+    rewriter.replaceOpWithNewOp<AddOp>(op, op.getType(), newInputs,
+                                       newAxesMapsAttr, newSignsAttr);
+    return success();
+  }
+};
+
+struct AddIndicesCanonicalizePattern : public OpRewritePattern<AddOp> {
+  using OpRewritePattern<AddOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(AddOp op,
+                                PatternRewriter &rewriter) const override {
+    auto axesMapsAttr = op.getAxesMaps();
+    SmallVector<SmallVector<int64_t>> axesMaps;
+    for (auto axesMapAttr : axesMapsAttr) {
+      axesMaps.emplace_back(unpackIntegerArrayAttr(axesMapAttr));
+    }
+    bool isCanonicalized = true;
+    int64_t maxAxis = -1;
+    // [[1,2,3],[1,0,2]] -> false
+    // [[0,1,2],[0,3,1]] -> true
+    for (auto &axesMap : axesMaps) {
+      bool begin = false;
+      for (auto axis : axesMap) {
+        if (!begin && maxAxis >= axis) {
+          continue;
+        }
+        begin = true;
+        if (++maxAxis != axis) {
+          isCanonicalized = false;
+          break;
         }
       }
+      if (!isCanonicalized) {
+        break;
+      }
     }
-    SmallVector<int64_t> permuteMap(sizeIDs.size());
+    if (isCanonicalized) {
+      return failure();
+    }
+    // [[1,2,3],[1,0,2]] -> [1,2,3,0]
+    SmallVector<int64_t> inverseMap;
+    for (auto &axesMap : axesMaps) {
+      for (auto axis1 : axesMap) {
+        bool found = false;
+        for (auto axis2 : inverseMap) {
+          if (axis1 == axis2) {
+            found = true;
+            break;
+          }
+        }
+        if (found)
+          continue;
+        inverseMap.emplace_back(axis1);
+      }
+    }
+    // [1,2,3,0] -> [3,0,1,2]
+    SmallVector<int64_t> permuteMap(inverseMap.size());
     for (auto e : llvm::enumerate(inverseMap)) {
       permuteMap[e.value()] = e.index();
     }
-    for (auto &axesMap : newAxesMaps) {
+    // [[1,2,3],[1,0,2]] -> [[0,1,2],[0,3,1]]
+    for (auto &axesMap : axesMaps) {
       for (auto &axis : axesMap) {
         axis = permuteMap[axis];
       }
     }
     auto newType = permuteTensorType(rewriter, op.getType(), permuteMap);
-    auto newAxesMapsAttr = getIndexListArrayAttribute(rewriter, newAxesMaps);
-    Value newAddOp = rewriter.create<AddOp>(op.getLoc(), newType, newTensors,
-                                            newAxesMapsAttr, newSignsAttr);
+    auto newAxesMapsAttr = getIndexListArrayAttribute(rewriter, axesMaps);
+    auto newAddOp = rewriter.create<AddOp>(op.getLoc(), newType, op.getInputs(),
+                                           newAxesMapsAttr, op.getSigns());
     auto permuteAttr = rewriter.getI64ArrayAttr(permuteMap);
     rewriter.replaceOpWithNewOp<PermuteOp>(op, op.getType(), newAddOp,
                                            permuteAttr);
@@ -169,10 +215,10 @@ struct AddReorder : public OpRewritePattern<AddOp> {
 
 void AddOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
                                         MLIRContext *context) {
-  patterns.add<AddReorder>(context);
+  patterns.add<AddReorderPattern, AddIndicesCanonicalizePattern>(context);
 }
 
-struct PermutePermuteOptPattern : public OpRewritePattern<PermuteOp> {
+struct PermutePermuteFoldPattern : public OpRewritePattern<PermuteOp> {
   using OpRewritePattern<PermuteOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(PermuteOp op,
@@ -199,7 +245,7 @@ struct PermutePermuteOptPattern : public OpRewritePattern<PermuteOp> {
   }
 };
 
-struct PermuteEliminateOptPattern : public OpRewritePattern<PermuteOp> {
+struct PermuteFoldPattern : public OpRewritePattern<PermuteOp> {
   using OpRewritePattern<PermuteOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(PermuteOp op,
@@ -217,7 +263,7 @@ struct PermuteEliminateOptPattern : public OpRewritePattern<PermuteOp> {
 
 void PermuteOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
                                             MLIRContext *context) {
-  patterns.add<PermutePermuteOptPattern, PermuteEliminateOptPattern>(context);
+  patterns.add<PermutePermuteFoldPattern, PermuteFoldPattern>(context);
 }
 
 //===----------------------------------------------------------------------===//
