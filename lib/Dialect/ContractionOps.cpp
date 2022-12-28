@@ -177,13 +177,47 @@ struct PermutePermuteOptPattern : public OpRewritePattern<PermuteOp> {
 
   LogicalResult matchAndRewrite(PermuteOp op,
                                 PatternRewriter &rewriter) const override {
+    auto input1 = op.getInput();
+    if (auto op2 = input1.getDefiningOp<PermuteOp>()) {
+      auto &op1 = op;
+      auto input2 = op2.getInput();
+      auto axesMapAttr1 = op1.getAxesMap();
+      auto axesMapAttr2 = op2.getAxesMap();
+      auto axesMap1 = unpackIntegerArrayAttr(axesMapAttr1);
+      auto axesMap2 = unpackIntegerArrayAttr(axesMapAttr2);
+      auto axesMap3 = SmallVector<int64_t>();
+      for (auto axis1 : axesMap1) {
+        auto axis3 = axesMap2[axis1];
+        axesMap3.emplace_back(axis3);
+      }
+      auto axesMapAttr3 = rewriter.getI64ArrayAttr(axesMap3);
+      rewriter.replaceOpWithNewOp<PermuteOp>(op, op.getType(), input2,
+                                             axesMapAttr3);
+      return success();
+    }
     return failure();
+  }
+};
+
+struct PermuteEliminateOptPattern : public OpRewritePattern<PermuteOp> {
+  using OpRewritePattern<PermuteOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(PermuteOp op,
+                                PatternRewriter &rewriter) const override {
+    auto axesMapAttr = op.getAxesMap();
+    auto axesMap = unpackIntegerArrayAttr(axesMapAttr);
+    for (auto e : llvm::enumerate(axesMap)) {
+      if (e.index() != (size_t)e.value())
+        return failure();
+    }
+    rewriter.replaceOp(op, op.getInput());
+    return success();
   }
 };
 
 void PermuteOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
                                             MLIRContext *context) {
-  patterns.add<PermutePermuteOptPattern>(context);
+  patterns.add<PermutePermuteOptPattern, PermuteEliminateOptPattern>(context);
 }
 
 //===----------------------------------------------------------------------===//
