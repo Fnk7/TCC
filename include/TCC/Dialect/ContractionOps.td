@@ -13,7 +13,7 @@ include "mlir/Interfaces/ParallelCombiningOpInterface.td"
 include "mlir/Interfaces/ViewLikeInterface.td"
 
 def Contraction_Dialect : Dialect {
-  let name = "ct";
+  let name = "tc";
   let cppNamespace = "::mlir::contraction";
   let dependentDialects = ["func::FuncDialect", "arith::ArithDialect"];
 }
@@ -24,6 +24,7 @@ class Contraction_Op<string mnemonic, list<Trait> traits = []>
 def AddOp : Contraction_Op<"add", [NoMemoryEffect]> {
   let arguments = (ins Variadic<F64Tensor>:$tensors, IndexListArrayAttr:$axes_maps, BoolArrayAttr:$signs);
   let results = (outs F64Tensor : $result);
+  let hasCanonicalizer = 1;
 }
 
 def MulOp : Contraction_Op<"mul", [NoMemoryEffect]> {

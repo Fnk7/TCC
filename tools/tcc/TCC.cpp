@@ -25,6 +25,9 @@ static cl::opt<std::string> InputFileName(cl::Positional,
                                           cl::init("-"),
                                           cl::value_desc("filename"));
 
+static cl::opt<bool> CTCSE("opt-cse", cl::desc("Contraction Dialect CSE Opt"),
+                           cl::init(false));
+
 namespace {
 enum Action {
   DumpAST,
@@ -61,10 +64,12 @@ int main(int argc, char **argv) {
   mlir::PassManager PM(&Ctx);
   auto M = mlir::contraction::MLIRGen(Ctx, *CF);
   if (Emit == DumpMLIR) {
-    mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
-    FuncPM.addPass(mlir::createCanonicalizerPass());
-    FuncPM.addPass(mlir::createCSEPass());
-    mlir::failed(PM.run(*M));
+    if (CTCSE) {
+      mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
+      FuncPM.addPass(mlir::createCanonicalizerPass());
+      FuncPM.addPass(mlir::createCSEPass());
+      mlir::failed(PM.run(*M));
+    }
     M->dump();
     return 0;
   }
@@ -75,7 +80,7 @@ int main(int argc, char **argv) {
   FuncPM.addPass(mlir::createCSEPass());
   FuncPM.addPass(mlir::createLoopFusionPass());
   FuncPM.addPass(mlir::createAffineScalarReplacementPass());
-  FuncPM.addPass(mlir::LLVM::createRequestCWrappersPass());
+  // FuncPM.addPass(mlir::LLVM::createRequestCWrappersPass());
   if (Emit == DumpMLIRLLVM || Emit == DumpLLVMIR) {
     PM.addPass(mlir::contraction::createLowerToLLVMPass());
   }
