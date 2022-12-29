@@ -30,16 +30,19 @@ def AddOp : Contraction_Op<"add", [NoMemoryEffect]> {
 def MulOp : Contraction_Op<"mul", [NoMemoryEffect]> {
   let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps);
   let results = (outs F64Tensor : $result);
+  let hasCanonicalizer = 1;
 }
 
 def NegOp : Contraction_Op<"neg", [NoMemoryEffect]> {
   let arguments = (ins F64Tensor : $input);
   let results = (outs F64Tensor : $result);
+  let hasCanonicalizer = 1;
 }
 
 def ContractOp : Contraction_Op<"contract", [NoMemoryEffect]> {
   let arguments = (ins F64Tensor : $input, I64ArrayAttr : $axes);
   let results = (outs F64Tensor : $result);
+  let hasCanonicalizer = 1;
 }
 
 def PermuteOp : Contraction_Op<"permute", [NoMemoryEffect]> {
