@@ -1,5 +1,5 @@
-#ifndef TCC_DIALECT_TC_TCOPS
-#define TCC_DIALECT_TC_TCOPS
+#ifndef TCC_DIALECT_TC_IR_TCOPS_TD
+#define TCC_DIALECT_TC_IR_TCOPS_TD
 
 include "mlir/IR/OpBase.td"
 // For NoMemoryEffect

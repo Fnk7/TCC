@@ -67,6 +67,7 @@ Type getResultTypeByAxesMap(OpBuilder &builder, Value input,
 using InputsOrder = I64ArrayTy;
 using TensorSizeIDsPair = std::pair<Value, SizeIDsTy>;
 InputsOrder getNewInputsOrder(ValueRange inputs);
+bool compareTensorOrder(Value v1, Value v2);
 bool compareTensorSizeIDsPair(TensorSizeIDsPair &p1, TensorSizeIDsPair &p2);
 
 // canonicalize axes maps

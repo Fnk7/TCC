@@ -108,6 +108,23 @@ InputsOrder getNewInputsOrder(ValueRange inputs) {
   order.clear();
   return order;
 }
+
+bool compareTensorOrder(Value t1, Value t2) {
+  if (t1 == t2) {
+    return false;
+  }
+  if (auto b1 = t1.dyn_cast<BlockArgument>()) {
+    if (auto b2 = t2.dyn_cast<BlockArgument>()) {
+      if (b1.getArgNumber() > b2.getArgNumber())
+        return false;
+    }
+    return true;
+  } else if (t2.isa<BlockArgument>()) {
+    return false;
+  }
+  return t1.getDefiningOp()->isBeforeInBlock(t2.getDefiningOp());
+}
+
 bool compareTensorSizeIDsPair(TensorSizeIDsPair &p1, TensorSizeIDsPair &p2) {
   auto t1 = p1.first;
   auto t2 = p2.first;
