@@ -65,7 +65,7 @@ struct PrintSymmetryPass
         if (symmInfos.count(input)) {
           auto dim = getTensorRank(input);
           auto axes = getAxes(contractOp);
-          auto i2oAxisMap = getContractOpInput2OutputAxesMap(axes, dim);
+          auto i2oAxisMap = getContractOpInput2OutputAxisMap(axes, dim);
           SymmInfo symmInfo;
           for (auto &pair : symmInfos[input]) {
             auto axis1 = pair.first;

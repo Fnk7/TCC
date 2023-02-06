@@ -385,19 +385,19 @@ struct MulContractSwapPattern : public OpRewritePattern<MulOp> {
       if (auto contractOp = input.getDefiningOp<ContractOp>()) {
         changed = true;
         auto axes = getAxes(contractOp);
-        auto newAxesMap = getContractOpInput2OutputAxesMap(
+        auto i2oAxisMap = getContractOpInput2OutputAxisMap(
             axes, axesMap.size() + axes.size());
-        for (auto &newAxis : newAxesMap) {
+        for (auto &newAxis : i2oAxisMap) {
           if (newAxis > 0)
             newAxis = axesMap[newAxis];
         }
         for (auto axis : axes) {
-          newAxesMap[axis] = newAxis;
+          i2oAxisMap[axis] = newAxis;
           newAxes.emplace_back(newAxis);
           newAxis++;
         }
         newInputs.emplace_back(contractOp.getInput());
-        newAxesMaps.emplace_back(newAxesMap);
+        newAxesMaps.emplace_back(i2oAxisMap);
       } else {
         newInputs.emplace_back(input);
         newAxesMaps.emplace_back(axesMap);
@@ -566,7 +566,7 @@ struct ContractAddSwapPattern : public OpRewritePattern<ContractOp> {
           return failure();
       }
       auto axes = getAxes(op);
-      auto old2NewAxesMap = getContractOpInput2OutputAxesMap(axes, rank);
+      auto i2oAxisMap = getContractOpInput2OutputAxisMap(axes, rank);
       SmallVector<Value> newInputs;
       AxesMapsTy newAxesMaps;
       for (auto [input, axesMap] : llvm::zip(addOp.getInputs(), axesMaps)) {
@@ -574,7 +574,7 @@ struct ContractAddSwapPattern : public OpRewritePattern<ContractOp> {
         AxesMapTy newAxesMap;
         for (auto e : llvm::enumerate(axesMap)) {
           auto oldAxis = e.value();
-          auto newAxis = old2NewAxesMap[oldAxis];
+          auto newAxis = i2oAxisMap[oldAxis];
           if (newAxis >= 0) {
             newAxesMap.emplace_back(newAxis);
           } else {
@@ -631,7 +631,7 @@ struct ContractPermuteSwapPattern : public OpRewritePattern<ContractOp> {
       // [0,2], axes
       // [1,3,2,0], axesMap
       // [3,2], newAxes
-      // [x,0,x,1], old2NewAxesMap
+      // [x,0,x,1], i2oAxisMap
       // [0,1], newAxesMap
       auto axes = getAxes(op);
       auto axesMap = getAxesMap(permuteOp);
@@ -642,11 +642,10 @@ struct ContractPermuteSwapPattern : public OpRewritePattern<ContractOp> {
             newAxes.emplace_back(e.index());
         }
       }
-      auto old2NewAxesMap =
-          getContractOpInput2OutputAxesMap(axes, axesMap.size());
+      auto i2oAxisMap = getContractOpInput2OutputAxisMap(axes, axesMap.size());
       AxesMapTy newAxesMap;
       for (auto axis : axesMap) {
-        auto newAxis = old2NewAxesMap[axis];
+        auto newAxis = i2oAxisMap[axis];
         if (newAxis >= 0) {
           newAxesMap.emplace_back(newAxis);
         }

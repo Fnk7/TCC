@@ -91,7 +91,7 @@ InputsOrder getNewInputsOrder(ValueRange inputs) {
     items.emplace_back(item);
   }
   std::sort(items.begin(), items.end(), [](SortItem &i1, SortItem &i2) {
-    return compareTensorSizeIDsPair(i1.second, i2.second);
+    return compareTensorOrderWithSizeIDs(i1.second, i2.second);
   });
   InputsOrder order;
   for (auto item : items) {
@@ -124,15 +124,15 @@ bool compareTensorOrder(Value t1, Value t2) {
   }
   return t1.getDefiningOp()->isBeforeInBlock(t2.getDefiningOp());
 }
-
-bool compareTensorSizeIDsPair(TensorSizeIDsPair &p1, TensorSizeIDsPair &p2) {
+bool compareTensorOrderWithSizeIDs(TensorSizeIDsPair &p1,
+                                   TensorSizeIDsPair &p2) {
   auto t1 = p1.first;
   auto t2 = p2.first;
+  auto &sizeIDs1 = p1.second;
+  auto &sizeIDs2 = p2.second;
   if (t1 == t2) {
     return false;
   }
-  auto &sizeIDs1 = p1.second;
-  auto &sizeIDs2 = p2.second;
   auto minDim = std::min(sizeIDs1.size(), sizeIDs2.size());
   for (auto idx : llvm::seq<int64_t>(0, minDim)) {
     if (sizeIDs1[idx] < sizeIDs2[idx])
@@ -146,16 +146,7 @@ bool compareTensorSizeIDsPair(TensorSizeIDsPair &p1, TensorSizeIDsPair &p2) {
   if (sizeIDs1.size() > sizeIDs2.size()) {
     return false;
   }
-  if (auto b1 = t1.dyn_cast<BlockArgument>()) {
-    if (auto b2 = t2.dyn_cast<BlockArgument>()) {
-      if (b1.getArgNumber() > b2.getArgNumber())
-        return false;
-    }
-    return true;
-  } else if (t2.isa<BlockArgument>()) {
-    return false;
-  }
-  return t1.getDefiningOp()->isBeforeInBlock(t2.getDefiningOp());
+  return compareTensorOrder(t1, t2);
 }
 
 // canonicalize axes maps

@@ -67,8 +67,9 @@ Type getResultTypeByAxesMap(OpBuilder &builder, Value input,
 using InputsOrder = I64ArrayTy;
 using TensorSizeIDsPair = std::pair<Value, SizeIDsTy>;
 InputsOrder getNewInputsOrder(ValueRange inputs);
-bool compareTensorOrder(Value v1, Value v2);
-bool compareTensorSizeIDsPair(TensorSizeIDsPair &p1, TensorSizeIDsPair &p2);
+bool compareTensorOrder(Value t1, Value t2);
+bool compareTensorOrderWithSizeIDs(TensorSizeIDsPair &p1,
+                                   TensorSizeIDsPair &p2);
 
 // canonicalize axes maps
 AxesMapTy canonicalizeAxesMaps(AxesMapsTy &axesMaps, int64_t dim);
@@ -87,16 +88,15 @@ inline auto inverseAxesMap(AxesMapTy &axesMap) {
   }
   return inverseMap;
 }
-inline AxesMapTy getContractOpInput2OutputAxesMap(AxesTy &axes,
+inline AxesMapTy getContractOpInput2OutputAxisMap(AxesTy &axes,
                                                   int64_t inputDim) {
-  auto r = llvm::seq<int64_t>(0, inputDim);
-  AxesMapTy axesMap(r.begin(), r.end());
+  AxesMapTy axesMap(inputDim, 0);
   for (auto axis : axes) {
     axesMap[axis] = -1;
   }
   int64_t outAxis = 0;
   for (auto &inAxis : axesMap) {
-    if (inAxis >= 0) {
+    if (inAxis == 0) {
       inAxis = outAxis++;
     }
   }
