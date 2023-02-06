@@ -14,6 +14,7 @@
 #include "mlir/Transforms/Passes.h"
 
 #include "TCC/Dialect/TC/IR/TCOps.h"
+#include "TCC/Dialect/TC/Transforms/Passes.h"
 #include "TCC/MLIRGen.h"
 #include "TCC/Parser.h"
 #include "TCC/Passes.h"
@@ -71,6 +72,9 @@ int main(int argc, char **argv) {
       // FIX: only one call
       FuncPM.addPass(mlir::createCanonicalizerPass());
       FuncPM.addPass(mlir::createCSEPass());
+      FuncPM.addPass(mlir::tc::createMergeContractPass());
+      FuncPM.addPass(mlir::createCSEPass());
+      FuncPM.addPass(mlir::tc::createPrintSymmetryPass());
       mlir::failed(PM.run(*M));
     }
     M->dump();

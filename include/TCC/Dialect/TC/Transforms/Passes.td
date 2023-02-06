@@ -8,4 +8,9 @@ def PrintSymmetry : Pass<"print-symmetry", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def MergeContract : Pass<"merge-contract", "func::FuncOp"> {
+  let constructor = "mlir::tc::createMergeContractPass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif

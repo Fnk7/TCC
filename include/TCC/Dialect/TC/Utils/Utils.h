@@ -138,6 +138,18 @@ inline auto getTensorSizeInfos(Value V) {
   assert(shape.size() == sizeIDs.size());
   return std::pair(shape, sizeIDs);
 }
+
+// Fall back to only support elementwise add
+inline bool isElementWiseAddOp(AddOp op) {
+  auto inputs = op.getInputs();
+  auto rank = getTensorRank(inputs[0]);
+  for (auto input : inputs) {
+    if (rank != getTensorRank(input)) {
+      return false;
+    }
+  }
+  return true;
+}
 } // namespace mlir::tc
 
 #endif
