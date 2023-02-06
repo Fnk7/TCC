@@ -1,10 +1,10 @@
-#ifndef TENSORCONTRACTION_PARSER_H
-#define TENSORCONTRACTION_PARSER_H
+#ifndef TCC_PARSER_H
+#define TCC_PARSER_H
 
 #include "TCC/ContractionTree.h"
 
-namespace contraction {
+namespace tc {
 std::unique_ptr<ContractionForest> parseInputFile(StringRef FileName);
-} // namespace contraction
+} // namespace tc
 
 #endif

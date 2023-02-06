@@ -4,7 +4,7 @@
 
 using namespace llvm;
 
-namespace contraction {
+namespace tc {
 const std::string Node::getKindString(NodeKind K) {
   switch (K) {
   case NK_Root:
@@ -263,4 +263,4 @@ void ContractionForest::dump() {
     errs() << "\n";
   }
 }
-} // namespace contraction
+} // namespace tc

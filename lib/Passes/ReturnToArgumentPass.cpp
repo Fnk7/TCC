@@ -6,7 +6,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Pass/Pass.h"
 
-#include "TCC/Dialect/ContractionOps.h"
+#include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Passes.h"
 
 #define DEBUG_TYPE "return-2-argument"
@@ -38,6 +38,6 @@ struct ReturnToArgumentPass
 };
 } // namespace
 
-std::unique_ptr<mlir::Pass> mlir::contraction::createReturnToArgumentPass() {
+std::unique_ptr<mlir::Pass> mlir::tc::createReturnToArgumentPass() {
   return std::make_unique<ReturnToArgumentPass>();
 }

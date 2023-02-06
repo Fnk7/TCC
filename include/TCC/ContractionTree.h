@@ -1,5 +1,5 @@
-#ifndef TENSORCONTRACTION_CONTRACTIONTREE_H
-#define TENSORCONTRACTION_CONTRACTIONTREE_H
+#ifndef TCC_CONTRACTIONTREE_H
+#define TCC_CONTRACTIONTREE_H
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
@@ -15,7 +15,7 @@ using llvm::DenseMap;
 using llvm::SmallVector;
 using llvm::StringRef;
 
-namespace contraction {
+namespace tc {
 // Node - AST node of Contraction Expression. It use the LLVM style RTTI.
 // And since LLVM Value class use deleteValue and ValueDeleter for unique_ptr,
 // std default_delete<Node> was not used here.
@@ -769,6 +769,6 @@ public:
 
 #undef DEBUG_TYPE
 
-} // namespace contraction
+} // namespace tc
 
 #endif

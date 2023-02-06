@@ -8,11 +8,11 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 
-#include "TCC/Dialect/ContractionOps.h"
+#include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Passes.h"
 
 namespace mlir {
-namespace contraction {
+namespace tc {
 static SmallVector<int64_t> unpackIntegerArrayAttr(ArrayAttr Attr) {
   SmallVector<int64_t> Sizes;
   for (auto &I64 : Attr) {
@@ -475,7 +475,7 @@ void ContractionLoweringPass::runOnOperation() {
   ConversionTarget target(getContext());
   target.addLegalDialect<AffineDialect, BuiltinDialect, arith::ArithDialect,
                          memref::MemRefDialect>();
-  target.addIllegalDialect<ContractionDialect>();
+  target.addIllegalDialect<TCDialect>();
   // target.addLegalOp<func::ReturnOp>();
   TypeConverter TC;
   TC.addConversion([](Type type) { return type; });
@@ -516,5 +516,5 @@ void ContractionLoweringPass::runOnOperation() {
 std::unique_ptr<Pass> createLowerToAffinePass() {
   return std::make_unique<ContractionLoweringPass>();
 }
-} // namespace contraction
+} // namespace tc
 } // namespace mlir

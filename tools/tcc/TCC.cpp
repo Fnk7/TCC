@@ -13,7 +13,7 @@
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
 
-#include "TCC/Dialect/ContractionOps.h"
+#include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/MLIRGen.h"
 #include "TCC/Parser.h"
 #include "TCC/Passes.h"
@@ -49,7 +49,7 @@ static cl::opt<enum Action>
 
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv, "TCC compiler\n");
-  auto CF = contraction::parseInputFile(InputFileName);
+  auto CF = tc::parseInputFile(InputFileName);
   if (!CF)
     return 1;
   if (Emit == DumpAST) {
@@ -60,12 +60,15 @@ int main(int argc, char **argv) {
   Ctx.getOrLoadDialect<mlir::scf::SCFDialect>();
   Ctx.getOrLoadDialect<mlir::func::FuncDialect>();
   Ctx.getOrLoadDialect<mlir::memref::MemRefDialect>();
-  Ctx.getOrLoadDialect<mlir::contraction::ContractionDialect>();
+  Ctx.getOrLoadDialect<mlir::tc::TCDialect>();
   mlir::PassManager PM(&Ctx);
-  auto M = mlir::contraction::MLIRGen(Ctx, *CF);
+  auto M = mlir::tc::MLIRGen(Ctx, *CF);
   if (Emit == DumpMLIR) {
     if (CTCSE) {
       mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
+      FuncPM.addPass(mlir::createCanonicalizerPass());
+      FuncPM.addPass(mlir::createCSEPass());
+      // FIX: only one call
       FuncPM.addPass(mlir::createCanonicalizerPass());
       FuncPM.addPass(mlir::createCSEPass());
       mlir::failed(PM.run(*M));
@@ -73,16 +76,16 @@ int main(int argc, char **argv) {
     M->dump();
     return 0;
   }
-  PM.addPass(mlir::contraction::createLowerToAffinePass());
+  PM.addPass(mlir::tc::createLowerToAffinePass());
   mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
-  FuncPM.addPass(mlir::contraction::createReturnToArgumentPass());
+  FuncPM.addPass(mlir::tc::createReturnToArgumentPass());
   FuncPM.addPass(mlir::createCanonicalizerPass());
   FuncPM.addPass(mlir::createCSEPass());
   FuncPM.addPass(mlir::createLoopFusionPass());
   FuncPM.addPass(mlir::createAffineScalarReplacementPass());
   // FuncPM.addPass(mlir::LLVM::createRequestCWrappersPass());
   if (Emit == DumpMLIRLLVM || Emit == DumpLLVMIR) {
-    PM.addPass(mlir::contraction::createLowerToLLVMPass());
+    PM.addPass(mlir::tc::createLowerToLLVMPass());
   }
   mlir::failed(PM.run(*M));
   if (Emit == DumpMLIRAffine || Emit == DumpMLIRLLVM) {

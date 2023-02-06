@@ -1,0 +1,11 @@
+add_mlir_dialect_library(
+  MLIRTCDialect
+  TCDialect.cpp
+  TCOps.cpp
+  TCCanonicalizations.cpp
+  DEPENDS
+  MLIRTCOpsIncGen
+  LINK_LIBS
+  PUBLIC
+  MLIRIR
+  MLIRInferTypeOpInterface)

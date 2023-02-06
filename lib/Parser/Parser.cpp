@@ -12,7 +12,7 @@
 
 using namespace llvm;
 
-namespace contraction {
+namespace tc {
 namespace parser {
 enum Token : int {
   Token_Comma = ',',
@@ -517,6 +517,6 @@ std::unique_ptr<ContractionForest> parseInputFile(StringRef FileName) {
   auto CF = Parser.parseContractionForest();
   return CF;
 }
-} // namespace contraction
+} // namespace tc
 
 #undef DEBUG_TYPE

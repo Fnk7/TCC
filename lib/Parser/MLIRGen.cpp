@@ -1,5 +1,5 @@
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -8,7 +8,7 @@
 #include "mlir/IR/Region.h"
 #include "mlir/IR/Verifier.h"
 
-#include "TCC/Dialect/ContractionOps.h"
+#include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/MLIRGen.h"
 
 using llvm::cast;
@@ -16,20 +16,20 @@ using llvm::isa;
 
 using llvm::errs;
 
-using namespace contraction;
+using namespace tc;
 
 namespace mlir {
-namespace contraction {
+namespace tc {
 class MLIRGenImpl {
 private:
   ContractionForest &CF;
   ModuleOp M;
-  OpBuilder OB;
+  OpBuilder builder;
   Location Loc;
 
 public:
   MLIRGenImpl(MLIRContext &Ctx, ContractionForest &CF)
-      : CF(CF), OB(&Ctx), Loc(UnknownLoc::get(&Ctx)){};
+      : CF(CF), builder(&Ctx), Loc(UnknownLoc::get(&Ctx)){};
 
 private:
   llvm::DenseMap<StringRef, Value> SymbolValueMap;
@@ -49,23 +49,25 @@ private:
     for (auto Size : Shape) {
       Encoding.emplace_back(Size->getUID());
     }
-    auto EncodingAttr = OB.getI64ArrayAttr(Encoding);
-    return RankedTensorType::get(TShape, OB.getF64Type(), EncodingAttr);
+    auto EncodingAttr = builder.getI64ArrayAttr(Encoding);
+    return RankedTensorType::get(TShape, builder.getF64Type(), EncodingAttr);
   }
 
 public:
   ModuleOp MLIRGen() {
     // create mlir module
     M = ModuleOp::create(Loc);
-    OB.setInsertionPointToEnd(M.getBody());
+    builder.setInsertionPointToEnd(M.getBody());
     // create mlir function
     auto &ArgSizes = CF.getArgSizes();
     auto &ArgIndices = CF.getArgIndices();
     auto &ArgTensors = CF.getArgTensors();
     auto &RetTensors = CF.getRetTensors();
     SmallVector<Type> InputTypes;
-    InputTypes.append(SmallVector<Type>(ArgSizes.size(), OB.getIndexType()));
-    InputTypes.append(SmallVector<Type>(ArgIndices.size(), OB.getIndexType()));
+    InputTypes.append(
+        SmallVector<Type>(ArgSizes.size(), builder.getIndexType()));
+    InputTypes.append(
+        SmallVector<Type>(ArgIndices.size(), builder.getIndexType()));
     for (auto &IT : ArgTensors) {
       auto Ty = getTensorTypeOfShape(IT->getShape());
       InputTypes.emplace_back(Ty);
@@ -82,18 +84,20 @@ public:
       }
       WriteBacks.emplace_back(ITIdx);
     }
-    auto FuncType = OB.getFunctionType(InputTypes, ResultTypes);
+    auto FuncType = builder.getFunctionType(InputTypes, ResultTypes);
     auto FuncAttr = SmallVector<NamedAttribute>(
-        {OB.getNamedAttr("num_input_sizes",
-                         OB.getI64IntegerAttr(ArgSizes.size())),
-         OB.getNamedAttr("num_input_indices",
-                         OB.getI64IntegerAttr(ArgIndices.size())),
-         OB.getNamedAttr("num_input_tensors",
-                         OB.getI64IntegerAttr(ArgTensors.size())),
-         OB.getNamedAttr("wirtebacks", OB.getI64ArrayAttr(WriteBacks))});
-    auto Func = OB.create<func::FuncOp>(Loc, CF.getName(), FuncType, FuncAttr);
+        {builder.getNamedAttr("num_input_sizes",
+                              builder.getI64IntegerAttr(ArgSizes.size())),
+         builder.getNamedAttr("num_input_indices",
+                              builder.getI64IntegerAttr(ArgIndices.size())),
+         builder.getNamedAttr("num_input_tensors",
+                              builder.getI64IntegerAttr(ArgTensors.size())),
+         builder.getNamedAttr("wirtebacks",
+                              builder.getI64ArrayAttr(WriteBacks))});
+    auto Func =
+        builder.create<func::FuncOp>(Loc, CF.getName(), FuncType, FuncAttr);
     auto EntryB = Func.addEntryBlock();
-    OB.setInsertionPointToEnd(EntryB);
+    builder.setInsertionPointToEnd(EntryB);
     // Map input tensor to mlir value
     size_t Offset = 0;
     for (size_t ArgIdx = 0; ArgIdx < ArgSizes.size(); ArgIdx++) {
@@ -112,7 +116,7 @@ public:
     }
     for (auto Index : CF.getConstIndices()) {
       SymbolValueMap[Index->getName()] =
-          OB.create<arith::ConstantIndexOp>(Loc, Index->getValue());
+          builder.create<arith::ConstantIndexOp>(Loc, Index->getValue());
     }
     // Generate Contraction Dialect of trees
     auto &CTs = CF.getContractionTrees();
@@ -125,14 +129,14 @@ public:
     for (auto &CT : RetTensors) {
       ReturnValues.emplace_back(SymbolValueMap[CT->getName()]);
     }
-    OB.create<func::ReturnOp>(Loc, TypeRange(), ReturnValues);
+    builder.create<func::ReturnOp>(Loc, TypeRange(), ReturnValues);
     return M;
   }
 
 private:
   void generateContractionTree(ContractionTree &CT) {
-    auto ValueIndices = generateNode(CT.getRootNode());
-    SymbolValueMap[CT.getName()] = ValueIndices.first;
+    auto [value, _] = generateNode(CT.getRootNode());
+    SymbolValueMap[CT.getName()] = value;
   }
 
   IndexedValueTy generateNode(Node &N) {
@@ -168,12 +172,10 @@ private:
 
   // 12-21
   IndexedValueTy generateNode(RootNode &node) {
-    auto valueIndices = generateNode(node.getChild());
-    auto value = valueIndices.first;
-    auto &indexUses = valueIndices.second;
+    auto [input, indexUses] = generateNode(node.getChild());
     auto &indexDefs = node.getIndexes();
     assert(indexUses.size() == indexDefs.size());
-    SmallVector<int64_t> axesMap;
+    AxesMapTy axesMap;
     for (auto index : indexUses) {
       for (auto axis : llvm::seq<int64_t>(0, indexDefs.size())) {
         if (index == indexDefs[axis].get()) {
@@ -188,20 +190,18 @@ private:
       shape.emplace_back(index->getSize());
     }
     auto outputType = getTensorTypeOfShape(shape);
-    auto axesMapAttr = OB.getI64ArrayAttr(axesMap);
-    value = OB.create<PermuteOp>(Loc, outputType, value, axesMapAttr);
+    auto value = builder.create<PermuteOp>(Loc, input, axesMap);
+    assert(outputType == value.getType());
     return {value, {}};
   }
 
   // 12-21
   IndexedValueTy generateNode(ContractionNode &node) {
-    auto valueIndices = generateNode(node.getChild());
-    auto value = valueIndices.first;
-    auto &indexUses = valueIndices.second;
+    auto [input, indexUses] = generateNode(node.getChild());
     auto &indexDefs = node.getIndexes();
     ShapeTy outputShape;
     IndexUsesTy outputIndexUses;
-    SmallVector<int64_t> contractedAxes;
+    AxesTy axes;
     for (auto axis : llvm::seq<int64_t>(0, indexUses.size())) {
       auto index1 = indexUses[axis];
       if (llvm::none_of(indexDefs,
@@ -209,12 +209,12 @@ private:
         outputShape.emplace_back(index1->getSize());
         outputIndexUses.emplace_back(index1);
       } else {
-        contractedAxes.emplace_back(axis);
+        axes.emplace_back(axis);
       }
     }
     auto outputType = getTensorTypeOfShape(outputShape);
-    auto contractedAxesAtrr = OB.getI64ArrayAttr(contractedAxes);
-    value = OB.create<ContractOp>(Loc, outputType, value, contractedAxesAtrr);
+    Value value = builder.create<ContractOp>(Loc, input, axes);
+    assert(outputType == value.getType());
     return {value, outputIndexUses};
   }
 
@@ -233,11 +233,9 @@ private:
     SmallVector<Value> operands;
     ShapeTy outputShape;
     IndexUsesTy outputIndexUses;
-    SmallVector<SmallVector<int64_t>> axesMaps(childs.size());
+    AxesMapsTy axesMaps(childs.size());
     for (auto [child, axesMap] : llvm::zip(childs, axesMaps)) {
-      auto valueIndices = generateNode(*child);
-      auto value = valueIndices.first;
-      auto indexUses = valueIndices.second;
+      auto [value, indexUses] = generateNode(*child);
       operands.emplace_back(value);
       for (auto index : indexUses) {
         size_t axis = 0;
@@ -253,10 +251,9 @@ private:
       }
     }
     auto outputType = getTensorTypeOfShape(outputShape);
-    auto axesMapsAttr = getIndexListArrayAttribute(OB, axesMaps);
-    auto signsAttr = OB.getBoolArrayAttr(node.getAddOrSub());
     Value value =
-        OB.create<AddOp>(Loc, outputType, operands, axesMapsAttr, signsAttr);
+        builder.create<AddOp>(Loc, operands, axesMaps, node.getAddOrSub());
+    assert(outputType == value.getType());
     return {value, outputIndexUses};
   }
 
@@ -265,11 +262,9 @@ private:
     SmallVector<Value> operands;
     ShapeTy outputShape;
     IndexUsesTy outputIndexUses;
-    SmallVector<SmallVector<int64_t>> axesMaps(childs.size());
+    AxesMapsTy axesMaps(childs.size());
     for (auto [child, axesMap] : llvm::zip(childs, axesMaps)) {
-      auto valueIndices = generateNode(*child);
-      auto value = valueIndices.first;
-      auto indexUses = valueIndices.second;
+      auto [value, indexUses] = generateNode(*child);
       operands.emplace_back(value);
       for (auto index : indexUses) {
         size_t axis = 0;
@@ -285,8 +280,8 @@ private:
       }
     }
     auto outputType = getTensorTypeOfShape(outputShape);
-    auto axesMapsAttr = getIndexListArrayAttribute(OB, axesMaps);
-    Value value = OB.create<MulOp>(Loc, outputType, operands, axesMapsAttr);
+    Value value = builder.create<MulOp>(Loc, operands, axesMaps);
+    assert(outputType == value.getType());
     return {value, outputIndexUses};
   }
 
@@ -297,8 +292,8 @@ private:
     } else if (llvm::isa<InputAsLeafNode>(LN)) {
       Name = llvm::cast<InputAsLeafNode>(LN).getInput()->getName();
     }
-    Value V = SymbolValueMap[Name];
-    assert(V);
+    Value value = SymbolValueMap[Name];
+    assert(value);
     IndexUsesTy IIndexUses;
     // U unique
     IndexUsesTy UIndexUses;
@@ -321,8 +316,8 @@ private:
       }
       if (SliceAxes.size()) {
         auto SliceType = getTensorTypeOfShape(SliceShape);
-        auto SliceAttr = OB.getI64ArrayAttr(SliceAxes);
-        V = OB.create<SliceOp>(Loc, SliceType, V, PIndexValues, SliceAttr);
+        value = builder.create<SliceOp>(Loc, value, PIndexValues, SliceAxes);
+        assert(SliceType == value.getType());
       }
     }
     {
@@ -336,40 +331,35 @@ private:
         }
         IndexPosMap[Index].emplace_back(IU);
       }
-      SmallVector<Attribute> AxesPairs;
+      AxesPairsTy AxesPairs;
       for (auto Index : UIndexUses) {
         // if (IndexPosMap[Index].size() >= 2) {
-        AxesPairs.emplace_back(OB.getI64ArrayAttr(IndexPosMap[Index]));
+        AxesPairs.emplace_back(IndexPosMap[Index]);
         // }
       }
       if (UIndexUses.size() < IIndexUses.size()) {
         auto DiagType = getTensorTypeOfShape(DiagShape);
-        auto AxesPairsAttr = OB.getArrayAttr(AxesPairs);
-        V = OB.create<DiagonalOp>(Loc, DiagType, V, AxesPairsAttr);
+        value = builder.create<DiagonalOp>(Loc, value, AxesPairs);
+        assert(DiagType == value.getType());
       }
     }
-    return {V, UIndexUses};
+    return {value, UIndexUses};
   }
 
-  IndexedValueTy generateNode(ConstantNode &CN) {
-    auto Attr = OB.getF64FloatAttr(CN.getValue());
-    ShapeTy Shape;
-    auto ResultType = getTensorTypeOfShape(Shape);
-    Value V = OB.create<ConstantOp>(Loc, ResultType, Attr);
-    return {V, {}};
+  IndexedValueTy generateNode(ConstantNode &node) {
+    auto value = builder.create<ConstantOp>(Loc, node.getValue());
+    return {value, {}};
   }
 
-  IndexedValueTy generateNode(NegativeNode &NN) {
-    auto ValueIndices = generateNode(NN.getChild());
-    Value V = ValueIndices.first;
-    auto &IndexUses = ValueIndices.second;
-    V = OB.create<NegOp>(Loc, V.getType(), V);
-    return {V, IndexUses};
+  IndexedValueTy generateNode(NegativeNode &node) {
+    auto [input, indexUses] = generateNode(node.getChild());
+    Value value = builder.create<NegOp>(Loc, input);
+    return {value, indexUses};
   }
 };
 
 OwningOpRef<ModuleOp> MLIRGen(MLIRContext &Ctx, ContractionForest &CF) {
   return MLIRGenImpl(Ctx, CF).MLIRGen();
 }
-} // namespace contraction
+} // namespace tc
 } // namespace mlir

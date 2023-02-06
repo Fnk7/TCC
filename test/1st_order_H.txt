@@ -1,0 +1,2 @@
+H(i,j) = sum((p), wave(p,i) * pf1(p) * wave(p,j) + wave(p,i) * sum((c), pf23(p,c) * gradient_basis_wave(p,c,j)) + sum((c), pf23(p,c) * gradient_basis_wave(p,c,i)) * wave(p,j))
+keep H
