@@ -13,4 +13,9 @@ def MergeContract : Pass<"merge-contract", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def SplitContract : Pass<"split-contract", "func::FuncOp"> {
+  let constructor = "mlir::tc::createSplitContractPass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif
