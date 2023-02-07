@@ -111,9 +111,13 @@ void MergeContractOp(AddOp op) {
       outerSigns.emplace_back(true);
     }
   }
-  auto newAddOp = builder.create<AddOp>(op.getLoc(), outerInputs, outerAxesMaps,
-                                        outerSigns);
-  op.replaceAllUsesWith(newAddOp.getResult());
+  if (outerInputs.size() >= 2) {
+    auto newAddOp = builder.create<AddOp>(op.getLoc(), outerInputs,
+                                          outerAxesMaps, outerSigns);
+    op.replaceAllUsesWith(newAddOp.getResult());
+  } else {
+    op.replaceAllUsesWith(outerInputs[0]);
+  }
   op.erase();
 }
 
