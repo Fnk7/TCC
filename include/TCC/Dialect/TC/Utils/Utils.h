@@ -73,6 +73,10 @@ bool compareTensorOrderWithSizeIDs(TensorSizeIDsPair &p1,
 
 // canonicalize axes maps
 AxesMapTy canonicalizeAxesMaps(AxesMapsTy &axesMaps, int64_t dim);
+inline auto getOrderedAxesMap(int64_t rank) {
+  auto r = llvm::seq<int64_t>(0, rank);
+  return AxesMapTy(r.begin(), r.end());
+}
 inline auto isOrderedAxesMap(AxesMapTy &axesMap) {
   for (auto e : llvm::enumerate(axesMap)) {
     if (e.value() != (int64_t)(e.index())) {

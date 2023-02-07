@@ -18,4 +18,9 @@ def SplitContract : Pass<"split-contract", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def GroupAddWithSameInput : Pass<"group-add", "func::FuncOp"> {
+  let constructor = "mlir::tc::createGroupAddWithSameInputPass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif
