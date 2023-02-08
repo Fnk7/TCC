@@ -8,6 +8,7 @@ std::unique_ptr<Pass> createPrintSymmetryPass();
 std::unique_ptr<Pass> createMergeContractPass();
 std::unique_ptr<Pass> createSplitContractPass();
 std::unique_ptr<Pass> createGroupAddWithSameInputPass();
+std::unique_ptr<Pass> createAddContractMulTreeAnalysisPass();
 }
 
 #endif

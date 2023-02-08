@@ -95,8 +95,8 @@ inline auto inverseAxesMap(AxesMapTy &axesMap) {
 inline AxesMapTy getContractOpInput2OutputAxisMap(AxesTy &axes,
                                                   int64_t inputDim) {
   AxesMapTy axesMap(inputDim, 0);
-  for (auto axis : axes) {
-    axesMap[axis] = -1;
+  for (auto [idx, axis] : llvm::enumerate(axes)) {
+    axesMap[axis] = -(1 + idx);
   }
   int64_t outAxis = 0;
   for (auto &inAxis : axesMap) {

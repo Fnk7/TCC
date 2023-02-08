@@ -23,4 +23,9 @@ def GroupAddWithSameInput : Pass<"group-add", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def AddContractMulTreeAnalysis : Pass<"tree-analysis", "func::FuncOp"> {
+  let constructor = "mlir::tc::createAddContractMulTreeAnalysisPass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif
