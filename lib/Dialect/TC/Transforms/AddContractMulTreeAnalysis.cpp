@@ -192,20 +192,248 @@ void TreeAnalysis(AddOp op) {
     }
   }
   op.dump();
-//   for (auto &e : map3) {
-//     auto &sizeID = e.first;
-//     auto &info = e.second;
-//     llvm::errs() << sizeID << "\n";
-//     for (auto [pos, axesPos] : info) {
-//       llvm::errs() << "  " << pos << ":  ";
-//       for (auto axisPos : axesPos) {
-//         llvm::errs() << axisPos << ", ";
-//       }
-//       llvm::errs() << "\n";
-//     }
-//     llvm::errs() << "\n";
-//   }
+  //   for (auto &e : map3) {
+  //     auto &sizeID = e.first;
+  //     auto &info = e.second;
+  //     llvm::errs() << sizeID << "\n";
+  //     for (auto [pos, axesPos] : info) {
+  //       llvm::errs() << "  " << pos << ":  ";
+  //       for (auto axisPos : axesPos) {
+  //         llvm::errs() << axisPos << ", ";
+  //       }
+  //       llvm::errs() << "\n";
+  //     }
+  //     llvm::errs() << "\n";
+  //   }
 }
+
+using InputPosTy = int64_t;
+using PositionTy = std::tuple<InputPosTy, bool, InputPosTy>;
+using UsageTy = std::pair<Value, AxesMapTy>;
+using UsageMapTy = llvm::MapVector<PositionTy, UsageTy>;
+
+template <> struct llvm::DenseMapInfo<PositionTy> {
+  static inline PositionTy getEmptyKey() { return PositionTy(-1, false, -1); }
+  static inline PositionTy getTombstoneKey() {
+    return PositionTy(-2, false, -2);
+  }
+  static unsigned getHashValue(const PositionTy &Val) {
+    return hash_combine(std::get<0>(Val), std::get<1>(Val), std::get<2>(Val));
+  }
+  static bool isEqual(const PositionTy &LHS, const PositionTy &RHS) {
+    return LHS == RHS;
+  }
+};
+
+namespace {
+auto getUsage(Value input3, AxesMapTy &axesMap1, AxesMapTy &axesMap2,
+              AxesMapTy &axesMap3) {
+  UsageTy usage;
+  usage.first = input3;
+  for (auto axis3 : axesMap3) {
+    auto axis2 = axesMap2[axis3];
+    if (axis2 >= 0) {
+      auto axis1 = axesMap1[axis2];
+      std::get<1>(usage).emplace_back(axis1);
+    } else {
+      std::get<1>(usage).emplace_back(axis2);
+    }
+  }
+  return usage;
+}
+
+void insertMulOpValueUsage(UsageMapTy &map, PositionTy pos, MulOp op,
+                           AxesMapTy &axesMap1, AxesMapTy &axesMap2) {
+  auto inputs3 = op.getInputs();
+  auto axesMaps3 = getAxesMaps(op);
+  for (auto [pos3, z3] : llvm::enumerate(llvm::zip(inputs3, axesMaps3))) {
+    auto [input3, axesMap3] = z3;
+    std::get<2>(pos) = pos3;
+    auto usage = getUsage(input3, axesMap1, axesMap2, axesMap3);
+    map.insert(std::pair(pos, usage));
+  }
+}
+
+void TreeAnalysis2(AddOp op) {
+  assert(isElementWiseAddOp(op));
+  auto inputs = op.getInputs();
+  auto axesMaps1 = getAxesMaps(op);
+  UsageMapTy usageMap;
+  for (auto [pos1, z1] : llvm::enumerate(llvm::zip(inputs, axesMaps1))) {
+    auto [input1, axesMap1] = z1;
+    if (auto contractOp = input1.getDefiningOp<ContractOp>()) {
+      auto input2 = contractOp.getInput();
+      auto rank2 = getTensorRank(input2);
+      auto axes2 = getAxes(contractOp);
+      auto axesMap2 = getContractOpInput2OutputAxisMap(axes2, rank2);
+      if (auto mulOp = input2.getDefiningOp<MulOp>()) {
+        PositionTy pos(pos1, true, -1);
+        insertMulOpValueUsage(usageMap, pos, mulOp, axesMap1, axesMap2);
+      } else {
+        auto axesMap3 = getOrderedAxesMap(axesMap2.size());
+        PositionTy pos(pos1, true, -1);
+        auto usage = getUsage(input2, axesMap1, axesMap2, axesMap3);
+        usageMap.insert(std::pair(pos, usage));
+      }
+    } else if (auto mulOp = input1.getDefiningOp<MulOp>()) {
+      auto axesMap2 = getOrderedAxesMap(axesMap1.size());
+      PositionTy pos(pos1, false, -1);
+      insertMulOpValueUsage(usageMap, pos, mulOp, axesMap1, axesMap2);
+    } else {
+      PositionTy pos(pos1, false, -1);
+      UsageTy usage(input1, axesMap1);
+      usageMap.insert(std::pair(pos, usage));
+    }
+  }
+  //   for (auto &[pos, usage] : usageMap) {
+  //     auto [pos1, pos2, pos3] = pos;
+  //     if (pos1 >= 0) {
+  //       llvm::errs() << pos1 << ", ";
+  //     } else {
+  //       llvm::errs() << "x, ";
+  //     }
+  //     if (pos2) {
+  //       llvm::errs() << "1, ";
+  //     } else {
+  //       llvm::errs() << "x, ";
+  //     }
+  //     if (pos3 >= 0) {
+  //       llvm::errs() << pos3 << ":\n";
+  //     } else {
+  //       llvm::errs() << "x:\n";
+  //     }
+  //     llvm::errs() << "  ";
+  //     for (auto axis : usage.second) {
+  //       if (axis >= 0) {
+  //         llvm::errs() << " " << axis << " ";
+  //       } else {
+  //         llvm::errs() << "*" << -(axis + 1) << " ";
+  //       }
+  //     }
+  //     llvm::errs() << "\n";
+  //     llvm::errs() << "  ";
+  //     usage.first.dump();
+  //   }
+  llvm::SetVector<ContractOp> ctInputs;
+  llvm::MapVector<ContractOp, llvm::MapVector<int64_t, SmallVector<int64_t>>>
+      map4;
+  for (auto [pos1, input1] : llvm::enumerate(inputs)) {
+    auto ctOp = input1.getDefiningOp<ContractOp>();
+    if (!ctOp || ctInputs.count(ctOp)) {
+      continue;
+    }
+    auto input2 = ctOp.getInput();
+    auto mulOp = input2.getDefiningOp<MulOp>();
+    if (!mulOp) {
+      continue;
+    }
+    ctInputs.insert(ctOp);
+    auto inputs3 = mulOp.getInputs();
+    auto axes2 = getAxes(ctOp);
+    for (auto axis3 : axes2) {
+      map4[ctOp][axis3] = SmallVector<int64_t>();
+    }
+    auto axesMaps3 = getAxesMaps(mulOp);
+    for (auto [pos3, z3] : llvm::enumerate(llvm::zip(inputs3, axesMaps3))) {
+      auto [input3, axesMap3] = z3;
+      auto &axesMap0 = usageMap[PositionTy(pos1, true, pos3)].second;
+      for (auto axis0 : axesMap0) {
+        if (axis0 < 0) {
+          axis0 = -(axis0 + 1);
+          auto axis3 = axes2[axis0];
+          map4[ctOp][axis3].emplace_back(pos3);
+        }
+      }
+    }
+  }
+#if 0
+  for (auto &[ctOp, map5] : map4) {
+    ctOp.getInput().dump();
+    for (auto &[axis3, vec] : map5) {
+      llvm::errs() << axis3 << ": ";
+      for (auto pos3 : vec) {
+        llvm::errs() << pos3 << " ";
+      }
+      llvm::errs() << "\n";
+    }
+    llvm::errs() << "\n";
+  }
+#endif
+  for (auto ctOp : ctInputs) {
+    ctOp.getInput().dump();
+    auto axisPosMap = map4[ctOp];
+    auto axes = getAxes(ctOp);
+    llvm::SetVector<int64_t> axisSet(axes.begin(), axes.end());
+    AxesTy sortedAxes;
+    llvm::SetVector<int64_t> resultAxes;
+    while (!axisSet.empty()) {
+      auto axis = axisSet.back();
+      for (auto axis2 : axisSet) {
+        if (axis == axis2) {
+          continue;
+        }
+        auto inputPos1 = axisPosMap[axis];
+        auto inputPos2 = axisPosMap[axis2];
+        bool allIn = true;
+        for (auto pos1 : inputPos1) {
+          if (llvm::find(inputPos2, pos1) == inputPos2.end()) {
+            allIn = false;
+            break;
+          }
+        }
+        if (allIn) {
+          axis = axis2;
+        }
+      }
+      axisSet.erase(llvm::find(axisSet, axis));
+      sortedAxes.emplace_back(axis);
+    }
+    auto mulOp = ctOp.getInput().getDefiningOp<MulOp>();
+    auto axesMaps3 = getAxesMaps(mulOp);
+    auto numInputs = mulOp.getNumOperands();
+    SmallVector<bool> notUsed(numInputs, true);
+    for (auto axis : llvm::reverse(sortedAxes)) {
+      llvm::errs() << axis << ": ";
+      SmallVector<int64_t> usedPos;
+      for (auto pos : axisPosMap[axis]) {
+        if (notUsed[pos]) {
+          notUsed[pos] = false;
+          llvm::errs() << pos << " ";
+          usedPos.emplace_back(pos);
+        }
+      }
+      if (resultAxes.count(axis)) {
+        llvm::errs() << "x ";
+      }
+      llvm::SetVector<int64_t> newResultAxes;
+      for (auto pos : usedPos) {
+        for (auto axis : axesMaps3[pos]) {
+          newResultAxes.insert(axis);
+        }
+      }
+      if (resultAxes.count(axis)) {
+        for (auto axis : resultAxes) {
+          newResultAxes.insert(axis);
+        }
+      }
+      newResultAxes.erase(llvm::find(newResultAxes, axis));
+      llvm::errs() << "-> (";
+      for (auto axis : newResultAxes) {
+        llvm::errs() << axis << ", ";
+      }
+      llvm::errs() << ")";
+      llvm::errs() << "\n";
+      for (auto axis : newResultAxes) {
+        resultAxes.insert(axis);
+      }
+      auto f = llvm::find(resultAxes, axis);
+      if (f != resultAxes.end())
+        resultAxes.erase(f);
+    }
+    llvm::errs() << "\n";
+  }
+}
+} // namespace
 
 struct AddContractMulTreeAnalysisPass
     : public tc::impl::AddContractMulTreeAnalysisBase<
@@ -228,7 +456,7 @@ struct AddContractMulTreeAnalysisPass
       // TODO: get from return op
       return;
     }
-    TreeAnalysis(workLists[0]);
+    TreeAnalysis2(workLists[0]);
   }
 };
 
