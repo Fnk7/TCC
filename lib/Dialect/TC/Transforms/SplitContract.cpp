@@ -228,9 +228,23 @@ public:
       }
     }
   }
+  void dump() { dump(0); }
 };
 
-SelectionMapTy analysis(AxesTy &axes, Axis2InputSetMapTy &map) {
+Axis2InputSetMapTy getAxis2InputSetMap(AxesTy &axes,
+                                       AxesMapsTy &inputAxesMaps) {
+  Axis2InputSetMapTy map;
+  for (auto [pos, axesMap] : llvm::enumerate(inputAxesMaps)) {
+    for (auto axis : axes) {
+      if (llvm::find(axesMap, axis) != axesMap.end()) {
+        map[axis].insert(pos);
+      }
+    }
+  }
+  return map;
+}
+
+SelectionMapTy analysisContractMul(AxesTy &axes, Axis2InputSetMapTy &map) {
   AxesRelationTy intersectRel = getIntersectRelation(axes, map);
   AxesRelationTy subsetRel = getSubsetRelation(axes, map);
   SelectionMapTy selectionMap;
@@ -248,22 +262,13 @@ void contractOpAnalysis(ContractOp op2) {
     return;
   }
   auto axes2 = getAxes(op2);
-  Axis2InputSetMapTy map;
-  auto inputs3 = op3.getInputs();
   auto axesMaps3 = getAxesMaps(op3);
-  for (auto &[pos3, z3] : llvm::enumerate(llvm::zip(inputs3, axesMaps3))) {
-    auto [input3, axesMap3] = z3;
-    for (auto axis3 : axes2) {
-      if (llvm::find(axesMap3, axis3) != axesMap3.end()) {
-        map[axis3].insert(pos3);
-      }
-    }
-  }
-  auto selectionMap = analysis(axes2, map);
+  Axis2InputSetMapTy inputSetMap = getAxis2InputSetMap(axes2, axesMaps3);
+  auto selectionMap = analysisContractMul(axes2, inputSetMap);
   auto node = selectionMap[axes2].get();
   op2.dump();
   input2.dump();
-  node->dump(0);
+  node->dump();
   llvm::errs() << "\n";
 }
 
