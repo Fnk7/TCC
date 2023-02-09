@@ -34,20 +34,253 @@ void splitContractOpWithMulOp(ContractOp op) {
   op.erase();
 }
 
+template <> struct llvm::DenseMapInfo<I64ArrayTy> {
+  static inline I64ArrayTy getEmptyKey() { return I64ArrayTy(); }
+  static inline I64ArrayTy getTombstoneKey() { return I64ArrayTy(); }
+  static unsigned getHashValue(const I64ArrayTy &Val) {
+    return llvm::hash_combine_range(Val.begin(), Val.end());
+  }
+  static bool isEqual(const I64ArrayTy &LHS, const I64ArrayTy &RHS) {
+    return LHS == RHS;
+  }
+};
+
+namespace {
+using InputPosSetTy = llvm::SetVector<int64_t>;
+using Axis2InputSetMapTy = DenseMap<int64_t, InputPosSetTy>;
+using AxisPairTy = std::pair<int64_t, int64_t>;
+using AxesRelationTy = DenseMap<AxisPairTy, bool>;
+// return true if set1 is subset of set2
+bool isSubsetOf(InputPosSetTy &set1, InputPosSetTy &set2) {
+  for (auto pos1 : set1) {
+    if (llvm::find(set2, pos1) == set2.end()) {
+      return false;
+    }
+  }
+  return true;
+}
+// return true if set1 intersects with set2
+bool isIntersecting(InputPosSetTy &set1, InputPosSetTy &set2) {
+  for (auto pos1 : set1) {
+    if (llvm::find(set2, pos1) != set2.end()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+AxesRelationTy getSubsetRelation(AxesTy &axes, Axis2InputSetMapTy &map) {
+  AxesRelationTy rel;
+  for (auto axis1 : axes) {
+    for (auto axis2 : axes) {
+      AxisPairTy pair(axis1, axis2);
+      rel[pair] = isSubsetOf(map[axis1], map[axis2]);
+    }
+  }
+  return rel;
+}
+
+AxesRelationTy getIntersectRelation(AxesTy &axes, Axis2InputSetMapTy &map) {
+  AxesRelationTy rel;
+  for (auto axis1 : axes) {
+    for (auto axis2 : axes) {
+      AxisPairTy pair(axis1, axis2);
+      rel[pair] = isIntersecting(map[axis1], map[axis2]);
+    }
+  }
+  return rel;
+}
+
+class SelectionNode;
+using SelectionMapTy = DenseMap<AxesTy, std::unique_ptr<SelectionNode>>;
+class SelectionNode {
+  using SelectionsTy = SmallVector<AxesTy>;
+  using SelectionNodesTy = SmallVector<SelectionNode *>;
+  // a group of selections, ref.ed by position
+  // the selection in the same group can be parallel
+  using SelectionGroupTy = SmallVector<int64_t>;
+  // all groups of selections
+  using SelectionGroupsTy = SmallVector<SelectionGroupTy>;
+  SelectionsTy selections;
+  SelectionNodesTy nodes;
+  SelectionGroupsTy groups;
+
+public:
+  SelectionNode(AxesTy &axes, SelectionMapTy &map, AxesRelationTy &intersectRel,
+                AxesRelationTy &subsetRel) {
+    // pair.first  : not intersect group
+    // pair.second : equality group, -1 represent to be a subset
+    using GroupInfoTy = std::pair<int64_t, int64_t>;
+    using GroupInfosTy = SmallVector<GroupInfoTy>;
+    GroupInfosTy groupInfos;
+    for (auto group : llvm::seq<int64_t>(0, axes.size())) {
+      groupInfos.emplace_back(GroupInfoTy(group, group));
+    }
+    for (auto pos1 : llvm::seq<int64_t>(0, axes.size())) {
+      for (auto pos2 : llvm::seq<int64_t>(pos1 + 1, axes.size())) {
+        auto axis1 = axes[pos1];
+        auto axis2 = axes[pos2];
+        AxisPairTy pair1(axis1, axis2);
+        if (intersectRel[pair1]) {
+          auto &intersect1 = groupInfos[pos1].first;
+          auto &intersect2 = groupInfos[pos2].first;
+          auto &equality1 = groupInfos[pos1].second;
+          auto &equality2 = groupInfos[pos2].second;
+          auto minIntersect = std::min(intersect1, intersect2);
+          intersect1 = minIntersect;
+          intersect2 = minIntersect;
+          AxisPairTy pair2(axis2, axis1);
+          auto sub1 = subsetRel[pair1];
+          auto sub2 = subsetRel[pair2];
+          if (sub1 && sub2) {
+            auto minEquality = std::min(equality1, equality2);
+            equality1 = minEquality;
+            equality2 = minEquality;
+          } else if (sub1) {
+            equality1 = -1;
+          } else if (sub2) {
+            equality2 = -1;
+          }
+        }
+      }
+    }
+    llvm::MapVector<int64_t, llvm::SetVector<int64_t>> groupMap;
+    for (auto [pos, info] : llvm::enumerate(groupInfos)) {
+      auto &iGroup = info.first;
+      while (iGroup != groupInfos[iGroup].first) {
+        iGroup = groupInfos[iGroup].first;
+      }
+      auto &eGroup = info.second;
+      while (eGroup >= 0 && eGroup != groupInfos[eGroup].second) {
+        eGroup = groupInfos[eGroup].second;
+      }
+      if (eGroup >= 0) {
+        groupMap[iGroup].insert(eGroup);
+      }
+    }
+    for (auto &[iGroup, eGroups] : groupMap) {
+      SelectionGroupTy group;
+      for (auto eGroup : eGroups) {
+        AxesTy toSelectAxes;
+        AxesTy selectedAxes;
+        for (auto [axis, info] : llvm::zip(axes, groupInfos)) {
+          if (info.first != iGroup) {
+            continue;
+          }
+          if (info.second != eGroup) {
+            toSelectAxes.emplace_back(axis);
+          } else {
+            selectedAxes.emplace_back(axis);
+          }
+        }
+        selections.emplace_back(selectedAxes);
+        if (toSelectAxes.size()) {
+          if (!map.count(toSelectAxes)) {
+            auto node = std::make_unique<SelectionNode>(
+                toSelectAxes, map, intersectRel, subsetRel);
+            map.insert(std::pair(toSelectAxes, std::move(node)));
+          }
+          auto *node = map[toSelectAxes].get();
+          nodes.emplace_back(node);
+        } else {
+          nodes.emplace_back(nullptr);
+        }
+        group.emplace_back(nodes.size() - 1);
+      }
+      groups.emplace_back(group);
+    }
+  }
+
+  void dump(int indent) {
+    for (auto [idx1, group] : llvm::enumerate(groups)) {
+      for (auto [idx2, pos] : llvm::enumerate(group)) {
+        if (idx1 != 0 || idx2 != 0) {
+          llvm::errs().indent(indent);
+        }
+        std::string toPrint = " ";
+        if (groups.size() > 1) {
+          if (idx2 == 0) {
+            toPrint += "*";
+          } else {
+            toPrint += "*";
+          }
+        }
+        toPrint += "-> ";
+        auto &selection = selections[pos];
+        if (selection.size() != 1) {
+          toPrint += "(";
+        }
+        for (auto [idx3, axis] : llvm::enumerate(selection)) {
+          if (idx3 != 0) {
+            toPrint += ", ";
+          }
+          toPrint += std::to_string(axis);
+        }
+        if (selection.size() != 1) {
+          toPrint += ")";
+        }
+        llvm::errs() << toPrint;
+        if (auto *node = nodes[pos]) {
+          node->dump(indent + toPrint.size());
+        } else {
+          llvm::errs() << "\n";
+        }
+      }
+    }
+  }
+};
+
+SelectionMapTy analysis(AxesTy &axes, Axis2InputSetMapTy &map) {
+  AxesRelationTy intersectRel = getIntersectRelation(axes, map);
+  AxesRelationTy subsetRel = getSubsetRelation(axes, map);
+  SelectionMapTy selectionMap;
+  auto node = std::make_unique<SelectionNode>(axes, selectionMap, intersectRel,
+                                              subsetRel);
+  selectionMap.insert(std::pair(axes, std::move(node)));
+  return selectionMap;
+}
+} // namespace
+
+void contractOpAnalysis(ContractOp op2) {
+  auto input2 = op2.getInput();
+  auto op3 = input2.getDefiningOp<MulOp>();
+  if (!op3) {
+    return;
+  }
+  auto axes2 = getAxes(op2);
+  Axis2InputSetMapTy map;
+  auto inputs3 = op3.getInputs();
+  auto axesMaps3 = getAxesMaps(op3);
+  for (auto &[pos3, z3] : llvm::enumerate(llvm::zip(inputs3, axesMaps3))) {
+    auto [input3, axesMap3] = z3;
+    for (auto axis3 : axes2) {
+      if (llvm::find(axesMap3, axis3) != axesMap3.end()) {
+        map[axis3].insert(pos3);
+      }
+    }
+  }
+  auto selectionMap = analysis(axes2, map);
+  auto node = selectionMap[axes2].get();
+  op2.dump();
+  input2.dump();
+  node->dump(0);
+  llvm::errs() << "\n";
+}
+
 struct SplitContractPass
     : public tc::impl::SplitContractBase<SplitContractPass> {
   void runOnOperation() override {
     auto funcOp = getOperation();
     auto &region = funcOp.getRegion();
     auto &entryBlock = *(region.getBlocks().begin());
-    SmallVector<ContractOp> workLists;
+    llvm::SetVector<ContractOp> workLists;
     for (auto &op : entryBlock) {
       if (auto contractOp = dyn_cast_or_null<ContractOp>(&op)) {
-        workLists.emplace_back(contractOp);
+        workLists.insert(contractOp);
       }
     }
     for (auto contractOp : workLists) {
-      splitContractOpWithMulOp(contractOp);
+      contractOpAnalysis(contractOp);
     }
   }
 };
