@@ -72,9 +72,14 @@ int main(int argc, char **argv) {
       // FIX: only one call
       FuncPM.addPass(mlir::createCanonicalizerPass());
       FuncPM.addPass(mlir::createCSEPass());
-      FuncPM.addPass(mlir::tc::createMergeContractPass());
+      // FuncPM.addPass(mlir::tc::createMergeContractPass());
+      // FuncPM.addPass(mlir::createCSEPass());
+      // FuncPM.addPass(mlir::tc::createSplitContractPass());
+      // FuncPM.addPass(mlir::createCSEPass());
+      // FuncPM.addPass(mlir::tc::createGroupAddWithSameInputPass());
+      // FuncPM.addPass(mlir::createCSEPass());
+      FuncPM.addPass(mlir::tc::createSplitContractPass());
       FuncPM.addPass(mlir::createCSEPass());
-      FuncPM.addPass(mlir::tc::createPrintSymmetryPass());
       mlir::failed(PM.run(*M));
     }
     M->dump();
