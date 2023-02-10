@@ -257,95 +257,162 @@ SelectionMapTy analysisContractMul(AxesTy &axes, Axis2InputSetMapTy &map) {
   return selectionMap;
 }
 
+int64_t getRankFromAxesMaps(AxesMapsTy &axesMaps) {
+  int64_t maxAxis = -1;
+  for (auto &axesMap : axesMaps) {
+    for (auto axis : axesMap) {
+      maxAxis = std::max(axis, maxAxis);
+    }
+  }
+  return maxAxis + 1;
+}
+
+void mapOriginAxis2NewAxis(AxesMapTy &axesMap) {
+  int64_t newAxis = 0;
+  for (auto &axis : axesMap) {
+    if (axis >= 0) {
+      axis = newAxis++;
+    }
+  }
+}
+
+AxesMapTy getOrigin2NewAxesMap(AxesMapsTy &axesMaps) {
+  auto rank = getRankFromAxesMaps(axesMaps);
+  AxesMapTy origin2NewMap(rank, -1);
+  for (auto &axesMap : axesMaps) {
+    for (auto axis : axesMap) {
+      origin2NewMap[axis] = axis;
+    }
+  }
+  mapOriginAxis2NewAxis(origin2NewMap);
+  return origin2NewMap;
+}
+
+AxesMapTy getNew2OriginAxesMap(AxesMapTy &origin2NewMap) {
+  AxesMapTy new2OriginMap;
+  for (auto [originAxis, newAxis] : llvm::enumerate(origin2NewMap)) {
+    if (newAxis >= 0) {
+      new2OriginMap.emplace_back(originAxis);
+    }
+  }
+  return new2OriginMap;
+}
+
+void applyUpdateAxesMapWithAxes(AxesMapTy &axesMap1, AxesTy &axes) {
+  for (auto &axis : axes) {
+    auto &axis2 = axesMap1[axis];
+    axis = axis2;
+    axis2 = -1;
+  }
+  mapOriginAxis2NewAxis(axesMap1);
+}
+
+void applyAxesMap(AxesMapTy &axesMap1, AxesMapTy &axesMap2) {
+  for (auto &axis : axesMap2) {
+    axis = axesMap1[axis];
+  }
+}
+
+void applyAxesMap(AxesMapTy &axesMap1, AxesMapsTy &axesMaps) {
+  for (auto &axesMap2 : axesMaps) {
+    applyAxesMap(axesMap1, axesMap2);
+  }
+}
+
+std::pair<Value, AxesMapTy> createContractMulWithSelectedAxes(
+    ContractOp ctOp, AxesTy &selectedAxes, Axis2InputSetMapTy &inputSetMap,
+    SmallVector<Value> &originInputs, AxesMapsTy &originAxesMaps,
+    SmallVector<Value> &mulInputs, AxesMapsTy &mulAxesMaps) {
+  // collect inputs for MulOp
+  for (auto axis : selectedAxes) {
+    for (auto pos : inputSetMap[axis]) {
+      if (auto input = originInputs[pos]) {
+        originInputs[pos] = Value(nullptr);
+        mulInputs.emplace_back(input);
+        mulAxesMaps.emplace_back(originAxesMaps[pos]);
+      }
+    }
+  }
+  // origin mul axis -> new mul axis map
+  AxesMapTy origin2NewMap = getOrigin2NewAxesMap(mulAxesMaps);
+  // create MulOp if # inputs > 1
+  OpBuilder builder(ctOp);
+  Value result;
+  if (mulInputs.size() >= 2) {
+    applyAxesMap(origin2NewMap, mulAxesMaps);
+    auto mulOp = builder.create<MulOp>(ctOp.getLoc(), mulInputs, mulAxesMaps);
+    result = mulOp.getResult();
+  } else {
+    assert(mulInputs.size() == 1);
+    result = mulInputs[0];
+  }
+  // create ContractOp if # selectedAxes >= 1
+  if (selectedAxes.size()) {
+    applyUpdateAxesMapWithAxes(origin2NewMap, selectedAxes);
+    auto ctOp2 =
+        builder.create<ContractOp>(ctOp.getLoc(), result, selectedAxes);
+    result = ctOp2.getResult();
+  } else {
+    assert(result);
+  }
+  auto retAxesMap = getNew2OriginAxesMap(origin2NewMap);
+  return std::pair(result, retAxesMap);
+}
+
 std::pair<SmallVector<Value>, AxesMapsTy>
-getContractMulOfSelection(SelectionNode *node, OpBuilder &builder,
-                          ContractOp op2, Axis2InputSetMapTy &inputSetMap,
+getContractMulOfSelection(ContractOp ctOp, SelectionNode *node,
+                          Axis2InputSetMapTy &inputSetMap,
                           SmallVector<Value> &inputs, AxesMapsTy &axesMaps) {
+  // empty selection
+  if (!node)
+    return std::pair(SmallVector<Value>(), AxesMapsTy());
   SmallVector<Value> retInputs;
   AxesMapsTy retAxesMaps;
   for (auto &group : node->groups) {
+    // pick one from one group
     auto pos = group[0];
-    SmallVector<Value> newInputs;
-    AxesMapsTy oldAxesMaps;
-    if (node->nodes[pos]) {
-      auto pair = getContractMulOfSelection(node->nodes[pos], builder, op2,
-                                            inputSetMap, inputs, axesMaps);
-      newInputs = pair.first;
-      oldAxesMaps = pair.second;
-    }
+    auto [mulInputs, mulAxesMaps] = getContractMulOfSelection(
+        ctOp, node->nodes[pos], inputSetMap, inputs, axesMaps);
     auto selectedAxes = node->selections[pos];
-    for (auto axis : selectedAxes) {
-      for (auto pos : inputSetMap[axis]) {
-        if (auto input = inputs[pos]) {
-          inputs[pos] = Value(nullptr);
-          newInputs.emplace_back(input);
-          oldAxesMaps.emplace_back(axesMaps[pos]);
-        }
-      }
-    }
-    auto rank = getTensorRank(op2.getInput());
-    AxesMapTy old2NewMap(rank, -1);
-    for (auto &oldAxesMap : oldAxesMaps) {
-      for (auto axis : oldAxesMap) {
-        old2NewMap[axis] = axis;
-      }
-    }
-    {
-      int64_t newAxis = 0;
-      for (auto &axis : old2NewMap) {
-        if (axis >= 0) {
-          axis = newAxis++;
-        }
-      }
-    }
-    auto &newAxesMap = oldAxesMaps;
-    for (auto &newAxesMap : newAxesMap) {
-      for (auto &axis : newAxesMap) {
-        axis = old2NewMap[axis];
-      }
-    }
-    auto newMulOp = builder.create<MulOp>(op2.getLoc(), newInputs, newAxesMap);
-    for (auto &axis : selectedAxes) {
-      auto temp = old2NewMap[axis];
-      old2NewMap[axis] = -1;
-      axis = temp;
-    }
-    auto contractOp = builder.create<ContractOp>(
-        op2.getLoc(), newMulOp.getResult(), selectedAxes);
-    retInputs.emplace_back(contractOp.getResult());
-    {
-      int64_t newAxis = 0;
-      for (auto &axis : old2NewMap) {
-        if (axis >= 0) {
-          axis = newAxis++;
-        }
-      }
-    }
-    AxesMapTy retAxesMap;
-    for (auto [oldAxis, newAxis] : llvm::enumerate(old2NewMap)) {
-      if (newAxis >= 0) {
-        retAxesMap.emplace_back(oldAxis);
-      }
-    }
+    auto [result, retAxesMap] = createContractMulWithSelectedAxes(
+        ctOp, selectedAxes, inputSetMap, inputs, axesMaps, mulInputs,
+        mulAxesMaps);
+    retInputs.emplace_back(result);
     retAxesMaps.emplace_back(retAxesMap);
   }
   return std::pair(retInputs, retAxesMaps);
 }
+
+Value getContractMulOfRootSelection(ContractOp ctOp, SelectionNode *node,
+                                    Axis2InputSetMapTy &inputSetMap,
+                                    SmallVector<Value> &inputs,
+                                    AxesMapsTy &axesMaps) {
+  auto [mulInputs, mulAxesMaps] =
+      getContractMulOfSelection(ctOp, node, inputSetMap, inputs, axesMaps);
+  AxesTy selectedAxes;
+  auto [result, retAxesMap] =
+      createContractMulWithSelectedAxes(ctOp, selectedAxes, inputSetMap, inputs,
+                                        axesMaps, mulInputs, mulAxesMaps);
+  return result;
+}
 } // namespace
 
-void dumpValue(Value v, llvm::SetVector<Value> &dumpped) {
-  if (dumpped.count(v)) {
-    return;
-  }
+void dumpValueDefiningChain(Value v, llvm::SetVector<Operation *> &dumpped) {
+  // Dump
   auto *op = v.getDefiningOp();
-  if (!op) {
+  if (!op || dumpped.count(op)) {
     return;
   }
   for (auto v : op->getOperands()) {
-    dumpValue(v, dumpped);
+    dumpValueDefiningChain(v, dumpped);
   }
-  dumpped.insert(v);
-  v.dump();
+  dumpped.insert(op);
+  op->dump();
+}
+
+void dumpValueDefiningChain(Value v) {
+  llvm::SetVector<Operation *> dumpped;
+  dumpValueDefiningChain(v, dumpped);
 }
 
 void splitContractAndLiftMul(ContractOp op2) {
@@ -365,26 +432,15 @@ void splitContractAndLiftMul(ContractOp op2) {
   if (axes2.size() <= 1) {
     return;
   }
-  OpBuilder builder(op2);
-  auto [res, _] = getContractMulOfSelection(node, builder, op2, inputSetMap,
-                                            inputs, axesMaps3);
+  auto result =
+      getContractMulOfRootSelection(op2, node, inputSetMap, inputs, axesMaps3);
   op3.dump();
   op2.dump();
   node->dump();
-  llvm::SetVector<Value> dumpped;
-  dumpValue(res[0], dumpped);
+  dumpValueDefiningChain(result);
   llvm::errs() << "\n";
-  if (res.size() == 1) {
-    bool replace = true;
-    for (auto input : inputs) {
-      if (input)
-        replace = false;
-    }
-    if (replace) {
-      op2.replaceAllUsesWith(res[0]);
-      op2.erase();
-    }
-  }
+  op2.replaceAllUsesWith(result);
+  op2.erase();
 }
 
 struct SplitContractPass
