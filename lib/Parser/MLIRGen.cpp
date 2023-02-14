@@ -98,6 +98,12 @@ public:
         builder.create<func::FuncOp>(Loc, CF.getName(), FuncType, FuncAttr);
     auto EntryB = Func.addEntryBlock();
     builder.setInsertionPointToEnd(EntryB);
+    // Set argument names
+    auto argIdxOffset = ArgSizes.size() + ArgIndices.size();
+    for (auto [argIdx, IT] : llvm::enumerate(ArgTensors)) {
+      argIdx = argIdx + argIdxOffset;
+      Func.setArgAttr(argIdx, "func.name", builder.getStringAttr(IT->getName()));
+    }
     // Map input tensor to mlir value
     size_t Offset = 0;
     for (size_t ArgIdx = 0; ArgIdx < ArgSizes.size(); ArgIdx++) {

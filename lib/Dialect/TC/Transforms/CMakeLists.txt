@@ -4,6 +4,7 @@ add_mlir_dialect_library(MLIRTCTransforms
   SplitContract.cpp
   GroupAddWithSameInput.cpp
   AddContractMulTreeAnalysis.cpp
+  MergeMul.cpp
 
   DEPENDS
   MLIRTCTransformsIncGen

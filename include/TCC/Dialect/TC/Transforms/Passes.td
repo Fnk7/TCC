@@ -28,4 +28,9 @@ def AddContractMulTreeAnalysis : Pass<"tree-analysis", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def MergeMul : Pass<"merge-mul", "func::FuncOp"> {
+  let constructor = "mlir::tc::createMergeMulPass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif
