@@ -194,6 +194,22 @@ public:
     }
   }
 
+  int64_t getPossibles() {
+    int64_t res1 = 1;
+    for (auto group : groups) {
+      int64_t res2 = 0;
+      for (auto pos : group) {
+        if (nodes[pos]) {
+          res2 += nodes[pos]->getPossibles();
+        } else {
+          res2 += 1;
+        }
+      }
+      res1 *= res2;
+    }
+    return res1;
+  }
+
   void dump(int indent) {
     for (auto [idx1, group] : llvm::enumerate(groups)) {
       for (auto [idx2, pos] : llvm::enumerate(group)) {
@@ -231,7 +247,10 @@ public:
       }
     }
   }
-  void dump() { dump(0); }
+  void dump() {
+    llvm::errs() << "Possible chains number: " << getPossibles() << "\n";
+    dump(0);
+  }
 };
 
 Axis2InputSetMapTy getAxis2InputSetMap(AxesTy &axes,

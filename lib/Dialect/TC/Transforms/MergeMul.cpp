@@ -74,6 +74,9 @@ void MergeMulOp(AddOp op) {
       worklist.emplace_back(MulOpItem(pos, mulOp));
     }
   }
+  if (worklist.empty()) {
+    return;
+  }
   using UsageTy = std::pair<Value, AxesMapTy>;
   using AddMulPosTy = std::pair<int64_t, int64_t>;
   using AddMulPosesTy = SmallVector<AddMulPosTy>;

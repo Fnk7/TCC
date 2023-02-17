@@ -33,4 +33,9 @@ def MergeMul : Pass<"merge-mul", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def TCOptimize : Pass<"tc-opt", "func::FuncOp"> {
+  let constructor = "mlir::tc::createTCOptimizePass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif

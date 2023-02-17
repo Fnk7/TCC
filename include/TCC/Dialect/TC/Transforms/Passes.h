@@ -10,6 +10,7 @@ std::unique_ptr<Pass> createSplitContractPass();
 std::unique_ptr<Pass> createGroupAddWithSameInputPass();
 std::unique_ptr<Pass> createAddContractMulTreeAnalysisPass();
 std::unique_ptr<Pass> createMergeMulPass();
+std::unique_ptr<Pass> createTCOptimizePass();
 }
 
 #endif
