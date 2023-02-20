@@ -1,10 +1,10 @@
 ### Step 1
-Any
+将所有输入转换为下面的简化形式。
 =>
 Add -> Contract -> Mul -> Input
 
 ### Step 1.1
-Symm
+利用对称性将Add操作优化。
 Add
 =>
 Add -> Add
@@ -40,7 +40,28 @@ Add -> Contract
 Add -> Contract -> Add
 
 ### Step 4
-合并乘法
+合并乘法。
+对于合并乘法，可以不考虑一下情况：
+```
+AB + BC + CA
+= A(B+C) + BC
+= B(A+C) + AC
+```
+应当考虑如下情况：
+```
+AB + AC + DC
+= A(B + C) + DC
+= (A + D)C + AB
+```
+这是因为，在实际计算中，张量的不同维度是有实际意义的，如果存在 `AB + AC`，则一般不应该有 `BC` 这样的计算。
+在考虑这种简化的情况下，可以将能够合并的项进行分类。
+还存在
+```
+AC + AD + BC + BD
+= (A + B)(C + D)
+```
+的情况。
+这是一个相当复杂的问题。
 Add -> Mul
 =>
 (Add ->?) Mul -> Add (-> Mul?)
