@@ -1,4 +1,5 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
+#include "TCC/Dialect/TC/IR/TCPatterns.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 
 #include "mlir/IR/Builders.h"
@@ -673,4 +674,21 @@ void ContractOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
   patterns.add<ContractContractFoldPattern>(context);
   patterns.add<ContractPermuteSwapPattern>(context);
 #endif
+}
+
+void mlir::tc::getCanonicalizeForCSEPatterns(RewritePatternSet &patterns,
+                                             MLIRContext *context) {
+  // AddOp
+  patterns.add<AddReorderPattern>(context);
+  patterns.add<AddAttrCanonicalizePattern>(context);
+  patterns.add<AddPermuteFoldPattern>(context);
+  // MulOp
+  patterns.add<MulReorderPattern>(context);
+  patterns.add<MulAttrCanonicalizePattern>(context);
+  patterns.add<MulPermuteFoldPattern>(context);
+  // ContractOp
+  patterns.add<ContractPermuteSwapPattern>(context);
+  // PermuteOp
+  patterns.add<PermuteFoldPattern>(context);
+  patterns.add<PermutePermuteFoldPattern>(context);
 }

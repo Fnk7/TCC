@@ -1,4 +1,5 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
+#include "TCC/Dialect/TC/IR/TCPatterns.h"
 #include "TCC/Dialect/TC/Transforms/Passes.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 
@@ -6,6 +7,7 @@
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
 
 #include "llvm/Support/Debug.h"
@@ -495,6 +497,7 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       ctPlans.insert(std::pair(ctOp, ctplan::CtOpPlan(ctOp)));
       planNums += ctPlans[ctOp].getNumOfPlans();
     }
+    auto *context = &getContext();
     llvm::errs() << "PlanNums " << planNums << "\n";
     for (auto planID = 0; planID < planNums; planID++) {
       OpBuilder builder(funcOp);
@@ -510,6 +513,10 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       newFuncOp.setName(std::string(funcOp.getName()) + std::to_string(planID));
       // CSE
       OpPassManager pm;
+      RewritePatternSet patterns(context);
+      mlir::tc::getCanonicalizeForCSEPatterns(patterns, context);
+      if (failed(applyPatternsAndFoldGreedily(newFuncOp, std::move(patterns))))
+        return signalPassFailure();
       pm.addPass(createCSEPass());
       pm.addPass(createCSEPass());
       pm.addPass(createMergeContractPass());
