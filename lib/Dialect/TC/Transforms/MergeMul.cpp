@@ -16,6 +16,121 @@ namespace mlir::tc {
 using namespace mlir;
 using namespace mlir::tc;
 
+namespace mlir::tc::symm {
+using SymmAxisPair = std::pair<int64_t, int64_t>;
+using SymmInfo = SmallVector<SymmAxisPair>;
+using ValueSymmInfoMap = DenseMap<Value, SymmInfo>;
+
+template <typename T>
+void collectAbelianOpSymmInfo(ValueSymmInfoMap &symmInfos, T op) {
+  auto inputs = op.getInputs();
+  auto axesMaps = getAxesMaps(op);
+  using Factor = std::pair<Value, int64_t>;
+  using Factors = SmallVector<Factor>;
+  using AxisFactorsMap = DenseMap<int64_t, Factors>;
+  // map to factors
+  AxisFactorsMap axisFactors;
+  for (auto [input, axesMap] : llvm::zip(inputs, axesMaps)) {
+    for (auto e : llvm::enumerate(axesMap)) {
+      int64_t axis = e.index();
+      bool found = false;
+      if (symmInfos.count(input)) {
+        for (auto &pair : symmInfos[input]) {
+          if (pair.first == axis || pair.second == axis) {
+            found = true;
+            axisFactors[e.value()].emplace_back(Factor(input, pair.first));
+            axisFactors[e.value()].emplace_back(Factor(input, pair.second));
+          }
+        }
+      }
+      if (!found) {
+        axisFactors[e.value()].emplace_back(Factor(input, axis));
+      }
+    }
+  }
+  // sort factors for later compare
+  for (auto &e : axisFactors) {
+    auto &factors = e.second;
+    std::sort(factors.begin(), factors.end(), [](Factor &f1, Factor &f2) {
+      auto t1 = f1.first;
+      auto t2 = f2.first;
+      if (t1 != t2) {
+        return compareTensorOrder(t1, t2);
+      } else {
+        return f1.second < f2.second;
+      }
+    });
+  }
+  // compare and insert axis pair into symminfos
+  Value res = op.getResult();
+  int64_t dim = axisFactors.size();
+  for (int64_t axis1 = 0; axis1 < dim; axis1++) {
+    for (int64_t axis2 = axis1 + 1; axis2 < dim; axis2++) {
+      if (axisFactors[axis1] == axisFactors[axis2]) {
+        symmInfos[res].emplace_back(SymmAxisPair(axis1, axis2));
+      }
+    }
+  }
+}
+void collectContractOpSymmInfo(ValueSymmInfoMap &symmInfos, ContractOp op) {
+  auto input = op.getInput();
+  if (!symmInfos.count(input))
+    return;
+  auto rank = getTensorRank(input);
+  auto axes = getAxes(op);
+  auto i2oAxisMap = getContractOpInput2OutputAxisMap(axes, rank);
+  SymmInfo symmInfo;
+  for (auto &pair : symmInfos[input]) {
+    auto axis1 = i2oAxisMap[pair.first];
+    auto axis2 = i2oAxisMap[pair.second];
+    if (axis1 >= 0 && axis2 >= 0) {
+      symmInfo.emplace_back(axis1, axis2);
+    }
+  }
+  if (symmInfo.size()) {
+    symmInfos[op.getResult()] = symmInfo;
+  }
+}
+void collectPermuteOpSymmInfo(ValueSymmInfoMap &symmInfos, PermuteOp op) {
+  auto input = op.getInput();
+  if (!symmInfos.count(input))
+    return;
+  auto axesMap = getAxesMap(op);
+  auto &symmInfo = symmInfos[op.getResult()];
+  for (auto &pair : symmInfo) {
+    pair.first = axesMap[pair.first];
+    pair.second = axesMap[pair.second];
+  }
+}
+void collectSymmInfosOfValue(ValueSymmInfoMap &symmInfos, Value value) {
+  auto op = value.getDefiningOp();
+  if (!op) {
+    return;
+  }
+  for (auto input : op->getOperands()) {
+    collectSymmInfosOfValue(symmInfos, input);
+  }
+  if (auto op = value.getDefiningOp<AddOp>()) {
+    collectAbelianOpSymmInfo(symmInfos, op);
+  } else if (auto op = value.getDefiningOp<MulOp>()) {
+    collectAbelianOpSymmInfo(symmInfos, op);
+  } else if (auto op = value.getDefiningOp<ContractOp>()) {
+    collectContractOpSymmInfo(symmInfos, op);
+  }
+}
+void cleanEmptyInfoInSymmInfos(ValueSymmInfoMap &symmInfos) {
+  SmallVector<Value> toErase;
+  for (auto &[value, info] : symmInfos) {
+    if (info.empty()) {
+      toErase.emplace_back(value);
+    }
+  }
+  for (auto value : toErase) {
+    symmInfos.erase(value);
+  }
+}
+} // namespace mlir::tc::symm
+
 // apply axesMap1 on axesMap2, axesMap2 changed
 void applyAxesMap(AxesMapTy &axesMap1, AxesMapTy &axesMap2) {
   for (auto &axis : axesMap2) {
@@ -242,11 +357,59 @@ FactorTy *getUniqueFactor(FactorsTy &factors, FactorTy &factor) {
 }
 
 void MergeMulOp(AddOp op) {
+  static int count = 0;
   if (!isElementWiseAddOp(op)) {
+    llvm::errs() << "Not elementwise : ";
+    op.dump();
     return;
   }
+  llvm::errs() << "\n\n\n" << count++ << "\nWorking on : ";
+  op.dump();
+  // Symm
+  symm::ValueSymmInfoMap symmInfos;
+  symm::collectSymmInfosOfValue(symmInfos, op.getResult());
+  symm::cleanEmptyInfoInSymmInfos(symmInfos);
+  if (symmInfos.count(op.getResult())) {
+    llvm::errs() << "Symmetry AddOp: ";
+    op.dump();
+  }
+  // Symm end
   auto inputs = op.getInputs();
   auto axesMaps = getAxesMaps(op);
+  // Symm
+  I64ArrayTy symmPoses(inputs.size(), -1);
+  for (auto [pos1, input1] : llvm::enumerate(inputs)) {
+    for (auto [pos2, input2] : llvm::enumerate(inputs)) {
+      if (pos1 == pos2 || input1 != input2) {
+        continue;
+      }
+      auto axesMap1 = axesMaps[pos1];
+      auto axesMap2 = axesMaps[pos2];
+      auto &symmInfo = symmInfos[op.getResult()];
+      for (auto [axis1, axis2] : symmInfo) {
+        auto m1 = axesMap1[axis1];
+        auto m2 = axesMap1[axis2];
+        axesMap1[axis1] = std::min(m1, m2);
+        axesMap1[axis2] = std::max(m1, m2);
+        m1 = axesMap2[axis1];
+        m2 = axesMap2[axis2];
+        axesMap2[axis1] = std::min(m1, m2);
+        axesMap2[axis2] = std::max(m1, m2);
+      }
+      llvm::errs() << "\n";
+      if (llvm::equal(axesMap1, axesMap2)) {
+        symmPoses[pos1] = pos2;
+      }
+    }
+  }
+  int64_t doAddSplit = 0;
+  for (auto pos : symmPoses) {
+    if (pos >= 0) {
+      doAddSplit += 1;
+    }
+  }
+  llvm::errs() << "\n";
+  // Symm end
   FactorsTy factors;
   AddMulFactorsTy addMulFactors;
   int64_t numMul = 0;
@@ -303,6 +466,82 @@ void MergeMulOp(AddOp op) {
     }
     llvm::errs() << "\n";
   }
+  // Symm
+  if (doAddSplit) {
+    FactorTy *splitKey = nullptr;
+    for (auto &[key, set] : factorMap2) {
+      int64_t isSplit = 0;
+      for (auto pos : set) {
+        if (symmPoses[pos] >= 0 && !set.count(symmPoses[pos])) {
+          isSplit += 1;
+        }
+      }
+      if (isSplit * 2 == doAddSplit) {
+        splitKey = key;
+        break;
+      }
+    }
+    if (splitKey) {
+      OpBuilder builder(op);
+      auto const05 = builder.create<ConstantOp>(op.getLoc(), 0.5).getResult();
+      SmallVector<Value> addInputs;
+      AxesMapsTy addAxesMaps;
+      auto &posSet = factorMap2[splitKey];
+      for (auto pos : llvm::seq<int64_t>(0, inputs.size())) {
+        auto input = inputs[pos];
+        auto &axesMap = axesMaps[pos];
+        if (symmPoses[pos] < 0) {
+          // 0.5 * input
+          if (auto mulOp = input.getDefiningOp<MulOp>()) {
+            auto inputs = mulOp.getInputs();
+            SmallVector<Value> mulInputs(inputs.begin(), inputs.end());
+            auto mulAxesMaps = getAxesMaps(mulOp);
+            mulInputs.emplace_back(const05);
+            mulAxesMaps.emplace_back(getOrderedAxesMap(0));
+            auto newMulOp =
+                builder.create<MulOp>(op.getLoc(), mulInputs, mulAxesMaps);
+            addInputs.emplace_back(newMulOp.getResult());
+            addAxesMaps.emplace_back(axesMap);
+          } else {
+            SmallVector<Value> mulInputs;
+            AxesMapsTy mulAxesMaps;
+            mulInputs.emplace_back(input);
+            mulInputs.emplace_back(const05);
+            mulAxesMaps.emplace_back(getOrderedAxesMap(axesMap.size()));
+            mulAxesMaps.emplace_back(getOrderedAxesMap(0));
+            auto newMulOp =
+                builder.create<MulOp>(op.getLoc(), mulInputs, mulAxesMaps);
+            addInputs.emplace_back(newMulOp.getResult());
+            addAxesMaps.emplace_back(axesMap);
+          }
+        } else if (posSet.count(pos)) {
+          addInputs.emplace_back(input);
+          addAxesMaps.emplace_back(axesMap);
+        }
+      }
+      // TODO signs for symm
+      SignsTy signs(addAxesMaps.size(), true);
+      auto subAddOp =
+          builder.create<AddOp>(op.getLoc(), addInputs, addAxesMaps, signs);
+      addInputs.clear();
+      addAxesMaps.clear();
+      addInputs.emplace_back(subAddOp.getResult());
+      addInputs.emplace_back(subAddOp.getResult());
+      auto rank = getTensorRank(subAddOp.getResult());
+      addAxesMaps.emplace_back(getOrderedAxesMap(rank));
+      auto orderAxesMap = getOrderedAxesMap(rank);
+      for (auto [axis1, axis2] : symmInfos[op.getResult()]) {
+        std::swap(orderAxesMap[axis1], orderAxesMap[axis2]);
+      }
+      addAxesMaps.emplace_back(orderAxesMap);
+      SignsTy signs2(addAxesMaps.size(), true);
+      auto newAddOp =
+          builder.create<AddOp>(op.getLoc(), addInputs, addAxesMaps, signs2);
+      op.replaceAllUsesWith(newAddOp.getResult());
+      return MergeMulOp(subAddOp);
+    }
+  }
+  // Symm end
   if (factorMap2.empty()) {
     return;
   }
