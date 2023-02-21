@@ -357,22 +357,13 @@ FactorTy *getUniqueFactor(FactorsTy &factors, FactorTy &factor) {
 }
 
 void MergeMulOp(AddOp op) {
-  static int count = 0;
   if (!isElementWiseAddOp(op)) {
-    llvm::errs() << "Not elementwise : ";
-    op.dump();
     return;
   }
-  llvm::errs() << "\n\n\n" << count++ << "\nWorking on : ";
-  op.dump();
   // Symm
   symm::ValueSymmInfoMap symmInfos;
   symm::collectSymmInfosOfValue(symmInfos, op.getResult());
   symm::cleanEmptyInfoInSymmInfos(symmInfos);
-  if (symmInfos.count(op.getResult())) {
-    llvm::errs() << "Symmetry AddOp: ";
-    op.dump();
-  }
   // Symm end
   auto inputs = op.getInputs();
   auto axesMaps = getAxesMaps(op);
@@ -546,6 +537,7 @@ void MergeMulOp(AddOp op) {
     return;
   }
   // Not consider intersection
+  FactorPtrsTy toErase;
   for (auto key1 : keys) {
     auto &inputSet1 = factorMap2[key1];
     for (auto key2 : keys) {
@@ -556,8 +548,15 @@ void MergeMulOp(AddOp op) {
         llvm::errs() << "Intersection!\n";
         dumpValueDefiningChain(key1->first);
         dumpValueDefiningChain(key2->first);
-        return;
+        toErase.emplace_back(key1);
+        toErase.emplace_back(key2);
       }
+    }
+  }
+  for (auto key : toErase) {
+    auto iter = llvm::find(keys, key);
+    if (iter != keys.end()) {
+      keys.erase(iter);
     }
   }
   llvm::sort(keys, [&](FactorTy *key1, FactorTy *key2) {

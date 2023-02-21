@@ -513,10 +513,10 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       dynamicPM.addPass(createTCCSEPass());
       dynamicPM.addPass(createMergeMulPass());
       dynamicPM.addPass(createTCCSEPass());
-      // dynamicPM.addPass(createMergeContractPass());
-      // dynamicPM.addPass(createTCCSEPass());
-      // dynamicPM.addPass(createMergeMulPass());
-      // dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeContractPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeMulPass());
+      dynamicPM.addPass(createTCCSEPass());
       if (failed(runPipeline(dynamicPM, newFuncOp)))
         return signalPassFailure();
     }

@@ -685,6 +685,7 @@ void mlir::tc::getCanonicalizeForCSEPatterns(RewritePatternSet &patterns,
   // MulOp
   patterns.add<MulReorderPattern>(context);
   patterns.add<MulAttrCanonicalizePattern>(context);
+  patterns.add<MulMulFoldPattern>(context);
   patterns.add<MulPermuteFoldPattern>(context);
   // ContractOp
   patterns.add<ContractPermuteSwapPattern>(context);
