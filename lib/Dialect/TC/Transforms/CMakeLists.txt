@@ -6,6 +6,7 @@ add_mlir_dialect_library(MLIRTCTransforms
   AddContractMulTreeAnalysis.cpp
   MergeMul.cpp
   TCOptimizePass.cpp
+  TCCSEPass.cpp
 
   DEPENDS
   MLIRTCTransformsIncGen

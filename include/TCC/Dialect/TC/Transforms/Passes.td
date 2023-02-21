@@ -38,4 +38,9 @@ def TCOptimize : Pass<"tc-opt", "ModuleOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def TCCSE : Pass<"tc-cse", "func::FuncOp"> {
+  let constructor = "mlir::tc::createTCCSEPass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif
