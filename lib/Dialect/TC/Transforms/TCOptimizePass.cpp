@@ -490,10 +490,10 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
                llvm::errs() << ctOpWorklist.size() << "\n";);
     // 1.2 Analysis each ContractOp, and create its plan
     DenseMap<ContractOp, ctplan::CtOpPlan> ctPlans;
-    int64_t planNums = 0;
+    int64_t planNums = 1;
     for (auto ctOp : ctOpWorklist) {
       ctPlans.insert(std::pair(ctOp, ctplan::CtOpPlan(ctOp)));
-      planNums += ctPlans[ctOp].getNumOfPlans();
+      planNums *= ctPlans[ctOp].getNumOfPlans();
     }
     for (auto planID = 0; planID < planNums; planID++) {
       OpBuilder builder(funcOp);
@@ -507,10 +507,15 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
         ctPlans[ctOp].applyPlan(newFuncOp, mappedOp, subID);
       }
       newFuncOp.setName(std::string(funcOp.getName()) + std::to_string(planID));
-      // CSE
       OpPassManager dynamicPM;
       dynamicPM.addPass(createTCCSEPass());
       dynamicPM.addPass(createMergeContractPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeMulPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeContractPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeMulPass());
       dynamicPM.addPass(createTCCSEPass());
       if (failed(runPipeline(dynamicPM, newFuncOp)))
         return signalPassFailure();
