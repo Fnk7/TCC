@@ -9,6 +9,7 @@ add_mlir_dialect_library(MLIRTCTransforms
   TCCSEPass.cpp
   SinkMul.cpp
   LiftMul.cpp
+  SinkMul2.cpp
 
   DEPENDS
   MLIRTCTransformsIncGen

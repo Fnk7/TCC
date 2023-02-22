@@ -10,7 +10,8 @@ using namespace mlir::tc;
 
 void MulOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
                   AxesMapsTy &axesMaps) {
-                    assert(inputs.size() >= 2);
+  assert(inputs.size() >= 2);
+  assert(inputs.size() == axesMaps.size());
   auto resultType = getResultTypeByAxesMaps(builder, inputs, axesMaps);
   auto axesMapsAttr = mlir::tc::getAxesMapsAttr(builder, axesMaps);
   MulOp::build(builder, state, resultType, inputs, axesMapsAttr);
