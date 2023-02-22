@@ -149,10 +149,15 @@ struct SinkMulPass : public tc::impl::SinkMulBase<SinkMulPass> {
           mulAxesMaps.emplace_back(ctAxesMap);
           worklist.emplace_back(subMulOp);
         }
-        OpBuilder builder(mulOp);
-        auto newMulOp =
-            builder.create<MulOp>(mulOp.getLoc(), mulInputs, mulAxesMaps);
-        mulOp.replaceAllUsesWith(newMulOp.getResult());
+        if (mulInputs.size() >= 2) {
+          OpBuilder builder(mulOp);
+          auto newMulOp =
+              builder.create<MulOp>(mulOp.getLoc(), mulInputs, mulAxesMaps);
+          mulOp.replaceAllUsesWith(newMulOp.getResult());
+        } else {
+          assert(mulInputs.size() == 1);
+          mulOp.replaceAllUsesWith(mulInputs[0]);
+        }
       }
     }
   }

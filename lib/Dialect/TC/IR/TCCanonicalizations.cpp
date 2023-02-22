@@ -681,6 +681,7 @@ void mlir::tc::getCanonicalizeForCSEPatterns(RewritePatternSet &patterns,
   // AddOp
   patterns.add<AddReorderPattern>(context);
   patterns.add<AddAttrCanonicalizePattern>(context);
+  patterns.add<AddAddFoldPattern>(context);
   patterns.add<AddPermuteFoldPattern>(context);
   // MulOp
   patterns.add<MulReorderPattern>(context);

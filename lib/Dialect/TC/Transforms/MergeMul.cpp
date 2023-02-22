@@ -360,6 +360,14 @@ void MergeMulOp(AddOp op) {
   if (!isElementWiseAddOp(op)) {
     return;
   }
+  // For symm add
+  if (op.getInputs().size() == 2) {
+    auto inputs = op.getInputs();
+    if (inputs[0] == inputs[1]) {
+      return;
+    }
+  }
+  // for symm add end
   // Symm
   symm::ValueSymmInfoMap symmInfos;
   symm::collectSymmInfosOfValue(symmInfos, op.getResult());

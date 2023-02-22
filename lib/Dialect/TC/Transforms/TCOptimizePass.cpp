@@ -509,11 +509,7 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       newFuncOp.setName(std::string(funcOp.getName()) + std::to_string(planID));
       OpPassManager dynamicPM;
       dynamicPM.addPass(createTCCSEPass());
-      dynamicPM.addPass(createMergeContractPass());
-      dynamicPM.addPass(createTCCSEPass());
       dynamicPM.addPass(createSinkMulPass());
-      dynamicPM.addPass(createTCCSEPass());
-      dynamicPM.addPass(createMergeMulPass());
       dynamicPM.addPass(createTCCSEPass());
       dynamicPM.addPass(createMergeContractPass());
       dynamicPM.addPass(createTCCSEPass());
@@ -522,6 +518,29 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       dynamicPM.addPass(createLiftMulPass());
       dynamicPM.addPass(createTCCSEPass());
       dynamicPM.addPass(createMergeMulPass());
+
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createSinkMulPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeContractPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeMulPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createLiftMulPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeMulPass());
+
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createSinkMulPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeContractPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeMulPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createLiftMulPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeMulPass());
+
       dynamicPM.addPass(createTCCSEPass());
       if (failed(runPipeline(dynamicPM, newFuncOp)))
         return signalPassFailure();
