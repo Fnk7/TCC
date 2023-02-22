@@ -143,7 +143,9 @@ struct SinkMulPass : public tc::impl::SinkMulBase<SinkMulPass> {
           OpBuilder builder(mulOp);
           auto subMulOp =
               builder.create<MulOp>(mulOp.getLoc(), subInputs, subAxesMaps);
-          mulInputs.emplace_back(subMulOp.getResult());
+          auto newCtOp = builder.create<ContractOp>(ctOp.getLoc(),
+                                                    subMulOp.getResult(), axes);
+          mulInputs.emplace_back(newCtOp.getResult());
           mulAxesMaps.emplace_back(ctAxesMap);
           worklist.emplace_back(subMulOp);
         }
