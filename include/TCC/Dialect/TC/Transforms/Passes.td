@@ -43,4 +43,9 @@ def TCCSE : Pass<"tc-cse", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def SinkMul : Pass<"tc-sink-mul", "func::FuncOp"> {
+  let constructor = "mlir::tc::createSinkMulPass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif

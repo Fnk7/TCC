@@ -12,6 +12,7 @@ std::unique_ptr<Pass> createAddContractMulTreeAnalysisPass();
 std::unique_ptr<Pass> createMergeMulPass();
 std::unique_ptr<Pass> createTCOptimizePass();
 std::unique_ptr<Pass> createTCCSEPass();
+std::unique_ptr<Pass> createSinkMulPass();
 } // namespace mlir::tc
 
 #endif
