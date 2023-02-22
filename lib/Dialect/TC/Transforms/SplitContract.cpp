@@ -307,7 +307,7 @@ AxesMapTy getOrigin2NewAxesMap(AxesMapsTy &axesMaps) {
   return origin2NewMap;
 }
 
-AxesMapTy getNew2OriginAxesMap(AxesMapTy &origin2NewMap) {
+static AxesMapTy getNew2OriginAxesMap(AxesMapTy &origin2NewMap) {
   AxesMapTy new2OriginMap;
   for (auto [originAxis, newAxis] : llvm::enumerate(origin2NewMap)) {
     if (newAxis >= 0) {
@@ -326,13 +326,13 @@ void applyUpdateAxesMapWithAxes(AxesMapTy &axesMap1, AxesTy &axes) {
   mapOriginAxis2NewAxis(axesMap1);
 }
 
-void applyAxesMap(AxesMapTy &axesMap1, AxesMapTy &axesMap2) {
+static void applyAxesMap(AxesMapTy &axesMap1, AxesMapTy &axesMap2) {
   for (auto &axis : axesMap2) {
     axis = axesMap1[axis];
   }
 }
 
-void applyAxesMap(AxesMapTy &axesMap1, AxesMapsTy &axesMaps) {
+static void applyAxesMap(AxesMapTy &axesMap1, AxesMapsTy &axesMaps) {
   for (auto &axesMap2 : axesMaps) {
     applyAxesMap(axesMap1, axesMap2);
   }

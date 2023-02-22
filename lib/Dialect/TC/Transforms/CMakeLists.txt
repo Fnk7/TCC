@@ -8,6 +8,7 @@ add_mlir_dialect_library(MLIRTCTransforms
   TCOptimizePass.cpp
   TCCSEPass.cpp
   SinkMul.cpp
+  LiftMul.cpp
 
   DEPENDS
   MLIRTCTransformsIncGen

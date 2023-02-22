@@ -13,6 +13,7 @@ std::unique_ptr<Pass> createMergeMulPass();
 std::unique_ptr<Pass> createTCOptimizePass();
 std::unique_ptr<Pass> createTCCSEPass();
 std::unique_ptr<Pass> createSinkMulPass();
+std::unique_ptr<Pass> createLiftMulPass();
 } // namespace mlir::tc
 
 #endif
