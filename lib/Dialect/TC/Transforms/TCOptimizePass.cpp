@@ -586,6 +586,8 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
         newFuncOp.erase();
       }
     }
+    resultFunc.setName(funcOp.getName());
+    funcOp.erase();
   }
 };
 

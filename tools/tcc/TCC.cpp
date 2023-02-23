@@ -1,10 +1,15 @@
+#include "mlir/Dialect/Affine/Passes.h"
+
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 
-#include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Conversion/BufferizationToMemRef/BufferizationToMemRef.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Func/Transforms/Passes.h"
 #include "mlir/Dialect/LLVMIR/Transforms/RequestCWrappers.h"
+#include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Pass/Pass.h"
@@ -33,6 +38,7 @@ namespace {
 enum Action {
   DumpAST,
   DumpMLIR,
+  DumpMLIRLINALG,
   DumpMLIRAffine,
   DumpMLIRLLVM,
   DumpLLVMIR,
@@ -42,6 +48,8 @@ static cl::opt<enum Action>
     Emit("emit", cl::desc("Select the kind of output desired"),
          cl::values(clEnumValN(DumpAST, "ast", "output the AST dump")),
          cl::values(clEnumValN(DumpMLIR, "mlir", "output the MLIR dump")),
+         cl::values(clEnumValN(DumpMLIRLINALG, "mlir-linalg",
+                               "output the MLIR dump after linalg lowering")),
          cl::values(clEnumValN(DumpMLIRAffine, "mlir-affine",
                                "output the MLIR dump after affine lowering")),
          cl::values(clEnumValN(DumpMLIRLLVM, "mlir-llvm",
@@ -62,14 +70,15 @@ int main(int argc, char **argv) {
   Ctx.getOrLoadDialect<mlir::func::FuncDialect>();
   Ctx.getOrLoadDialect<mlir::memref::MemRefDialect>();
   Ctx.getOrLoadDialect<mlir::tc::TCDialect>();
+  Ctx.getOrLoadDialect<mlir::bufferization::BufferizationDialect>();
   mlir::PassManager PM(&Ctx);
   auto M = mlir::tc::MLIRGen(Ctx, *CF);
   if (Emit == DumpMLIR) {
     if (CTCSE) {
       mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
+      // TOcFIX: only one call
       FuncPM.addPass(mlir::createCanonicalizerPass());
       FuncPM.addPass(mlir::createCSEPass());
-      // FIX: only one call
       FuncPM.addPass(mlir::createCanonicalizerPass());
       FuncPM.addPass(mlir::createCSEPass());
       // FuncPM.addPass(mlir::tc::createMergeContractPass());
@@ -79,12 +88,38 @@ int main(int argc, char **argv) {
       // FuncPM.addPass(mlir::tc::createGroupAddWithSameInputPass());
       // FuncPM.addPass(mlir::createCSEPass());
       // FuncPM.addPass(mlir::tc::createPrintSymmetryPass());
-      FuncPM.addPass(mlir::tc::createSplitContractPass());
-      FuncPM.addPass(mlir::createCSEPass());
-      FuncPM.addPass(mlir::tc::createMergeContractPass());
-      FuncPM.addPass(mlir::createCSEPass());
+      // FuncPM.addPass(mlir::tc::createSplitContractPass());
+      // FuncPM.addPass(mlir::createCSEPass());
+      // FuncPM.addPass(mlir::tc::createMergeContractPass());
+      // FuncPM.addPass(mlir::createCSEPass());
+      PM.addPass(mlir::tc::createTCOptimizePass());
+      mlir::OpPassManager &FuncPM2 = PM.nest<mlir::func::FuncOp>();
+      FuncPM2.addPass(mlir::LLVM::createRequestCWrappersPass());
       mlir::failed(PM.run(*M));
     }
+    M->dump();
+    return 0;
+  }
+  if (Emit == DumpMLIRLINALG) {
+    mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
+    FuncPM.addPass(mlir::createCanonicalizerPass());
+    FuncPM.addPass(mlir::createCSEPass());
+    FuncPM.addPass(mlir::createCanonicalizerPass());
+    FuncPM.addPass(mlir::createCSEPass());
+    PM.addPass(mlir::tc::createTCOptimizePass());
+    mlir::OpPassManager &FuncPM2 = PM.nest<mlir::func::FuncOp>();
+    FuncPM2.addPass(mlir::LLVM::createRequestCWrappersPass());
+    PM.addPass(mlir::tc::createConvertTCToLinalgPass());
+    PM.addPass(mlir::createCSEPass());
+    PM.addPass(mlir::createLinalgElementwiseOpFusionPass());
+    PM.addPass(mlir::func::createFuncBufferizePass());
+    mlir::OpPassManager &FuncPM3 = PM.nest<mlir::func::FuncOp>();
+    FuncPM3.addPass(mlir::createLinalgBufferizePass());
+    PM.addPass(mlir::createCSEPass());
+    mlir::OpPassManager &FuncPM4 = PM.nest<mlir::func::FuncOp>();
+    FuncPM4.addPass(mlir::createConvertLinalgToLoopsPass());
+    // PM.addPass(mlir::createBufferizationToMemRefPass());
+    mlir::failed(PM.run(*M));
     M->dump();
     return 0;
   }
