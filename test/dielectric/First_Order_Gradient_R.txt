@@ -1,2 +1,4 @@
+size C = (3,3)
+input Gwave(*,C,*)
 GR(p,c) = sum((i,j), Gwave(p,c,i) * DM(i,j) * wave(p,j) + wave(p,i) * DM(i,j) * Gwave(p,c,j))
 keep GR

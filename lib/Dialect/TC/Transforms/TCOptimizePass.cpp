@@ -474,6 +474,29 @@ public:
 };
 } // namespace ctplan
 
+double getNaiveCost(func::FuncOp funcOp) {
+  double cost = 0;
+  auto funcAttr = funcOp->getAttrDictionary();
+  auto numInputSizesAttr = funcAttr.get("num_input_sizes").cast<IntegerAttr>();
+  auto numInputSizes = numInputSizesAttr.getValue().getSExtValue();
+  for (auto &op : funcOp.front()) {
+    if (auto mulOp = dyn_cast_or_null<MulOp>(&op)) {
+      auto [shape, sizeIDs] = getTensorSizeInfos(mulOp.getResult());
+      double mulCost = 1;
+      for (auto [size, sizeID] : llvm::zip(shape, sizeIDs)) {
+        if (sizeID < numInputSizes) {
+          mulCost *= 256;
+        } else {
+          assert(size >= 1);
+          mulCost *= size;
+        }
+      }
+      cost += mulCost;
+    }
+  }
+  return cost;
+}
+
 struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
   void runOnOperation() override {
     ModuleOp modOp = getOperation();
@@ -495,6 +518,8 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       ctPlans.insert(std::pair(ctOp, ctplan::CtOpPlan(ctOp)));
       planNums *= ctPlans[ctOp].getNumOfPlans();
     }
+    double minCost = 0;
+    func::FuncOp resultFunc;
     for (auto planID = 0; planID < planNums; planID++) {
       OpBuilder builder(funcOp);
       BlockAndValueMapping map;
@@ -547,6 +572,19 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
 
       if (failed(runPipeline(dynamicPM, newFuncOp)))
         return signalPassFailure();
+
+      auto newCost = getNaiveCost(newFuncOp);
+      llvm::errs() << "New funcOp cost is " << newCost << "\n";
+      if (!resultFunc) {
+        resultFunc = newFuncOp;
+        minCost = newCost;
+      } else if (newCost < minCost) {
+        resultFunc.erase();
+        resultFunc = newFuncOp;
+        minCost = newCost;
+      } else {
+        newFuncOp.erase();
+      }
     }
   }
 };
