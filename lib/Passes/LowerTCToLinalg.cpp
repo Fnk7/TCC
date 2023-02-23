@@ -138,6 +138,8 @@ struct ReturnOpLowering : public OpConversionPattern<func::ReturnOp> {
   LogicalResult
   matchAndRewrite(func::ReturnOp op, func::ReturnOp::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
+    rewriter.updateRootInPlace(op,
+                               [&] { op->setOperands(adaptor.getOperands()); });
     return success();
   }
 };

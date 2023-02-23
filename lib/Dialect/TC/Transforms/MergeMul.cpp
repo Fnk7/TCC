@@ -395,7 +395,7 @@ void MergeMulOp(AddOp op) {
         axesMap2[axis1] = std::min(m1, m2);
         axesMap2[axis2] = std::max(m1, m2);
       }
-      llvm::errs() << "\n";
+      // llvm::errs() << "\n";
       if (llvm::equal(axesMap1, axesMap2)) {
         symmPoses[pos1] = pos2;
       }
@@ -407,7 +407,7 @@ void MergeMulOp(AddOp op) {
       doAddSplit += 1;
     }
   }
-  llvm::errs() << "\n";
+  // llvm::errs() << "\n";
   // Symm end
   FactorsTy factors;
   AddMulFactorsTy addMulFactors;
@@ -603,7 +603,7 @@ void MergeMulOp(AddOp op) {
 struct MergeMulPass : public tc::impl::MergeMulBase<MergeMulPass> {
   void runOnOperation() override {
     auto funcOp = getOperation();
-    llvm::errs() << funcOp.getName() << "\n";
+    // llvm::errs() << funcOp.getName() << "\n";
     auto &region = funcOp.getRegion();
     auto &entryBlock = *(region.getBlocks().begin());
     SmallVector<AddOp> workLists;

@@ -82,7 +82,10 @@ public:
         if (CT->getName() == ArgTensors[ITIdx]->getName())
           break;
       }
-      WriteBacks.emplace_back(ITIdx);
+      if (ITIdx >= 0)
+        WriteBacks.emplace_back(ITIdx + ArgSizes.size() + ArgIndices.size());
+      else
+        WriteBacks.emplace_back(-1);
     }
     auto FuncType = builder.getFunctionType(InputTypes, ResultTypes);
     auto FuncAttr = SmallVector<NamedAttribute>(
@@ -102,7 +105,8 @@ public:
     auto argIdxOffset = ArgSizes.size() + ArgIndices.size();
     for (auto [argIdx, IT] : llvm::enumerate(ArgTensors)) {
       argIdx = argIdx + argIdxOffset;
-      Func.setArgAttr(argIdx, "func.name", builder.getStringAttr(IT->getName()));
+      Func.setArgAttr(argIdx, "func.name",
+                      builder.getStringAttr(IT->getName()));
     }
     // Map input tensor to mlir value
     size_t Offset = 0;

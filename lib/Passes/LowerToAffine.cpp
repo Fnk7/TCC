@@ -13,6 +13,7 @@
 
 namespace mlir {
 namespace tc {
+#if 0
 static SmallVector<int64_t> unpackIntegerArrayAttr(ArrayAttr Attr) {
   SmallVector<int64_t> Sizes;
   for (auto &I64 : Attr) {
@@ -452,6 +453,8 @@ struct ContractOpLowering : public OpConversionPattern<ContractOp> {
   }
 };
 
+#endif
+
 struct ContractionLoweringPass
     : public PassWrapper<ContractionLoweringPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ContractionLoweringPass)
@@ -472,6 +475,7 @@ static Value materializeToTensor(OpBuilder &builder, TensorType type,
 }
 
 void ContractionLoweringPass::runOnOperation() {
+#if 0
   ConversionTarget target(getContext());
   target.addLegalDialect<AffineDialect, BuiltinDialect, arith::ArithDialect,
                          memref::MemRefDialect>();
@@ -511,6 +515,7 @@ void ContractionLoweringPass::runOnOperation() {
   if (failed(
           applyPartialConversion(getOperation(), target, std::move(patterns))))
     signalPassFailure();
+#endif
 }
 
 std::unique_ptr<Pass> createLowerToAffinePass() {

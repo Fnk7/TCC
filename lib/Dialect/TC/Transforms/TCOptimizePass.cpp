@@ -574,7 +574,7 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
         return signalPassFailure();
 
       auto newCost = getNaiveCost(newFuncOp);
-      llvm::errs() << "New funcOp cost is " << newCost << "\n";
+      LLVM_DEBUG(llvm::errs() << "New funcOp cost is " << newCost << "\n";);
       if (!resultFunc) {
         resultFunc = newFuncOp;
         minCost = newCost;

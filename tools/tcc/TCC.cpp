@@ -116,9 +116,10 @@ int main(int argc, char **argv) {
     mlir::OpPassManager &FuncPM3 = PM.nest<mlir::func::FuncOp>();
     FuncPM3.addPass(mlir::createLinalgBufferizePass());
     PM.addPass(mlir::createCSEPass());
+    PM.addPass(mlir::tc::createReturnToArgumentPass());
     mlir::OpPassManager &FuncPM4 = PM.nest<mlir::func::FuncOp>();
     FuncPM4.addPass(mlir::createConvertLinalgToLoopsPass());
-    // PM.addPass(mlir::createBufferizationToMemRefPass());
+    PM.addPass(mlir::createBufferizationToMemRefPass());
     mlir::failed(PM.run(*M));
     M->dump();
     return 0;
