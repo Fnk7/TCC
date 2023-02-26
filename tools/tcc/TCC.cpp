@@ -121,6 +121,7 @@ int main(int argc, char **argv) {
     FuncPM4.addPass(mlir::createConvertLinalgToLoopsPass());
     PM.addPass(mlir::createBufferizationToMemRefPass());
     mlir::failed(PM.run(*M));
+    M->print(llvm::outs());
     M->dump();
     return 0;
   }

@@ -1,2 +1,0 @@
-A(i,j) = B(i,j) + C(i,j)
-keep A
