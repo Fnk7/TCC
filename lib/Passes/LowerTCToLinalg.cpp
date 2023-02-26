@@ -334,67 +334,59 @@ struct FuncOpLowering : public OpConversionPattern<func::FuncOp> {
 //   }
 // };
 
-// struct ContractOpLowering : public OpConversionPattern<ContractOp> {
-//   using OpConversionPattern<ContractOp>::OpConversionPattern;
+auto getAffineMapByAxes(int64_t rank, AxesTy &axes, MLIRContext *ctx) {
+  SmallVector<AffineExpr> exprs;
+  auto i2oAxesMap = getContractOpInput2OutputAxisMap(axes, rank);
+  for (auto [iAxis, oAxis] : llvm::enumerate(i2oAxesMap)) {
+    if (oAxis >= 0) {
+      exprs.emplace_back(getAffineDimExpr(iAxis, ctx));
+    }
+  }
+  return AffineMap::get(rank, 0, exprs, ctx);
+}
 
-//   LogicalResult
-//   matchAndRewrite(ContractOp op, ContractOp::Adaptor adaptor,
-//                   ConversionPatternRewriter &rewriter) const final {
-//     auto Loc = op.getLoc();
-//     auto [Alloc, SizeValues] = createBufferForTensor(rewriter,
-//     op.getResult()); auto InType =
-//     op.getResult().getType().cast<RankedTensorType>(); auto &B =
-//     *(op->getBlock()); Value ZeroIndexVar =
-//     rewriter.create<arith::ConstantIndexOp>(Loc, 0); SmallVector<Value>
-//     InductionVars =
-//         createNestedAffineForOps(rewriter, Loc, SizeValues);
-//     // Inner Reduction Loop
-//     auto Sizes2 = getTensorSizes(op.getOperand());
-//     auto AxesAttr = op.getAxesAttr();
-//     auto ContractedAxes = unpackIntegerArrayAttr(AxesAttr);
-//     SmallVector<Value> SizeValues2;
-//     for (auto CAxis : ContractedAxes) {
-//       SizeValues2.emplace_back(B.getArgument(Sizes2[CAxis]));
-//     }
-//     Value ToStore;
-//     auto ElementType = InType.getElementType().cast<FloatType>();
-//     Value ReductionVar =
-//         rewriter.create<arith::ConstantFloatOp>(Loc, APFloat(0.0),
-//         ElementType);
-//     SmallVector<Value> InductionVars2;
-//     for (auto SzValue : SizeValues2) {
-//       auto AffineFor = rewriter.create<AffineForOp>(
-//           Loc, ZeroIndexVar, rewriter.getSymbolIdentityMap(), SzValue,
-//           rewriter.getSymbolIdentityMap(), 1, ReductionVar);
-//       if (!ToStore) {
-//         ToStore = AffineFor.getResult(0);
-//         rewriter.create<memref::StoreOp>(Loc, ToStore, Alloc, InductionVars);
-//       } else {
-//         rewriter.create<AffineYieldOp>(Loc, AffineFor.getResults());
-//       }
-//       auto InnerMostBody = AffineFor.getBody();
-//       InductionVars2.emplace_back(AffineFor.getInductionVar());
-//       ReductionVar = AffineFor.getRegionIterArgs()[0];
-//       rewriter.setInsertionPointToStart(InnerMostBody);
-//     }
-//     Value LoadFrom = adaptor.getInput();
-//     SmallVector<Value> LoadIndexes;
-//     int64_t Idx1 = 0, Idx2 = 0;
-//     for (int64_t Axis = 0; Axis < (int64_t)(Sizes2.size()); Axis++) {
-//       if (llvm::none_of(ContractedAxes,
-//                         [&](auto Axis2) { return Axis == Axis2; })) {
-//         LoadIndexes.emplace_back(InductionVars[Idx1++]);
-//       } else {
-//         LoadIndexes.emplace_back(InductionVars2[Idx2++]);
-//       }
-//     }
-//     auto ToAdd = rewriter.create<memref::LoadOp>(Loc, LoadFrom, LoadIndexes);
-//     Value ToYield = rewriter.create<arith::AddFOp>(Loc, ReductionVar, ToAdd);
-//     rewriter.create<AffineYieldOp>(Loc, ToYield);
-//     rewriter.replaceOp(op, Alloc);
-//     return success();
-//   }
-// };
+static Value createZeroTensorForLinalgOuts(OpBuilder &builder, Value value) {
+  auto zero = builder.create<arith::ConstantFloatOp>(
+      value.getLoc(), APFloat(0.0), builder.getF64Type());
+  auto out = createEmptyTensorForLinalgOuts(builder, value);
+  SmallVector<Value> inputs(1, zero.getResult());
+  SmallVector<Value> outputs(1, out);
+  auto fillOp = builder.create<linalg::FillOp>(value.getLoc(), inputs, outputs);
+  return fillOp.getResult(0);
+}
+
+struct ContractOpLowering : public OpConversionPattern<ContractOp> {
+  using OpConversionPattern<ContractOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(ContractOp op, ContractOp::Adaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto *ctx = op.getContext();
+    auto loc = op.getLoc();
+    auto input = adaptor.getInput();
+    auto rank = getTensorRank(input);
+    auto axes = getAxes(op);
+    auto out = createZeroTensorForLinalgOuts(rewriter, op.getResult());
+    SmallVector<Value> ins(1, input);
+    SmallVector<Value> outs(1, out);
+    // input tensor
+    SmallVector<AffineMap> indexingMaps;
+    indexingMaps.push_back(rewriter.getMultiDimIdentityMap(rank));
+    indexingMaps.push_back(getAffineMapByAxes(rank, axes, ctx));
+    SmallVector<StringRef> iteratorTypes(rank, StringRef("parallel"));
+    for (auto axis : axes) {
+      iteratorTypes[axis] = "reduction";
+    }
+    auto genericOp = rewriter.create<linalg::GenericOp>(
+        loc, out.getType(), ins, outs, indexingMaps, iteratorTypes,
+        [&](OpBuilder &builder, Location loc, ValueRange args) {
+          auto toYield = builder.create<arith::AddFOp>(loc, args[0], args[1]);
+          builder.create<linalg::YieldOp>(loc, toYield.getResult());
+        });
+    rewriter.replaceOp(op, genericOp.getResults());
+    return success();
+  }
+};
 
 struct ConvertTCToLinalgPass
     : public PassWrapper<ConvertTCToLinalgPass, OperationPass<ModuleOp>> {
@@ -467,8 +459,9 @@ void ConvertTCToLinalgPass::runOnOperation() {
   patterns.add<ReturnOpLowering>(typeConverter, ctx);
   patterns.add<AddOpLowering>(typeConverter, ctx);
   patterns.add<MulOpLowering>(typeConverter, ctx);
+  patterns.add<ContractOpLowering>(typeConverter, ctx);
   // patterns.add<FuncOpLowering2, ReturnOpLowering,
-  //              PermuteOpLowering, ContractOpLowering, DiagonalOpLowering,
+  //              PermuteOpLowering, DiagonalOpLowering,
   //              ConstantOpLowering, SliceOpLowering, NegOpLowering>();
   if (failed(applyPartialConversion(op, target, std::move(patterns))))
     signalPassFailure();
