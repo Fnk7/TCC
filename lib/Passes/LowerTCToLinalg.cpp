@@ -6,6 +6,7 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/BuiltinDialect.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -82,6 +83,19 @@ namespace tc {
 //   return inductionValues;
 // }
 
+auto getAffineMapsByAxesMaps(int64_t rank, const AxesMapsTy &axesMaps,
+                             MLIRContext *ctx) {
+  SmallVector<AffineMap> maps;
+  for (auto axesMap : axesMaps) {
+    SmallVector<AffineExpr> exprs;
+    for (auto axis : axesMap) {
+      exprs.emplace_back(getAffineDimExpr(axis, ctx));
+    }
+    maps.emplace_back(AffineMap::get(rank, 0, exprs, ctx));
+  }
+  return maps;
+}
+
 static Value createEmptyTensorForLinalgOuts(OpBuilder &builder, Value value) {
   auto [shape, sizeIDs] = getTensorSizeInfos(value);
   auto RTT = value.getType().cast<RankedTensorType>();
@@ -98,19 +112,22 @@ static Value createEmptyTensorForLinalgOuts(OpBuilder &builder, Value value) {
   return emptyOp.getResult();
 }
 
-struct AddOpLowering : public OpConversionPattern<AddOp> {
-  using OpConversionPattern<AddOp>::OpConversionPattern;
+template <typename TCOp, typename ArithOp>
+struct AbelianOpLowering : public OpConversionPattern<TCOp> {
+  using OpConversionPattern<TCOp>::OpConversionPattern;
   LogicalResult
-  matchAndRewrite(AddOp op, typename AddOp::Adaptor adaptor,
+  matchAndRewrite(TCOp op, typename TCOp::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
+    auto *ctx = op.getContext();
     auto loc = op.getLoc();
+    auto axesMaps = getAxesMaps(op);
     auto out = createEmptyTensorForLinalgOuts(rewriter, op.getResult());
     auto ins = adaptor.getInputs();
     auto rank = getTensorRank(out);
     SmallVector<Value> outs(1, out);
-    SmallVector<AffineMap> indexingMaps;
-    indexingMaps.push_back(rewriter.getMultiDimIdentityMap(rank));
-    indexingMaps.push_back(rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<AffineMap> indexingMaps =
+        getAffineMapsByAxesMaps(rank, axesMaps, ctx);
+    // result tensor
     indexingMaps.push_back(rewriter.getMultiDimIdentityMap(rank));
     SmallVector<StringRef> iteratorTypes(rank, StringRef("parallel"));
     auto genericOp = rewriter.create<linalg::GenericOp>(
@@ -119,7 +136,7 @@ struct AddOpLowering : public OpConversionPattern<AddOp> {
           auto numArgs = args.size();
           Value toYield = args[0];
           for (auto idx : llvm::seq<int64_t>(1, numArgs - 1)) {
-            auto addOp = builder.create<arith::AddFOp>(loc, toYield, args[idx]);
+            auto addOp = builder.create<ArithOp>(loc, toYield, args[idx]);
             toYield = addOp.getResult();
           }
           builder.create<linalg::YieldOp>(loc, toYield);
@@ -129,8 +146,8 @@ struct AddOpLowering : public OpConversionPattern<AddOp> {
   }
 };
 
-// using AddOpLowering = BinaryOpLowering<AddOp, arith::AddFOp>;
-// using MulOpLowering = BinaryOpLowering<MulOp, arith::MulFOp>;
+using AddOpLowering = AbelianOpLowering<AddOp, arith::AddFOp>;
+using MulOpLowering = AbelianOpLowering<MulOp, arith::MulFOp>;
 
 struct ReturnOpLowering : public OpConversionPattern<func::ReturnOp> {
   using OpConversionPattern<func::ReturnOp>::OpConversionPattern;
@@ -401,7 +418,8 @@ static Value materializeToTensor(OpBuilder &builder, TensorType type,
 
 void ConvertTCToLinalgPass::runOnOperation() {
   auto op = getOperation();
-  ConversionTarget target(getContext());
+  auto *ctx = op.getContext();
+  ConversionTarget target(*ctx);
   target.addLegalDialect<BuiltinDialect, arith::ArithDialect,
                          memref::MemRefDialect, linalg::LinalgDialect,
                          tensor::TensorDialect, func::FuncDialect>();
@@ -445,10 +463,11 @@ void ConvertTCToLinalgPass::runOnOperation() {
         llvm_unreachable("only tensor/memref input types supported");
       });
   RewritePatternSet patterns(&getContext());
-  patterns.add<FuncOpLowering>(typeConverter, patterns.getContext());
-  patterns.add<ReturnOpLowering>(typeConverter, patterns.getContext());
-  patterns.add<AddOpLowering>(typeConverter, patterns.getContext());
-  // patterns.add<FuncOpLowering2, ReturnOpLowering, MulOpLowering,
+  patterns.add<FuncOpLowering>(typeConverter, ctx);
+  patterns.add<ReturnOpLowering>(typeConverter, ctx);
+  patterns.add<AddOpLowering>(typeConverter, ctx);
+  patterns.add<MulOpLowering>(typeConverter, ctx);
+  // patterns.add<FuncOpLowering2, ReturnOpLowering,
   //              PermuteOpLowering, ContractOpLowering, DiagonalOpLowering,
   //              ConstantOpLowering, SliceOpLowering, NegOpLowering>();
   if (failed(applyPartialConversion(op, target, std::move(patterns))))
