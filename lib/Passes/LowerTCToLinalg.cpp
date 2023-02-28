@@ -161,26 +161,6 @@ struct ReturnOpLowering : public OpConversionPattern<func::ReturnOp> {
   }
 };
 
-// struct ConstantOpLowering : public OpConversionPattern<ConstantOp> {
-//   using OpConversionPattern<ConstantOp>::OpConversionPattern;
-
-//   LogicalResult
-//   matchAndRewrite(ConstantOp op, ConstantOp::Adaptor adaptor,
-//                   ConversionPatternRewriter &rewriter) const final {
-//     auto loc = op.getLoc();
-//     auto memrefType =
-//         MemRefType::get(op.getType().getShape(),
-//         op.getType().getElementType());
-//     auto allocaOp = rewriter.create<memref::AllocaOp>(loc, memrefType,
-//                                                       SmallVector<Value>());
-//     auto constOp = rewriter.create<arith::ConstantFloatOp>(
-//         loc, adaptor.getValue(), rewriter.getF64Type());
-//     rewriter.create<memref::StoreOp>(loc, constOp, allocaOp);
-//     rewriter.replaceOp(op, allocaOp.getResult());
-//     return success();
-//   }
-// };
-
 // struct ReturnOpLowering2 : public OpConversionPattern<func::ReturnOp> {
 //   using OpConversionPattern<func::ReturnOp>::OpConversionPattern;
 
@@ -236,26 +216,42 @@ struct FuncOpLowering : public OpConversionPattern<func::FuncOp> {
   }
 };
 
-// struct PermuteOpLowering : public OpConversionPattern<PermuteOp> {
-//   using OpConversionPattern<PermuteOp>::OpConversionPattern;
+auto getAffineMapByAxesMap(AxesMapTy &axesMap, MLIRContext *ctx) {
+  auto rank = axesMap.size();
+  SmallVector<AffineExpr> exprs;
+  for (auto axis : axesMap) {
+    exprs.emplace_back(getAffineDimExpr(axis, ctx));
+  }
+  return AffineMap::get(rank, 0, exprs, ctx);
+}
 
-//   LogicalResult
-//   matchAndRewrite(PermuteOp op, PermuteOp::Adaptor adaptor,
-//                   ConversionPatternRewriter &rewriter) const final {
-//     auto Loc = op.getLoc();
-//     auto [buffer, SizeValues] = createBufferForTensor(rewriter,
-//     op.getResult()); auto InductionVars = createNestedAffineForOps(rewriter,
-//     Loc, SizeValues); Value LoadFrom = adaptor.getInput(); SmallVector<Value>
-//     Indexes; auto AxesMapAttr = op.getAxesMap(); auto AxesMap =
-//     unpackIntegerArrayAttr(AxesMapAttr); for (auto Axis : AxesMap) {
-//       Indexes.emplace_back(InductionVars[Axis]);
-//     }
-//     Value ToStore = rewriter.create<memref::LoadOp>(Loc, LoadFrom, Indexes);
-//     rewriter.create<memref::StoreOp>(Loc, ToStore, buffer, InductionVars);
-//     rewriter.replaceOp(op, buffer);
-//     return success();
-//   }
-// };
+struct PermuteOpLowering : public OpConversionPattern<PermuteOp> {
+  using OpConversionPattern<PermuteOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(PermuteOp op, PermuteOp::Adaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto *ctx = op.getContext();
+    auto loc = op.getLoc();
+    auto input = adaptor.getInput();
+    auto output = createEmptyTensorForLinalgOuts(rewriter, op.getResult());
+    auto axesMap = getAxesMap(op);
+    auto rank = axesMap.size();
+    SmallVector<Value> ins(1, input);
+    SmallVector<Value> outs(1, output);
+    SmallVector<AffineMap> indexingMaps;
+    indexingMaps.push_back(getAffineMapByAxesMap(axesMap, ctx));
+    indexingMaps.push_back(rewriter.getMultiDimIdentityMap(rank));
+    SmallVector<StringRef> iteratorTypes(rank, StringRef("parallel"));
+    auto genericOp = rewriter.create<linalg::GenericOp>(
+        loc, output.getType(), ins, outs, indexingMaps, iteratorTypes,
+        [&](OpBuilder &builder, Location loc, ValueRange args) {
+          builder.create<linalg::YieldOp>(loc, args[0]);
+        });
+    rewriter.replaceOp(op, genericOp.getResults());
+    return success();
+  }
+};
 
 // struct DiagonalOpLowering : public OpConversionPattern<DiagonalOp> {
 //   using OpConversionPattern<DiagonalOp>::OpConversionPattern;
@@ -388,6 +384,24 @@ struct ContractOpLowering : public OpConversionPattern<ContractOp> {
   }
 };
 
+struct ConstantOpLowering : public OpConversionPattern<ConstantOp> {
+  using OpConversionPattern<ConstantOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(ConstantOp op, ConstantOp::Adaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto loc = op.getLoc();
+    auto constValue = rewriter.create<arith::ConstantFloatOp>(
+        loc, adaptor.getValue(), rewriter.getF64Type());
+    auto out = createEmptyTensorForLinalgOuts(rewriter, op.getResult());
+    SmallVector<Value> inputs(1, constValue.getResult());
+    SmallVector<Value> outputs(1, out);
+    auto fillOp = rewriter.create<linalg::FillOp>(loc, inputs, outputs);
+    rewriter.replaceOp(op, fillOp.getResults());
+    return success();
+  }
+};
+
 struct ConvertTCToLinalgPass
     : public PassWrapper<ConvertTCToLinalgPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ConvertTCToLinalgPass)
@@ -460,8 +474,10 @@ void ConvertTCToLinalgPass::runOnOperation() {
   patterns.add<AddOpLowering>(typeConverter, ctx);
   patterns.add<MulOpLowering>(typeConverter, ctx);
   patterns.add<ContractOpLowering>(typeConverter, ctx);
+  patterns.add<ConstantOpLowering>(typeConverter, ctx);
+  patterns.add<PermuteOpLowering>(typeConverter, ctx);
   // patterns.add<FuncOpLowering2, ReturnOpLowering,
-  //              PermuteOpLowering, DiagonalOpLowering,
+  //              DiagonalOpLowering,
   //              ConstantOpLowering, SliceOpLowering, NegOpLowering>();
   if (failed(applyPartialConversion(op, target, std::move(patterns))))
     signalPassFailure();

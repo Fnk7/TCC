@@ -38,20 +38,19 @@ void collectAbelianOpSymmInfo(ValueSymmInfoMap &symmInfos, T op) {
   // map to factors
   AxisFactorsMap axisFactors;
   for (auto [input, axesMap] : llvm::zip(inputs, axesMaps)) {
-    for (auto e : llvm::enumerate(axesMap)) {
-      int64_t axis = e.index();
+    for (auto [iAxis, oAxis] : llvm::enumerate(axesMap)) {
       bool found = false;
       if (symmInfos.count(input)) {
         for (auto &pair : symmInfos[input]) {
-          if (pair.first == axis || pair.second == axis) {
+          if (pair.first == iAxis || pair.second == iAxis) {
             found = true;
-            axisFactors[e.value()].emplace_back(Factor(input, pair.first));
-            axisFactors[e.value()].emplace_back(Factor(input, pair.second));
+            axisFactors[oAxis].emplace_back(Factor(input, pair.first));
+            axisFactors[oAxis].emplace_back(Factor(input, pair.second));
           }
         }
       }
       if (!found) {
-        axisFactors[e.value()].emplace_back(Factor(input, axis));
+        axisFactors[oAxis].emplace_back(Factor(input, iAxis));
       }
     }
   }
