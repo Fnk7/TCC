@@ -58,4 +58,9 @@ def SinkMul2 : Pass<"tc-sink-mul2", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def GroupElementwiseMul : Pass<"tc-group-elementwise-mul", "func::FuncOp"> {
+  let constructor = "mlir::tc::createGroupElementwiseMulPass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif

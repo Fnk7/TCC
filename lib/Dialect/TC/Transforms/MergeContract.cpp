@@ -17,8 +17,8 @@ using namespace mlir;
 using namespace mlir::tc;
 
 template <> struct llvm::DenseMapInfo<SizeIDsTy> {
-  static inline SizeIDsTy getEmptyKey() { return SizeIDsTy(); }
-  static inline SizeIDsTy getTombstoneKey() { return SizeIDsTy(); }
+  static inline SizeIDsTy getEmptyKey() { return SizeIDsTy(1, -2); }
+  static inline SizeIDsTy getTombstoneKey() { return SizeIDsTy(1, -2); }
   static unsigned getHashValue(const SizeIDsTy &Val) {
     return llvm::hash_combine_range(Val.begin(), Val.end());
   }

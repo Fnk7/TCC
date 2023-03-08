@@ -10,6 +10,8 @@ add_mlir_dialect_library(MLIRTCTransforms
   SinkMul.cpp
   LiftMul.cpp
   SinkMul2.cpp
+  Patterns.cpp
+  GroupElementwiseMulPass.cpp
 
   DEPENDS
   MLIRTCTransformsIncGen
