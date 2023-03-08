@@ -81,13 +81,15 @@ struct ConvertTCToTBLASPass
             oAxis = ctI2OAxesMap[oAxis];
             permuteMap.emplace_back(oAxis);
           }
-          if (restAxes1.size() && restAxes2.size()) {
-            OpBuilder builder(ctOp);
-            auto bacthMatMulOp = builder.create<tblas::BatchMatMulOp>(
-                ctOp.getLoc(), inputs[0], inputs[1], batchAxes1, batchAxes2,
-                restAxes1, restAxes2, contractAxes1, contractAxes2);
+          OpBuilder builder(ctOp);
+          auto genericOp = builder.create<tblas::GenericOp>(
+              ctOp.getLoc(), inputs[0], inputs[1], batchAxes1, batchAxes2,
+              restAxes1, restAxes2, contractAxes1, contractAxes2);
+          if (tc::isOrderedAxesMap(permuteMap)) {
+            ctOp.replaceAllUsesWith(genericOp.getResult());
+          } else {
             auto permuteOp = builder.create<tc::PermuteOp>(
-                ctOp.getLoc(), bacthMatMulOp.getResult(), permuteMap);
+                ctOp.getLoc(), genericOp.getResult(), permuteMap);
             ctOp.replaceAllUsesWith(permuteOp.getResult());
           }
         }
