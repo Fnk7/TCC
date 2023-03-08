@@ -16,6 +16,7 @@ std::unique_ptr<Pass> createSinkMulPass();
 std::unique_ptr<Pass> createLiftMulPass();
 std::unique_ptr<Pass> createSinkMul2Pass();
 std::unique_ptr<Pass> createGroupElementwiseMulPass();
+std::unique_ptr<Pass> createBeforeCodeGenPass();
 
 void populateGroupElementewiseMulPatterns(RewritePatternSet &patterns,
                                           MLIRContext *context);

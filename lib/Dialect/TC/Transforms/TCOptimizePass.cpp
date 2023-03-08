@@ -570,6 +570,8 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
 
       dynamicPM.addPass(createSinkMul2Pass());
       dynamicPM.addPass(createGroupElementwiseMulPass());
+      dynamicPM.addPass(createBeforeCodeGenPass());
+      dynamicPM.addPass(createCSEPass());
 
       if (failed(runPipeline(dynamicPM, newFuncOp)))
         return signalPassFailure();

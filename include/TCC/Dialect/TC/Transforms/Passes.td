@@ -63,4 +63,9 @@ def GroupElementwiseMul : Pass<"tc-group-elementwise-mul", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def BeforeCodeGen : Pass<"tc-before-codegen", "func::FuncOp"> {
+  let constructor = "mlir::tc::createBeforeCodeGenPass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif

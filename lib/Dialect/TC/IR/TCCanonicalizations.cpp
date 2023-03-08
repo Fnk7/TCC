@@ -694,3 +694,8 @@ void mlir::tc::getCanonicalizeForCSEPatterns(RewritePatternSet &patterns,
   patterns.add<PermuteFoldPattern>(context);
   patterns.add<PermutePermuteFoldPattern>(context);
 }
+
+void mlir::tc::populateSimpilfyCodeGenPatterns(RewritePatternSet &patterns,
+                                               MLIRContext *context) {
+  patterns.add<ContractAddSwapPattern>(context);
+}
