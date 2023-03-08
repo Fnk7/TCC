@@ -389,7 +389,7 @@ struct MulContractSwapPattern : public OpRewritePattern<MulOp> {
         auto i2oAxisMap = getContractOpInput2OutputAxisMap(
             axes, axesMap.size() + axes.size());
         for (auto &newAxis : i2oAxisMap) {
-          if (newAxis > 0)
+          if (newAxis >= 0)
             newAxis = axesMap[newAxis];
         }
         for (auto axis : axes) {
