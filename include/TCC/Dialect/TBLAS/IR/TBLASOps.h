@@ -5,7 +5,10 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-namespace mlir::tblas {} // namespace mlir::tblas
+namespace mlir::tblas {
+using I64ArrayTy = SmallVector<int64_t>;
+using AxesTy = I64ArrayTy;
+} // namespace mlir::tblas
 
 #include "TCC/Dialect/TBLAS/IR/TBLASOpsDialect.h.inc"
 

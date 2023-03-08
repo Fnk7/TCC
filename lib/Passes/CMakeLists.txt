@@ -4,5 +4,6 @@ add_mlir_library(
   LowerToLLVM.cpp
   ReturnToArgumentPass.cpp
   LowerTCToLinalg.cpp
+  LowerTCToTBLAS.cpp
 
   ADDITIONAL_HEADER_DIRS ${PROJECT_SOURCE_DIR}/include)

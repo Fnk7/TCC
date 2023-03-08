@@ -1,0 +1,10 @@
+add_mlir_dialect_library(
+  MLIRTBLASDialect
+  TBLASDialect.cpp
+  TBLASOps.cpp
+  DEPENDS
+  MLIRTBLASOpsIncGen
+  LINK_LIBS
+  PUBLIC
+  MLIRIR
+  MLIRInferTypeOpInterface)

@@ -92,6 +92,13 @@ inline auto inverseAxesMap(AxesMapTy &axesMap) {
   }
   return inverseMap;
 }
+inline auto inverseAxesMap(AxesMapTy &axesMap, int64_t rank) {
+  AxesMapTy inverseMap(rank, -1);
+  for (auto e : llvm::enumerate(axesMap)) {
+    inverseMap[e.value()] = e.index();
+  }
+  return inverseMap;
+}
 inline AxesMapTy getContractOpInput2OutputAxisMap(AxesTy &axes,
                                                   int64_t inputDim) {
   AxesMapTy axesMap(inputDim, 0);
