@@ -20,6 +20,8 @@ std::unique_ptr<Pass> createBeforeCodeGenPass();
 
 void populateGroupElementewiseMulPatterns(RewritePatternSet &patterns,
                                           MLIRContext *context);
+void populateMergeAddOfMulPatterns(RewritePatternSet &patterns,
+                                   MLIRContext *context);
 } // namespace mlir::tc
 
 #endif

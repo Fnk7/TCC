@@ -3,6 +3,9 @@
 #include "TCC/Dialect/TC/Utils/Utils.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Pass/PassManager.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "mlir/Transforms/Passes.h"
 
 #include "llvm/Support/Debug.h"
 
@@ -153,7 +156,9 @@ static void dumpValueDefiningChain(Value v, llvm::SetVector<Value> &dumpped) {
     auto name = funcOp.getArgAttr(arg.getArgNumber(), "func.name");
     if (name) {
       llvm::errs() << "\%arg" << arg.getArgNumber() << " -> "
-                   << name.cast<StringAttr>().getValue() << "\n";
+                   << name.cast<StringAttr>().getValue() << " ";
+      arg.getType().dump();
+      llvm::errs() << "\n";
     } else {
       arg.dump();
     }
@@ -168,6 +173,15 @@ static void dumpValueDefiningChain(Value v, llvm::SetVector<Value> &dumpped) {
 static void dumpValueDefiningChain(Value v) {
   llvm::SetVector<Value> dumpped;
   dumpValueDefiningChain(v, dumpped);
+}
+
+static bool isSubsetOf(AxesMapTy &map1, AxesMapTy &map2) {
+  for (auto axis1 : map1) {
+    if (llvm::find(map2, axis1) == map2.end()) {
+      return false;
+    }
+  }
+  return true;
 }
 
 using InputPosSetTy = llvm::SetVector<int64_t>;
@@ -357,6 +371,7 @@ FactorTy *getUniqueFactor(FactorsTy &factors, FactorTy &factor) {
 }
 
 void MergeMulOp(AddOp op) {
+  llvm::errs() << "MergeMul Start!\n";
   if (!isElementWiseAddOp(op)) {
     return;
   }
@@ -545,6 +560,7 @@ void MergeMulOp(AddOp op) {
     return;
   }
   // Not consider intersection
+  llvm::errs() << "Before Erase intersection keys: " << keys.size() << "\n";
   FactorPtrsTy toErase;
   for (auto key1 : keys) {
     auto &inputSet1 = factorMap2[key1];
@@ -554,10 +570,24 @@ void MergeMulOp(AddOp op) {
           !(isSubsetOf(inputSet1, inputSet2) ||
             isSubsetOf(inputSet2, inputSet1))) {
         llvm::errs() << "Intersection!\n";
-        dumpValueDefiningChain(key1->first);
-        dumpValueDefiningChain(key2->first);
+        // auto &axesMap1 = key1->second;
+        // auto &axesMap2 = key1->second;
+        // if (isSubsetOf(axesMap1, axesMap2)) {
+        //   llvm::errs() << "Erase key:\n";
+        //   dumpValueDefiningChain(key1->first);
+        //   key1->first.dump();
+        // } else if (isSubsetOf(axesMap2, axesMap1)) {
+        //   llvm::errs() << "Erase key:\n";
+        //   key2->first.dump();
+        //   toErase.emplace_back(key2);
+        // } else {
+        llvm::errs() << "Erase key:\n";
+        key1->first.dump();
+        llvm::errs() << "Erase key:\n";
+        key2->first.dump();
         toErase.emplace_back(key1);
         toErase.emplace_back(key2);
+        // }
       }
     }
   }
@@ -567,6 +597,7 @@ void MergeMulOp(AddOp op) {
       keys.erase(iter);
     }
   }
+  llvm::errs() << "After  Erase intersection keys: " << keys.size() << "\n";
   llvm::sort(keys, [&](FactorTy *key1, FactorTy *key2) {
     if (isSubsetOf(factorMap2[key1], factorMap2[key2])) {
       return false;
@@ -615,6 +646,12 @@ struct MergeMulPass : public tc::impl::MergeMulBase<MergeMulPass> {
     for (auto addOp : workLists) {
       MergeMulOp(addOp);
     }
+    auto *context = &getContext();
+    RewritePatternSet patterns(context);
+    populateMergeAddOfMulPatterns(patterns, context);
+    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
+    if (failed(applyPatternsAndFoldGreedily(funcOp, frozenPatterns)))
+      return signalPassFailure();
   }
 };
 
