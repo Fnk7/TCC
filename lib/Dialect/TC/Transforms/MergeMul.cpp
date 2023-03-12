@@ -635,23 +635,33 @@ struct MergeMulPass : public tc::impl::MergeMulBase<MergeMulPass> {
   void runOnOperation() override {
     auto funcOp = getOperation();
     // llvm::errs() << funcOp.getName() << "\n";
-    auto &region = funcOp.getRegion();
-    auto &entryBlock = *(region.getBlocks().begin());
-    SmallVector<AddOp> workLists;
-    for (auto &op : entryBlock) {
-      if (auto addOp = dyn_cast_or_null<AddOp>(&op)) {
-        workLists.emplace_back(addOp);
-      }
+    // auto &region = funcOp.getRegion();
+    // auto &entryBlock = *(region.getBlocks().begin());
+    // SmallVector<AddOp> workLists;
+    // for (auto &op : entryBlock) {
+    //   if (auto addOp = dyn_cast_or_null<AddOp>(&op)) {
+    //     workLists.emplace_back(addOp);
+    //   }
+    // }
+    // for (auto addOp : workLists) {
+    //   MergeMulOp(addOp);
+    // }
+    {
+      auto *context = &getContext();
+      RewritePatternSet patterns(context);
+      populateSymmAddFoldPatterns(patterns, context);
+      FrozenRewritePatternSet frozenPatterns(std::move(patterns));
+      if (failed(applyPatternsAndFoldGreedily(funcOp, frozenPatterns)))
+        return signalPassFailure();
     }
-    for (auto addOp : workLists) {
-      MergeMulOp(addOp);
+    {
+      auto *context = &getContext();
+      RewritePatternSet patterns(context);
+      populateMergeAddOfMulPatterns(patterns, context);
+      FrozenRewritePatternSet frozenPatterns(std::move(patterns));
+      if (failed(applyPatternsAndFoldGreedily(funcOp, frozenPatterns)))
+        return signalPassFailure();
     }
-    auto *context = &getContext();
-    RewritePatternSet patterns(context);
-    populateMergeAddOfMulPatterns(patterns, context);
-    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
-    if (failed(applyPatternsAndFoldGreedily(funcOp, frozenPatterns)))
-      return signalPassFailure();
   }
 };
 
