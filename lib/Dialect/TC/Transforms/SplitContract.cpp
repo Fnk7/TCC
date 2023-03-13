@@ -1,5 +1,6 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/Transforms/Passes.h"
+#include "TCC/Dialect/TC/Utils/AxesMap.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -15,6 +16,7 @@ namespace mlir::tc {
 
 using namespace mlir;
 using namespace mlir::tc;
+using namespace mlir::tc::utils;
 
 void splitContractOpWithMulOp(ContractOp op) {
   auto input = op.getInput();
@@ -313,18 +315,6 @@ void applyUpdateAxesMapWithAxes(AxesMapTy &axesMap1, AxesTy &axes) {
     axis2 = -1;
   }
   mapOriginAxis2NewAxis(axesMap1);
-}
-
-static void applyAxesMap(AxesMapTy &axesMap1, AxesMapTy &axesMap2) {
-  for (auto &axis : axesMap2) {
-    axis = axesMap1[axis];
-  }
-}
-
-static void applyAxesMap(AxesMapTy &axesMap1, AxesMapsTy &axesMaps) {
-  for (auto &axesMap2 : axesMaps) {
-    applyAxesMap(axesMap1, axesMap2);
-  }
 }
 
 std::pair<Value, AxesMapTy> createContractMulWithSelectedAxes(
