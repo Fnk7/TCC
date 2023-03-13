@@ -5,6 +5,22 @@
 
 #include "mlir/IR/Builders.h"
 
+template <> struct llvm::DenseMapInfo<mlir::tc::I64ArrayTy> {
+  static inline mlir::tc::I64ArrayTy getEmptyKey() {
+    return mlir::tc::I64ArrayTy(1, -2);
+  }
+  static inline mlir::tc::I64ArrayTy getTombstoneKey() {
+    return mlir::tc::I64ArrayTy(1, -2);
+  }
+  static unsigned getHashValue(const mlir::tc::I64ArrayTy &Val) {
+    return llvm::hash_combine_range(Val.begin(), Val.end());
+  }
+  static bool isEqual(const mlir::tc::I64ArrayTy &LHS,
+                      const mlir::tc::I64ArrayTy &RHS) {
+    return LHS == RHS;
+  }
+};
+
 namespace mlir::tc {
 // Attribute
 inline I64ArrayTy getI64ArrayFromAttr(Attribute attr) {

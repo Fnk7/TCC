@@ -13,6 +13,7 @@ add_mlir_dialect_library(MLIRTCTransforms
   Patterns.cpp
   GroupElementwiseMulPass.cpp
   BeforeCodeGenPass.cpp
+  Symmetry.cpp
 
   DEPENDS
   MLIRTCTransformsIncGen

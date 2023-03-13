@@ -28,8 +28,8 @@ int main() {
   double _E[size0][size1];
   for (int i = 0; i < size0; i++) {
     for (int j = 0; j < size1; j++) {
-        _E[i][j] = _A.get()[j + i * size1] * _B.get()[j + i * size1];
-        _E[i][j] += _A.get()[j + i * size1] * _C.get()[i + j * size0];
+      _E[i][j] = _A.get()[j + i * size1] * _B.get()[j + i * size1];
+      _E[i][j] += _A.get()[j + i * size1] * _C.get()[i + j * size0];
     }
   }
   auto E = getTensorND<2>(&_E[0][0], {size0, size1});

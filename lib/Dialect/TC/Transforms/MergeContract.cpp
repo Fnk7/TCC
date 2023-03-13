@@ -16,17 +16,6 @@ namespace mlir::tc {
 using namespace mlir;
 using namespace mlir::tc;
 
-template <> struct llvm::DenseMapInfo<SizeIDsTy> {
-  static inline SizeIDsTy getEmptyKey() { return SizeIDsTy(1, -2); }
-  static inline SizeIDsTy getTombstoneKey() { return SizeIDsTy(1, -2); }
-  static unsigned getHashValue(const SizeIDsTy &Val) {
-    return llvm::hash_combine_range(Val.begin(), Val.end());
-  }
-  static bool isEqual(const SizeIDsTy &LHS, const SizeIDsTy &RHS) {
-    return LHS == RHS;
-  }
-};
-
 void MergeContractOp(AddOp op) {
   if (!isElementWiseAddOp(op)) {
     return;

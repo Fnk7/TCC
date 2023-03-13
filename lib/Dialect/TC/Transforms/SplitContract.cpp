@@ -34,17 +34,6 @@ void splitContractOpWithMulOp(ContractOp op) {
   op.erase();
 }
 
-template <> struct llvm::DenseMapInfo<I64ArrayTy> {
-  static inline I64ArrayTy getEmptyKey() { return I64ArrayTy(1, -2); }
-  static inline I64ArrayTy getTombstoneKey() { return I64ArrayTy(1, -2); }
-  static unsigned getHashValue(const I64ArrayTy &Val) {
-    return llvm::hash_combine_range(Val.begin(), Val.end());
-  }
-  static bool isEqual(const I64ArrayTy &LHS, const I64ArrayTy &RHS) {
-    return LHS == RHS;
-  }
-};
-
 namespace {
 using InputPosSetTy = llvm::SetVector<int64_t>;
 using Axis2InputSetMapTy = DenseMap<int64_t, InputPosSetTy>;
