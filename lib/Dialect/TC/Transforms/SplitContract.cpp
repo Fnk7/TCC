@@ -1,6 +1,7 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/Transforms/Passes.h"
 #include "TCC/Dialect/TC/Utils/AxesMap.h"
+#include "TCC/Dialect/TC/Utils/Debug.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -394,24 +395,6 @@ Value getContractMulOfRootSelection(ContractOp ctOp, SelectionNode *node,
   return result;
 }
 } // namespace
-
-void dumpValueDefiningChain(Value v, llvm::SetVector<Operation *> &dumpped) {
-  // Dump
-  auto *op = v.getDefiningOp();
-  if (!op || dumpped.count(op)) {
-    return;
-  }
-  for (auto v : op->getOperands()) {
-    dumpValueDefiningChain(v, dumpped);
-  }
-  dumpped.insert(op);
-  op->dump();
-}
-
-void dumpValueDefiningChain(Value v) {
-  llvm::SetVector<Operation *> dumpped;
-  dumpValueDefiningChain(v, dumpped);
-}
 
 void splitContractAndLiftMul(ContractOp op2) {
   auto input2 = op2.getInput();

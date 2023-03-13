@@ -2,6 +2,7 @@
 #include "TCC/Dialect/TC/Transforms/Passes.h"
 #include "TCC/Dialect/TC/Transforms/Symmetry.h"
 #include "TCC/Dialect/TC/Utils/AxesMap.h"
+#include "TCC/Dialect/TC/Utils/Debug.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -21,44 +22,6 @@ namespace mlir::tc {
 using namespace mlir;
 using namespace mlir::tc;
 using namespace mlir::tc::utils;
-
-static void dumpValueDefiningChain(Value v, llvm::SetVector<Value> &dumpped) {
-  if (dumpped.count(v)) {
-    return;
-  }
-  dumpped.insert(v);
-  if (auto arg = v.dyn_cast<BlockArgument>()) {
-    auto funcOp = arg.getParentRegion()->getParentOfType<func::FuncOp>();
-    auto name = funcOp.getArgAttr(arg.getArgNumber(), "func.name");
-    if (name) {
-      llvm::errs() << "\%arg" << arg.getArgNumber() << " -> "
-                   << name.cast<StringAttr>().getValue() << " ";
-      arg.getType().dump();
-      llvm::errs() << "\n";
-    } else {
-      arg.dump();
-    }
-  } else if (auto *op = v.getDefiningOp()) {
-    for (auto v : op->getOperands()) {
-      dumpValueDefiningChain(v, dumpped);
-    }
-    op->dump();
-  }
-}
-
-static void dumpValueDefiningChain(Value v) {
-  llvm::SetVector<Value> dumpped;
-  dumpValueDefiningChain(v, dumpped);
-}
-
-static bool isSubsetOf(AxesMapTy &map1, AxesMapTy &map2) {
-  for (auto axis1 : map1) {
-    if (llvm::find(map2, axis1) == map2.end()) {
-      return false;
-    }
-  }
-  return true;
-}
 
 using InputPosSetTy = llvm::SetVector<int64_t>;
 // return true if set1 is subset of set2
