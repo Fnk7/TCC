@@ -21,11 +21,97 @@ using namespace mlir::tc;
 using namespace mlir::tc::utils;
 
 namespace {
+using PostionsTy = I64ArrayTy;
+using SizeIDs2PosSetMapTy = DenseMap<SizeIDsTy, PostionsTy>;
+
+void insertContractOpPositionIntoGroups(ContractOp ctOp, int64_t pos,
+                                        SizeIDs2PosSetMapTy &ctOpGroups) {
+  auto axes = getAxes(ctOp);
+  auto input = ctOp.getInput();
+  auto sizeIDs = getTensorSizeIDs(input);
+  auto ctSizeIDs = llvm::to_vector(
+      llvm::map_range(axes, [&](auto axis) { return sizeIDs[axis]; }));
+  ctOpGroups[ctSizeIDs].emplace_back(pos);
+}
+
+Value sinkMulIntoContract(MulOp mulOp) {
+  auto rank = getTensorRank(mulOp.getResult());
+  auto inputs = mulOp.getInputs();
+  int64_t ctPos = -1;
+  for (auto [pos, input] : llvm::enumerate(inputs)) {
+    if (auto ctOp = input.getDefiningOp<ContractOp>()) {
+      assert(ctPos == -1);
+      ctPos = pos;
+    }
+  }
+  assert(ctPos != -1);
+  auto ctOp = inputs[ctPos].getDefiningOp<ContractOp>();
+  auto axes = getAxes(ctOp);
+  auto newInputs = llvm::to_vector(inputs);
+  auto newAxesMaps = getAxesMaps(mulOp);
+  auto i2oAxisMap = getContractOpInput2OutputAxisMap(ctOp);
+  applyAxesMapWithEmpty(newAxesMaps[ctPos], i2oAxisMap);
+  auto newAxis = rank;
+  for (auto &axis : i2oAxisMap) {
+    if (axis < 0) {
+      axis = newAxis++;
+    }
+  }
+  newInputs[ctPos] = ctOp.getInput();
+  newAxesMaps[ctPos] = i2oAxisMap;
+  OpBuilder builder(mulOp);
+  auto newMulOp = builder.create<MulOp>(mulOp.getLoc(), newInputs, newAxesMaps);
+  auto newAxes = llvm::to_vector(llvm::seq<int64_t>(rank, rank + axes.size()));
+  auto newCtOp =
+      builder.create<ContractOp>(ctOp.getLoc(), newMulOp.getResult(), newAxes);
+  return newCtOp.getResult();
+}
+
+void mergeAddOfContract(AddOp op);
+void mergeAddOfContractAggressive(AddOp op) {
+  assert(isElementWiseAddOp(op));
+  auto inputs = op.getInputs();
+  SizeIDs2PosSetMapTy ctOpGroups;
+  for (auto [pos, input] : llvm::enumerate(inputs)) {
+    if (auto ctOp = input.getDefiningOp<ContractOp>()) {
+      insertContractOpPositionIntoGroups(ctOp, pos, ctOpGroups);
+    } else if (auto mulOp = input.getDefiningOp<MulOp>()) {
+      SmallVector<ContractOp> ctOps;
+      auto inputs = mulOp.getInputs();
+      for (auto input : inputs) {
+        if (auto ctOp = input.getDefiningOp<ContractOp>()) {
+          ctOps.emplace_back(ctOp);
+        }
+      }
+      if (ctOps.size() == 1) {
+        auto ctOp = ctOps[0];
+        insertContractOpPositionIntoGroups(ctOp, pos, ctOpGroups);
+      }
+    }
+  }
+  auto newInputs = llvm::to_vector(inputs);
+  for (auto &[sizeIDs, posSet] : ctOpGroups) {
+    if (posSet.size() >= 2) {
+      for (auto pos : posSet) {
+        auto input = inputs[pos];
+        if (auto mulOp = input.getDefiningOp<MulOp>()) {
+          auto newInput = sinkMulIntoContract(mulOp);
+          newInputs[pos] = newInput;
+        }
+      }
+    }
+  }
+  auto newAxesMaps = getAxesMaps(op);
+  OpBuilder builder(op);
+  auto newAddOp = builder.create<AddOp>(op.getLoc(), newInputs, newAxesMaps);
+  op.replaceAllUsesWith(newAddOp.getResult());
+  op.erase();
+  mergeAddOfContract(newAddOp);
+}
+
 void mergeAddOfContract(AddOp op) {
   assert(isElementWiseAddOp(op));
   auto inputs = op.getInputs();
-  using PostionsTy = I64ArrayTy;
-  using SizeIDs2PosSetMapTy = DenseMap<SizeIDsTy, PostionsTy>;
   SizeIDs2PosSetMapTy ctOpGroups;
   for (auto [pos, input] : llvm::enumerate(inputs)) {
     if (auto ctOp = input.getDefiningOp<ContractOp>()) {
@@ -103,103 +189,12 @@ void mergeAddOfContract(AddOp op) {
       newAxesMaps.emplace_back(getOrderedAxesMap(rank));
     }
   }
-  auto [newValue, _] = createAddOp(builder, newInputs, newAxesMaps);
+  auto [newValue, newAxesMap] = createAddOp(builder, newInputs, newAxesMaps);
+  assert(isOrderedAxesMap(newAxesMap));
   op.replaceAllUsesWith(newValue);
   op.erase();
 }
 } // namespace
-
-void MergeContractOp(AddOp op) {
-  assert(isElementWiseAddOp(op));
-  auto inputs = op.getInputs();
-  auto axesMaps = getAxesMaps(op);
-  auto signs = getSigns(op);
-  SmallVector<Value> outerInputs;
-  AxesMapsTy outerAxesMaps;
-  SignsTy outerSigns;
-  using ToMerge = SmallVector<int64_t>;
-  using SizeIDs2ToMergeMap = DenseMap<SizeIDsTy, ToMerge>;
-  SizeIDs2ToMergeMap map;
-  for (auto e : llvm::enumerate(inputs)) {
-    auto idx = e.index();
-    auto input = e.value();
-    if (auto contractOp = input.getDefiningOp<ContractOp>()) {
-      auto axes = getAxes(contractOp);
-      auto sizeIDs = getTensorSizeIDs(contractOp.getInput());
-      SizeIDsTy keySizeIDs;
-      for (auto axis : axes) {
-        keySizeIDs.emplace_back(sizeIDs[axis]);
-      }
-      std::sort(keySizeIDs.begin(), keySizeIDs.end());
-      map[keySizeIDs].emplace_back(e.index());
-    } else {
-      outerInputs.emplace_back(input);
-      outerAxesMaps.emplace_back(axesMaps[idx]);
-      outerSigns.emplace_back(signs[idx]);
-    }
-  }
-  OpBuilder builder(op);
-  int64_t rank = axesMaps[0].size();
-  for (auto &e : map) {
-    if (e.second.size() < 2) {
-      auto idx = e.second[0];
-      outerInputs.emplace_back(inputs[idx]);
-      outerAxesMaps.emplace_back(axesMaps[idx]);
-      outerSigns.emplace_back(signs[idx]);
-    } else {
-      SmallVector<Value> innerInputs;
-      AxesMapsTy innerAxesMaps;
-      SignsTy innerSigns;
-      for (auto idx : e.second) {
-        auto contractOp = inputs[idx].getDefiningOp<ContractOp>();
-        auto input = contractOp.getInput();
-        auto &axesMap = axesMaps[idx];
-        auto axes = getAxes(contractOp);
-        auto sizeIDs = getTensorSizeIDs(input);
-        auto keySizeIDs = e.first;
-        auto i2oAxisMap =
-            getContractOpInput2OutputAxisMap(axes, rank + axes.size());
-        for (auto &axis : i2oAxisMap) {
-          if (axis >= 0) {
-            axis = axesMap[axis];
-          }
-        }
-        for (auto axis : axes) {
-          for (auto [idx, key] : llvm::enumerate(keySizeIDs)) {
-            if (key == sizeIDs[axis]) {
-              i2oAxisMap[axis] = rank + idx;
-              key = -1;
-              break;
-            }
-          }
-        }
-        innerInputs.emplace_back(input);
-        innerAxesMaps.emplace_back(i2oAxisMap);
-        innerSigns.emplace_back(signs[idx]);
-      }
-      auto innerAddOp = builder.create<AddOp>(op.getLoc(), innerInputs,
-                                              innerAxesMaps, innerSigns);
-      auto r = llvm::seq<int64_t>(rank, rank + e.first.size());
-      AxesTy newAxes(r.begin(), r.end());
-
-      auto outerInput =
-          builder.create<ContractOp>(op.getLoc(), (Value)innerAddOp, newAxes);
-      r = llvm::seq<int64_t>(0, rank);
-      AxesMapTy outerAxesMap(r.begin(), r.end());
-      outerInputs.emplace_back(outerInput);
-      outerAxesMaps.emplace_back(outerAxesMap);
-      outerSigns.emplace_back(true);
-    }
-  }
-  if (outerInputs.size() >= 2) {
-    auto newAddOp = builder.create<AddOp>(op.getLoc(), outerInputs,
-                                          outerAxesMaps, outerSigns);
-    op.replaceAllUsesWith(newAddOp.getResult());
-  } else {
-    op.replaceAllUsesWith(outerInputs[0]);
-  }
-  op.erase();
-}
 
 struct MergeContractPass
     : public tc::impl::MergeContractBase<MergeContractPass> {
@@ -214,7 +209,7 @@ struct MergeContractPass
       }
     }
     for (auto addOp : workLists) {
-      MergeContractOp(addOp);
+      mergeAddOfContractAggressive(addOp);
     }
   }
 };

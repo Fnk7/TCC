@@ -129,6 +129,11 @@ inline AxesMapTy getContractOpInput2OutputAxisMap(AxesTy &axes,
   }
   return axesMap;
 }
+inline AxesMapTy getContractOpInput2OutputAxisMap(ContractOp ctOp) {
+  auto axes = getAxes(ctOp);
+  auto inputDim = getTensorRank(ctOp.getInput());
+  return getContractOpInput2OutputAxisMap(axes, inputDim);
+}
 
 inline Type getEncodedTensorType(OpBuilder &builder, TShapeTy &shape,
                                  SizeIDsTy &encoding) {
