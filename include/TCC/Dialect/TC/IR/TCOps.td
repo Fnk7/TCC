@@ -43,7 +43,9 @@ def AddOp : TC_Op<"add", [NoMemoryEffect]> {
     OpBuilder<(ins "ValueRange"
                : $inputs, "AxesMapsTy&"
                : $axesMaps, "ArrayAttr"
-               : $signs)>
+               : $signs)>,
+    OpBuilder<(ins "ValueRange" : $inputs,
+                   "AxesMapsTy&" : $axesMaps)>
   ];
   let hasCanonicalizer = 1;
 }

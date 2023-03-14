@@ -18,21 +18,23 @@ void MulOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
 }
 
 void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
-                  AxesMapsTy &axesMaps, SignsTy &signs) {
-  assert(inputs.size() >= 2);
-  assert(inputs.size() == axesMaps.size());
-  auto resultType = getResultTypeByAxesMaps(builder, inputs, axesMaps);
-  auto axesMapsAttr = mlir::tc::getAxesMapsAttr(builder, axesMaps);
-  auto signsAttr = builder.getBoolArrayAttr(signs);
-  AddOp::build(builder, state, resultType, inputs, axesMapsAttr, signsAttr);
-}
-void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
                   AxesMapsTy &axesMaps, ArrayAttr signsAttr) {
   assert(inputs.size() >= 2);
   assert(inputs.size() == axesMaps.size());
+  assert(inputs.size() == signsAttr.size());
   auto resultType = getResultTypeByAxesMaps(builder, inputs, axesMaps);
   auto axesMapsAttr = mlir::tc::getAxesMapsAttr(builder, axesMaps);
   AddOp::build(builder, state, resultType, inputs, axesMapsAttr, signsAttr);
+}
+void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
+                  AxesMapsTy &axesMaps, SignsTy &signs) {
+  auto signsAttr = builder.getBoolArrayAttr(signs);
+  AddOp::build(builder, state, inputs, axesMaps, signsAttr);
+}
+void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
+                  AxesMapsTy &axesMaps) {
+  SignsTy signs(inputs.size(), true);
+  AddOp::build(builder, state, inputs, axesMaps, signs);
 }
 
 void ContractOp::build(OpBuilder &builder, OperationState &state, Value input,

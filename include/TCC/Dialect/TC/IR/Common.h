@@ -3,6 +3,8 @@
 
 #include "mlir/Support/LLVM.h"
 
+#include "llvm/ADT/SmallVector.h"
+
 namespace mlir::tc {
 using BoolArrayTy = SmallVector<bool>;
 using SignsTy = BoolArrayTy;
