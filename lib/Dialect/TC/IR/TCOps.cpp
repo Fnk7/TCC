@@ -19,6 +19,8 @@ void MulOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
 
 void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
                   AxesMapsTy &axesMaps, SignsTy &signs) {
+  assert(inputs.size() >= 2);
+  assert(inputs.size() == axesMaps.size());
   auto resultType = getResultTypeByAxesMaps(builder, inputs, axesMaps);
   auto axesMapsAttr = mlir::tc::getAxesMapsAttr(builder, axesMaps);
   auto signsAttr = builder.getBoolArrayAttr(signs);
@@ -26,6 +28,8 @@ void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
 }
 void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
                   AxesMapsTy &axesMaps, ArrayAttr signsAttr) {
+  assert(inputs.size() >= 2);
+  assert(inputs.size() == axesMaps.size());
   auto resultType = getResultTypeByAxesMaps(builder, inputs, axesMaps);
   auto axesMapsAttr = mlir::tc::getAxesMapsAttr(builder, axesMaps);
   AddOp::build(builder, state, resultType, inputs, axesMapsAttr, signsAttr);

@@ -479,8 +479,8 @@ struct MergeAddOfMulPattern : public OpRewritePattern<AddOp> {
     auto [subInput, subAxesMap] = createMulOp(rewriter, mulMappedInputs);
     newInputs.emplace_back(subInput);
     newAxesMaps.emplace_back(subAxesMap);
-    SignsTy signs(newInputs.size(), true);
-    rewriter.replaceOpWithNewOp<AddOp>(op, newInputs, newAxesMaps, signs);
+    auto [newValue, _] = createAddOp(rewriter, newInputs, newAxesMaps);
+    rewriter.replaceOp(op, newValue);
     return success();
   }
 };

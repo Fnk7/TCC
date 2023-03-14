@@ -8,6 +8,13 @@ inline void applyAxesMap(AxesMapTy &axesMap1, AxesMapTy &axesMap2) {
     axis = axesMap1[axis];
   }
 }
+inline void applyAxesMapWithEmpty(AxesMapTy &axesMap1, AxesMapTy &axesMap2) {
+  for (auto &axis : axesMap2) {
+    if (axis >= 0) {
+      axis = axesMap1[axis];
+    }
+  }
+}
 inline void applyAxesMap(AxesMapTy &axesMap1, AxesMapsTy &axesMaps) {
   for (auto &axesMap2 : axesMaps) {
     applyAxesMap(axesMap1, axesMap2);
