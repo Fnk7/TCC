@@ -3,43 +3,6 @@
 #include "TCC/Dialect/TC/Utils/AxesMap.h"
 
 namespace mlir::tc::utils {
-int64_t getRankFromAxesMaps(AxesMapsTy &axesMaps) {
-  int64_t maxAxis = -1;
-  for (auto &axesMap : axesMaps) {
-    for (auto axis : axesMap) {
-      maxAxis = std::max(axis, maxAxis);
-    }
-  }
-  return maxAxis + 1;
-}
-void mapOriginAxis2NewAxis(AxesMapTy &axesMap) {
-  int64_t newAxis = 0;
-  for (auto &axis : axesMap) {
-    if (axis >= 0) {
-      axis = newAxis++;
-    }
-  }
-}
-AxesMapTy getOrigin2NewAxesMap(AxesMapsTy &axesMaps) {
-  auto rank = getRankFromAxesMaps(axesMaps);
-  AxesMapTy origin2NewMap(rank, -1);
-  for (auto &axesMap : axesMaps) {
-    for (auto axis : axesMap) {
-      origin2NewMap[axis] = axis;
-    }
-  }
-  mapOriginAxis2NewAxis(origin2NewMap);
-  return origin2NewMap;
-}
-AxesMapTy getNew2OriginAxesMap(AxesMapTy &origin2NewMap) {
-  AxesMapTy new2OriginMap;
-  for (auto [originAxis, newAxis] : llvm::enumerate(origin2NewMap)) {
-    if (newAxis >= 0) {
-      new2OriginMap.emplace_back(originAxis);
-    }
-  }
-  return new2OriginMap;
-}
 MappedInputTy createMulOp(OpBuilder &builder, MappedInputsTy &mappedInputs) {
   SmallVector<Value> inputs;
   AxesMapsTy axesMaps;

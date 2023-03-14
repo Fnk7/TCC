@@ -1,6 +1,7 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/Transforms/Passes.h"
 #include "TCC/Dialect/TC/Utils/AxesMap.h"
+#include "TCC/Dialect/TC/Utils/Builder.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -18,70 +19,6 @@ namespace mlir::tc {
 using namespace mlir;
 using namespace mlir::tc;
 using namespace mlir::tc::utils;
-
-using MappedInputTy = std::pair<Value, AxesMapTy>;
-using MappedInputsTy = SmallVector<MappedInputTy>;
-static int64_t getRankFromAxesMaps(AxesMapsTy &axesMaps) {
-  int64_t maxAxis = -1;
-  for (auto &axesMap : axesMaps) {
-    for (auto axis : axesMap) {
-      maxAxis = std::max(axis, maxAxis);
-    }
-  }
-  return maxAxis + 1;
-}
-static void mapOriginAxis2NewAxis(AxesMapTy &axesMap) {
-  int64_t newAxis = 0;
-  for (auto &axis : axesMap) {
-    if (axis >= 0) {
-      axis = newAxis++;
-    }
-  }
-}
-static AxesMapTy getOrigin2NewAxesMap(AxesMapsTy &axesMaps) {
-  auto rank = getRankFromAxesMaps(axesMaps);
-  AxesMapTy origin2NewMap(rank, -1);
-  for (auto &axesMap : axesMaps) {
-    for (auto axis : axesMap) {
-      origin2NewMap[axis] = axis;
-    }
-  }
-  mapOriginAxis2NewAxis(origin2NewMap);
-  return origin2NewMap;
-}
-static AxesMapTy getNew2OriginAxesMap(AxesMapTy &origin2NewMap) {
-  AxesMapTy new2OriginMap;
-  for (auto [originAxis, newAxis] : llvm::enumerate(origin2NewMap)) {
-    if (newAxis >= 0) {
-      new2OriginMap.emplace_back(originAxis);
-    }
-  }
-  return new2OriginMap;
-}
-static MappedInputTy createMulOp(OpBuilder &builder, ValueRange inputs,
-                                 AxesMapsTy &axesMaps) {
-  if (inputs.size() == 1) {
-    return MappedInputTy(inputs[0], axesMaps[0]);
-  }
-  AxesMapTy origin2NewMap = getOrigin2NewAxesMap(axesMaps);
-  applyAxesMap(origin2NewMap, axesMaps);
-  auto mulOp = builder.create<MulOp>(builder.getUnknownLoc(), inputs, axesMaps);
-  auto retAxesMap = getNew2OriginAxesMap(origin2NewMap);
-  return MappedInputTy(mulOp.getResult(), retAxesMap);
-}
-static MappedInputTy createMulOp(OpBuilder &builder,
-                                 MappedInputsTy &mappedInputs) {
-  if (mappedInputs.size() == 1) {
-    return mappedInputs[0];
-  }
-  SmallVector<Value> inputs;
-  AxesMapsTy axesMaps;
-  for (auto [input, axesMap] : mappedInputs) {
-    inputs.emplace_back(input);
-    axesMaps.emplace_back(axesMap);
-  }
-  return createMulOp(builder, inputs, axesMaps);
-}
 
 struct LiftMulPass : public tc::impl::LiftMulBase<LiftMulPass> {
   void runOnOperation() override {
