@@ -166,6 +166,34 @@ FactorPosSetMapTy collectFacorPosSetMap(AddOfMulFactorsTy &factors) {
   cleanFactorPosSetMap(inputPosSetMap, toErase);
   return inputPosSetMap;
 }
+// Should do factorize or not
+bool isSubSetOf(I64ArrayTy &array1, I64ArrayTy &array2) {
+  if (array1.size() > array2.size()) {
+    return false;
+  }
+  for (auto e1 : array1) {
+    if (llvm::find(array2, e1) == array2.end()) {
+      return false;
+    }
+  }
+  return true;
+}
+bool shouldDoFactorize(ArrayRef<int64_t> shape, FactorPtrsTy &mulFactors,
+                       FactorPtr factor) {
+  auto rank = shape.size();
+  if (factor->second.size() == rank) {
+    return true;
+  }
+  for (auto mulFactor : mulFactors) {
+    if (factor == mulFactor) {
+      continue;
+    }
+    if (isSubSetOf(factor->second, mulFactor->second)) {
+      return false;
+    }
+  }
+  return true;
+}
 // Debug Info
 // TODO
 } // namespace factorize
@@ -305,6 +333,22 @@ struct MergeAddOfMulPattern : public OpRewritePattern<AddOp> {
     auto inputPosSetMap = collectFacorPosSetMap(factors);
     if (inputPosSetMap.empty()) {
       return failure();
+    }
+    LLVM_DEBUG(llvm::dbgs() << "<Factorize> Potential factors: "
+                            << inputPosSetMap.size() << "\n";);
+    // Erase factors that should not do factorize
+    auto [shape, sizeIDs] = getTensorSizeInfos(op.getResult());
+    {
+      FactorPtrsTy toErase;
+      for (auto &[key, inputPosSet] : inputPosSetMap) {
+        for (auto pos : inputPosSet) {
+          if (!shouldDoFactorize(shape, factors[pos], key)) {
+            toErase.emplace_back(key);
+            break;
+          }
+        }
+      }
+      cleanFactorPosSetMap(inputPosSetMap, toErase);
     }
     LLVM_DEBUG(llvm::dbgs() << "<Factorize> Potential factors: "
                             << inputPosSetMap.size() << "\n";);
