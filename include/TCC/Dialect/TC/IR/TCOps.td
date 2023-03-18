@@ -22,28 +22,29 @@ def MulOp : TC_Op<"mul", [NoMemoryEffect]> {
   let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps);
   let results = (outs F64Tensor : $result);
 
-  let builders = [OpBuilder<(ins "ValueRange"
-                             : $inputs, "AxesMapsTy&"
-                             : $axesMaps)>];
+  let builders = [OpBuilder<(ins "ValueRange" : $inputs,
+                                 "AxesMapsTy&" : $axesMaps)>];
   let hasCanonicalizer = 1;
 }
 
 def AddOp : TC_Op<"add", [NoMemoryEffect]> {
-  let summary = "Tensor expanded elementwise addition, with signs.";
-  let description = "TODO";
+  let summary = "Tensor elementwise addition, with signs.";
+  let description = [{
+    // TODO  
+  }];
 
-  let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps, BoolArrayAttr:$signs);
+  let arguments = (ins Variadic<F64Tensor>:$inputs, 
+                       IndexListArrayAttr:$axes_maps,
+                       BoolArrayAttr:$signs);
   let results = (outs F64Tensor : $result);
 
   let builders = [
-    OpBuilder<(ins "ValueRange"
-               : $inputs, "AxesMapsTy&"
-               : $axesMaps, "SignsTy&"
-               : $signs)>,
-    OpBuilder<(ins "ValueRange"
-               : $inputs, "AxesMapsTy&"
-               : $axesMaps, "ArrayAttr"
-               : $signs)>,
+    OpBuilder<(ins "ValueRange" : $inputs,
+                   "AxesMapsTy&" : $axesMaps,
+                   "SignsTy&" : $signs)>,
+    OpBuilder<(ins "ValueRange" : $inputs,
+                   "AxesMapsTy&" : $axesMaps,
+                   "ArrayAttr" : $signs)>,
     OpBuilder<(ins "ValueRange" : $inputs,
                    "AxesMapsTy&" : $axesMaps)>
   ];
