@@ -9,7 +9,7 @@ def TC_Dialect : Dialect {
   let name = "tc";
   let summary = "Tensor Contraction Dialect";
   let cppNamespace = "::mlir::tc";
-  let dependentDialects = ["func::FuncDialect", "arith::ArithDialect"];
+  let dependentDialects = ["func::FuncDialect"];
 }
 
 class TC_Op<string mnemonic, list<Trait> traits = []>

@@ -1,3 +1,5 @@
+#include "TCC/CodeGen.h"
+
 #include "mlir/Dialect/Affine/Passes.h"
 
 #include "llvm/IR/LLVMContext.h"
@@ -69,6 +71,18 @@ static cl::opt<enum Action>
                                "output the MLIR dump after llvm lowering")),
          cl::values(clEnumValN(DumpLLVMIR, "llvm", "output the LLVM IR dump")));
 
+namespace {
+void addTCOptimizePipeline(mlir::PassManager &PM) {
+  mlir::OpPassManager &funcPM = PM.nest<mlir::func::FuncOp>();
+  // TOcFIX: only one call
+  funcPM.addPass(mlir::createCanonicalizerPass());
+  funcPM.addPass(mlir::createCSEPass());
+  funcPM.addPass(mlir::createCanonicalizerPass());
+  funcPM.addPass(mlir::createCSEPass());
+  PM.addPass(mlir::tc::createTCOptimizePass());
+}
+} // namespace
+
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv, "TCC compiler\n");
   auto CF = tc::parseInputFile(InputFileName);
@@ -89,23 +103,7 @@ int main(int argc, char **argv) {
   auto M = mlir::tc::MLIRGen(Ctx, *CF);
   if (Emit == DumpMLIR) {
     if (CTCSE) {
-      mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
-      // TOcFIX: only one call
-      FuncPM.addPass(mlir::createCanonicalizerPass());
-      FuncPM.addPass(mlir::createCSEPass());
-      FuncPM.addPass(mlir::createCanonicalizerPass());
-      FuncPM.addPass(mlir::createCSEPass());
-      // FuncPM.addPass(mlir::tc::createMergeContractPass());
-      // FuncPM.addPass(mlir::createCSEPass());
-      // FuncPM.addPass(mlir::tc::createSplitContractPass());
-      // FuncPM.addPass(mlir::createCSEPass());
-      // FuncPM.addPass(mlir::tc::createGroupAddWithSameInputPass());
-      // FuncPM.addPass(mlir::createCSEPass());
-      // FuncPM.addPass(mlir::tc::createPrintSymmetryPass());
-      // FuncPM.addPass(mlir::tc::createSplitContractPass());
-      // FuncPM.addPass(mlir::createCSEPass());
-      // FuncPM.addPass(mlir::tc::createMergeContractPass());
-      // FuncPM.addPass(mlir::createCSEPass());
+      addTCOptimizePipeline(PM);
       PM.addPass(mlir::tc::createTCOptimizePass());
       mlir::OpPassManager &FuncPM2 = PM.nest<mlir::func::FuncOp>();
       FuncPM2.addPass(mlir::LLVM::createRequestCWrappersPass());
@@ -116,29 +114,23 @@ int main(int argc, char **argv) {
   }
 
   if (Emit == DumpMLIRBLAS) {
-    mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
-    // TOcFIX: only one call
-    FuncPM.addPass(mlir::createCanonicalizerPass());
-    FuncPM.addPass(mlir::createCSEPass());
-    FuncPM.addPass(mlir::createCanonicalizerPass());
-    FuncPM.addPass(mlir::createCSEPass());
-    PM.addPass(mlir::tc::createTCOptimizePass());
+    addTCOptimizePipeline(PM);
     mlir::OpPassManager &FuncPM2 = PM.nest<mlir::func::FuncOp>();
     FuncPM2.addPass(mlir::tc::createConvertTCToTBLASPass());
     FuncPM2.addPass(mlir::createCSEPass());
     FuncPM2.addPass(mlir::createCSEPass());
+    PM.addPass(mlir::tc::createConvertTCToLinalgPass());
+    PM.addPass(mlir::createCSEPass());
+    PM.addPass(mlir::createLinalgElementwiseOpFusionPass());
+    PM.addPass(mlir::createCSEPass());
     mlir::failed(PM.run(*M));
-    M->dump();
+    mlir::tc::codegen::emitCCode(M.get());
+    // M->dump();
     return 0;
   }
 
   if (Emit == DumpMLIRLINALG) {
-    mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
-    FuncPM.addPass(mlir::createCanonicalizerPass());
-    FuncPM.addPass(mlir::createCSEPass());
-    FuncPM.addPass(mlir::createCanonicalizerPass());
-    FuncPM.addPass(mlir::createCSEPass());
-    PM.addPass(mlir::tc::createTCOptimizePass());
+    addTCOptimizePipeline(PM);
     mlir::OpPassManager &FuncPM2 = PM.nest<mlir::func::FuncOp>();
     FuncPM2.addPass(mlir::LLVM::createRequestCWrappersPass());
     PM.addPass(mlir::tc::createConvertTCToLinalgPass());

@@ -15,6 +15,8 @@
 #include "TCC/Dialect/TC/Utils/Utils.h"
 #include "TCC/Passes.h"
 
+#define TBLAS_EMIT_C
+
 namespace mlir {
 namespace tc {
 // static SmallVector<int64_t> unpackIntegerArrayAttr(ArrayAttr Attr) {
@@ -99,7 +101,11 @@ auto getAffineMapsByAxesMaps(int64_t rank, const AxesMapsTy &axesMaps,
 static Value createEmptyTensorForLinalgOuts(OpBuilder &builder, Value value) {
   auto [shape, sizeIDs] = getTensorSizeInfos(value);
   auto RTT = value.getType().cast<RankedTensorType>();
+#ifndef TBLAS_EMIT_C
   auto newType = RankedTensorType::get(RTT.getShape(), RTT.getElementType());
+#else
+  auto newType = RTT;
+#endif
   auto *block = value.getParentBlock();
   SmallVector<Value> dynamicSizes;
   for (auto [size, sizeID] : llvm::zip(shape, sizeIDs)) {
@@ -430,6 +436,7 @@ void ConvertTCToLinalgPass::runOnOperation() {
                          memref::MemRefDialect, linalg::LinalgDialect,
                          tensor::TensorDialect, func::FuncDialect>();
   target.addIllegalDialect<TCDialect>();
+#ifndef TBLAS_EMIT_C
   target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op) {
     return llvm::all_of(op.getFunctionType().getInputs(), [&](Type T) {
       if (auto RTT = T.dyn_cast_or_null<RankedTensorType>()) {
@@ -450,11 +457,14 @@ void ConvertTCToLinalgPass::runOnOperation() {
       return true;
     });
   });
+#endif
   TypeConverter typeConverter;
   typeConverter.addConversion([](Type type) { return type; });
+#ifndef TBLAS_EMIT_C
   typeConverter.addConversion([](RankedTensorType type) -> Type {
     return RankedTensorType::get(type.getShape(), type.getElementType());
   });
+#endif
   typeConverter.addArgumentMaterialization(materializeToTensor);
   typeConverter.addSourceMaterialization(materializeToTensor);
   typeConverter.addTargetMaterialization(
