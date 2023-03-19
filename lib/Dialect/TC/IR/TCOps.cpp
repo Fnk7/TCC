@@ -8,6 +8,17 @@
 using namespace mlir;
 using namespace mlir::tc;
 
+namespace {
+template <typename T> inline AxesMapsTy getAxesMapsArray(T op) {
+  auto axesMapsAttr = op.getAxesMaps();
+  AxesMapsTy axesMaps;
+  for (auto axesMapAttr : axesMapsAttr) {
+    axesMaps.emplace_back(getI64ArrayFromAttr(axesMapAttr));
+  }
+  return axesMaps;
+}
+} // namespace
+
 void MulOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
                   AxesMapsTy &axesMaps) {
   assert(inputs.size() >= 2);
@@ -16,6 +27,7 @@ void MulOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
   auto axesMapsAttr = mlir::tc::getAxesMapsAttr(builder, axesMaps);
   MulOp::build(builder, state, resultType, inputs, axesMapsAttr);
 }
+AxesMapsTy MulOp::getAxesMapsArray() { return ::getAxesMapsArray(*this); }
 
 void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
                   AxesMapsTy &axesMaps, ArrayAttr signsAttr) {

@@ -24,6 +24,10 @@ def MulOp : TC_Op<"mul", []> {
 
   let builders = [OpBuilder<(ins "ValueRange" : $inputs,
                                  "AxesMapsTy&" : $axesMaps)>];
+  let extraClassDeclaration = [{
+    /// Helper function to get axes_maps as SmallVector<SmallVector<int64_t>>.
+    AxesMapsTy getAxesMapsArray();
+  }];
   let hasCanonicalizer = 1;
 }
 
