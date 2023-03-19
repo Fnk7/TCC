@@ -13,11 +13,11 @@ def TC_Dialect : Dialect {
 }
 
 class TC_Op<string mnemonic, list<Trait> traits = []>
-    : Op<TC_Dialect, mnemonic, traits>;
+    : Op<TC_Dialect, mnemonic, traits # [NoMemoryEffect]>;
 
-def MulOp : TC_Op<"mul", [NoMemoryEffect]> {
+def MulOp : TC_Op<"mul", []> {
   let summary = "Tensor expanded elementwise multiplication.";
-  let description = "TODO";
+  let description = [{}];
 
   let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps);
   let results = (outs F64Tensor : $result);
