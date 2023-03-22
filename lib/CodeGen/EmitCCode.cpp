@@ -106,7 +106,7 @@ private:
   }
 
   void emitIndexArgument(Value value, int64_t sizeID, std::string name) {
-    out << "size_t " << name;
+    out << "int " << name;
     sizeIDNameMap[sizeID] = name;
   }
 
@@ -120,6 +120,7 @@ private:
     }
   }
 
+  SmallVector<std::string> returnNames;
   void emitResultTypes(bool &newLine) {
     // TODO: use writebacks
     // TODO: get result name
@@ -129,9 +130,10 @@ private:
         out.indent(indent);
       }
       newLine = true;
-      std::string name = "result" + std::to_string(idx);
+      std::string name = "result_" + std::to_string(idx);
       emitTensorArgument(input, name);
       valueNameMap[input] = name;
+      returnNames.emplace_back(name);
     }
   }
 
@@ -143,13 +145,15 @@ private:
         emitArithConstantOp(cstOp);
       } else if (auto linalgOp = dyn_cast_or_null<linalg::GenericOp>(&op)) {
         emitLinalgGenericOp(linalgOp);
+      } else if (auto fillOp = dyn_cast_or_null<linalg::FillOp>(&op)) {
+        emitLinalgFillOp(fillOp);
       } else if (auto blasOp = dyn_cast_or_null<tblas::GenericOp>(&op)) {
         out.indent(indent) << "// Failed: Emit C for op: " << op.getName()
                            << "\n";
       } else if (auto emptyOp = dyn_cast_or_null<tensor::EmptyOp>(&op)) {
-        // Ignore
+        emitTensorEmptyOp(emptyOp);
       } else if (auto returnOp = dyn_cast_or_null<func::ReturnOp>(&op)) {
-        // Ignore
+        emitFuncReturnOp(returnOp);
       } else {
         out.indent(indent) << "// Failed: Emit C for op: " << op.getName()
                            << "\n";
@@ -168,66 +172,124 @@ private:
     valueNameMap[op.getResult()] = name;
   }
 
-  // emit linalg generic op
-  using PositionIterVariableMapTy = DenseMap<int64_t, std::string>;
-  void emitLinalgGenericOp(linalg::GenericOp op) {
-    out.indent(indent) << "// Linalg GenericOp: " << op->getName() << "\n";
-    // create alloc
-    auto inputs = op.getInputs();
-    auto results = op.getResults();
-    for (auto result : op.getResults()) {
-      emitLocalArrayForTensor(result);
+  // emit tensor empty op
+  void emitTensorEmptyOp(tensor::EmptyOp op) {
+    out.indent(indent) << "// From Tensor EmptyOp\n";
+    emitLocalArrayForTensor(op.getResult());
+  }
+
+  // emit func return op
+  void emitFuncReturnOp(func::ReturnOp op) {
+    out.indent(indent) << "// From Func ReturnOp\n";
+    auto outputs = op.getOperands();
+    for (auto [idx, output] : llvm::enumerate(outputs)) {
+      auto [shape, sizeIDs] = getTensorSizeInfos(output);
+      int numLoops = shape.size();
+      SmallVector<std::string> iterVars(numLoops, "");
+      for (auto [idx, size] : llvm::enumerate(shape)) {
+        iterVars[idx] = getIteratorName(idx);
+        emitForLoop(iterVars[idx], size, sizeIDs[idx]);
+      }
+      out.indent(indent) << returnNames[idx];
+      emitIterVars(iterVars);
+      out << " = " << valueNameMap[output];
+      emitIterVars(iterVars);
+      out << ";\n";
+      emitForLoopsEnd(numLoops);
     }
-    PositionIterVariableMapTy posIterMap;
-    auto iterTypes = op.getIteratorTypesArray();
+  }
+
+  // emit linalg fill op
+  void emitLinalgFillOp(linalg::FillOp op) {
+    out.indent(indent) << "// From Linalg FillOp\n";
+    assert(op.getResults().size() == 1);
+    auto input = op.getInputs()[0];
+    auto output = op.getOutputs()[0];
+    auto result = op.getResults()[0];
+    valueNameMap[result] = valueNameMap[output];
+    auto [shape, sizeIDs] = getTensorSizeInfos(output);
+    int numLoops = shape.size();
+    SmallVector<std::string> iterVars(numLoops, "");
+    for (auto [idx, size] : llvm::enumerate(shape)) {
+      iterVars[idx] = getIteratorName(idx);
+      emitForLoop(iterVars[idx], size, sizeIDs[idx]);
+    }
+    out.indent(indent) << valueNameMap[result];
+    emitIterVars(iterVars);
+    out << " = " << valueNameMap[input] << ";\n";
+    emitForLoopsEnd(numLoops);
+  }
+
+  // emit linalg generic op
+  using PositionIterVariableMapTy = DenseMap<unsigned, std::string>;
+  void emitLinalgGenericOp(linalg::GenericOp op) {
+    out.indent(indent) << "// From Linalg GenericOp\n";
+    auto operands = op->getOperands();
+    auto inputs = op.getInputs();
+    auto outputs = op.getOutputs();
+    auto results = op.getResults();
     auto indexingMaps = op.getIndexingMapsArray();
-    // emit for loop
-    for (auto [idx, result] : llvm::enumerate(results)) {
+    auto iteratorTypes = op.getIteratorTypesArray();
+    // 1. emit parallel loop
+    int numLoops = iteratorTypes.size();
+    SmallVector<std::string> iterVars(numLoops, "");
+    int numParallelLoops = 0;
+    for (auto [idx, output] : llvm::enumerate(outputs)) {
       auto affineMap = indexingMaps[inputs.size() + idx];
       auto exprs = affineMap.getResults();
-      auto [shape, sizeIDs] = getTensorSizeInfos(result);
-      for (auto [size, sizeID, expr] : llvm::zip(shape, sizeIDs, exprs)) {
+      auto [shape, sizeIDs] = getTensorSizeInfos(output);
+      for (auto [expr, size, sizeID] : llvm::zip(exprs, shape, sizeIDs)) {
         auto position = expr.cast<AffineDimExpr>().getPosition();
-        if (posIterMap.count(position)) {
+        if (iterVars[position] != "") {
           continue;
         }
-        assert(iterTypes[position] == "parallel");
-        out.indent(indent) << "for (";
-        // initial
-        auto iterName = "i" + std::to_string(position);
-        out << "int64_t " << iterName << " = 0; ";
-        // condition
-        out << iterName << " < ";
-        emitConstantOrVaribaleSize(size, sizeID);
-        out << "; ";
-        // tail
-        out << iterName << "++) {\n";
-        indent += 2;
-        posIterMap[position] = iterName;
+        assert(iteratorTypes[position] == "parallel");
+        numParallelLoops++;
+        iterVars[position] = getIteratorName(position);
+        emitForLoop(iterVars[position], size, sizeID);
       }
     }
-    // emit load
+    // 2. emit reduction loop
+    int numReductionLoops = 0;
+    if (numParallelLoops < numLoops) {
+      for (auto [idx, input] : llvm::enumerate(inputs)) {
+        auto affineMap = indexingMaps[idx];
+        auto exprs = affineMap.getResults();
+        auto [shape, sizeIDs] = getTensorSizeInfos(input);
+        for (auto [expr, size, sizeID] : llvm::zip(exprs, shape, sizeIDs)) {
+          auto position = expr.cast<AffineDimExpr>().getPosition();
+          if (iterVars[position] != "") {
+            continue;
+          }
+          assert(iteratorTypes[position] == "reduction");
+          numReductionLoops++;
+          iterVars[position] = getIteratorName(position);
+          emitForLoop(iterVars[position], size, sizeID);
+        }
+      }
+    }
+    // 3. emit load
     auto &block = *(op.getBlock());
-    for (auto [idx, input] : llvm::enumerate(inputs)) {
+    for (auto [idx, operand] : llvm::enumerate(operands)) {
       std::string name = "in" + std::to_string(idx);
       out.indent(indent) << "double " << name << " = ";
-      out << valueNameMap[input];
-      emitAffineMap(indexingMaps[idx], posIterMap);
+      out << valueNameMap[operand];
+      emitAffineMap(indexingMaps[idx], iterVars);
       out << ";\n";
       auto blockArg = block.getArgument(idx);
       valueNameMap[blockArg] = name;
     }
-    // emit body
+    // 4. emit body
     for (auto [idx, op] : llvm::enumerate(block)) {
       if (auto addFOp = dyn_cast_or_null<arith::AddFOp>(&op)) {
         emitArithAddFOp(addFOp, idx);
       } else if (auto mulFOp = dyn_cast_or_null<arith::MulFOp>(&op)) {
         emitArithMulFOp(mulFOp, idx);
       } else if (auto yieldOp = dyn_cast_or_null<linalg::YieldOp>(&op)) {
-        for (auto [idx, output] : llvm::enumerate(results)) {
+        for (auto [idx, output] : llvm::enumerate(outputs)) {
           auto affineMap = indexingMaps[inputs.size() + idx];
           out.indent(indent) << valueNameMap[output];
-          emitAffineMap(affineMap, posIterMap);
+          emitAffineMap(affineMap, iterVars);
           out << " = " << valueNameMap[yieldOp.getOperand(idx)] << ";\n";
         }
       } else {
@@ -235,10 +297,27 @@ private:
                            << "\n";
       }
     }
-    for (auto __ : llvm::seq<int>(0, posIterMap.size())) {
-      (void)__;
+    emitForLoopsEnd(numReductionLoops);
+    emitForLoopsEnd(numParallelLoops);
+    for (auto [result, output] : llvm::zip(results, outputs)) {
+      valueNameMap[result] = valueNameMap[output];
+    }
+  }
+  void emitForLoop(std::string iterName, int64_t size, int64_t sizeID) {
+    out.indent(indent) << "for (";
+    // initial
+    out << "int " << iterName << " = 0; ";
+    // condition
+    out << iterName << " < ";
+    emitConstantOrVaribaleSize(size, sizeID);
+    out << "; ";
+    // increment
+    out << iterName << "++) {\n";
+    indent += 2;
+  }
+  void emitForLoopsEnd(int numLoops) {
+    while (numLoops--) {
       indent -= 2;
-      indent = indent < 0 ? 0 : indent;
       out.indent(indent) << "}\n";
     }
   }
@@ -248,6 +327,21 @@ private:
       auto position = expr.dyn_cast<AffineDimExpr>().getPosition();
       out << "[";
       out << posIterMap[position];
+      out << "]";
+    }
+  }
+  void emitAffineMap(AffineMap map, SmallVector<std::string> &iterVars) {
+    for (auto expr : map.getResults()) {
+      auto position = expr.dyn_cast<AffineDimExpr>().getPosition();
+      out << "[";
+      out << iterVars[position];
+      out << "]";
+    }
+  }
+  void emitIterVars(SmallVector<std::string> &iterVars) {
+    for (auto iterVar : iterVars) {
+      out << "[";
+      out << iterVar;
       out << "]";
     }
   }
@@ -269,6 +363,10 @@ private:
     out << valueNameMap[lhs] << " * ";
     out << valueNameMap[rhs] << ";\n";
     valueNameMap[op.getResult()] = name;
+  }
+
+  inline std::string getIteratorName(unsigned position) {
+    return "c" + std::to_string(position);
   }
 };
 } // namespace

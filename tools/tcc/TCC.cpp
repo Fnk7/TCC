@@ -87,6 +87,7 @@ void addTCOptimizePipeline(mlir::PassManager &PM) {
 void addConvertToLinalgPipelin(mlir::PassManager &PM) {
   PM.addPass(mlir::tc::createConvertTCToLinalgPass());
   PM.addPass(mlir::createCSEPass());
+  PM.addPass(mlir::createCanonicalizerPass());
 }
 } // namespace
 
