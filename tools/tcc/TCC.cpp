@@ -55,11 +55,13 @@ enum Action {
   DumpMLIRLLVM,
   DumpLLVMIR,
   DumpMLIRBLAS,
+  EmitScopC,
 };
 } // namespace
 static cl::opt<enum Action>
     Emit("emit", cl::desc("Select the kind of output desired"),
          cl::values(clEnumValN(DumpAST, "ast", "output the AST dump")),
+         cl::values(clEnumValN(EmitScopC, "scop-c", "emit scop c")),
          cl::values(clEnumValN(DumpMLIR, "mlir", "output the MLIR dump")),
          cl::values(clEnumValN(DumpMLIRLINALG, "mlir-linalg",
                                "output the MLIR dump after linalg lowering")),
@@ -80,6 +82,11 @@ void addTCOptimizePipeline(mlir::PassManager &PM) {
   funcPM.addPass(mlir::createCanonicalizerPass());
   funcPM.addPass(mlir::createCSEPass());
   PM.addPass(mlir::tc::createTCOptimizePass());
+}
+
+void addConvertToLinalgPipelin(mlir::PassManager &PM) {
+  PM.addPass(mlir::tc::createConvertTCToLinalgPass());
+  PM.addPass(mlir::createCSEPass());
 }
 } // namespace
 
@@ -110,6 +117,14 @@ int main(int argc, char **argv) {
       mlir::failed(PM.run(*M));
     }
     M->dump();
+    return 0;
+  }
+
+  if (Emit == EmitScopC) {
+    addTCOptimizePipeline(PM);
+    addConvertToLinalgPipelin(PM);
+    mlir::failed(PM.run(*M));
+    mlir::tc::codegen::emitCCode(M.get());
     return 0;
   }
 

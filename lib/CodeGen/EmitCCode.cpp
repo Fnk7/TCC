@@ -235,9 +235,10 @@ private:
                            << "\n";
       }
     }
-    for (auto &__ : posIterMap) {
+    for (auto __ : llvm::seq<int>(0, posIterMap.size())) {
       (void)__;
       indent -= 2;
+      indent = indent < 0 ? 0 : indent;
       out.indent(indent) << "}\n";
     }
   }
@@ -275,8 +276,9 @@ private:
 namespace mlir::tc::codegen {
 void emitCCode(ModuleOp moduleOp) {
   SymbolTable symTable(moduleOp);
-  func::FuncOp funcOp = symTable.lookup<func::FuncOp>("CT");
-  assert(funcOp);
-  EmitCImpl(funcOp, llvm::errs()).emit();
+  auto funcOps = moduleOp.getOps<func::FuncOp>();
+  for (auto funcOp : funcOps) {
+    EmitCImpl(funcOp, llvm::errs()).emit();
+  }
 }
 } // namespace mlir::tc::codegen
