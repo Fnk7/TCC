@@ -1,16 +1,9 @@
 #ifndef TCC_DIALECT_TC_IR_TCOPS_TD
 #define TCC_DIALECT_TC_IR_TCOPS_TD
 
-include "mlir/IR/OpBase.td"
+include "./TCBase.td"
 // For NoMemoryEffect
 include "mlir/Interfaces/SideEffectInterfaces.td"
-
-def TC_Dialect : Dialect {
-  let name = "tc";
-  let summary = "Tensor Contraction Dialect";
-  let cppNamespace = "::mlir::tc";
-  let dependentDialects = ["func::FuncDialect"];
-}
 
 class TC_Op<string mnemonic, list<Trait> traits = []>
     : Op<TC_Dialect, mnemonic, traits # [NoMemoryEffect]>;

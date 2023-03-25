@@ -5,6 +5,7 @@ add_mlir_dialect_library(
   TCCanonicalizations.cpp
   DEPENDS
   MLIRTCOpsIncGen
+  MLIRTCAttributesIncGen
   LINK_LIBS
   PUBLIC
   MLIRIR

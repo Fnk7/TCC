@@ -15,6 +15,7 @@ using AxesTy = I64ArrayTy;
 using AxesMapTy = I64ArrayTy;
 using AxesMapsTy = SmallVector<AxesMapTy>;
 using AxesPairsTy = SmallVector<AxesTy>;
+using AxesMapsRefTy = ArrayRef<AxesMapTy>;
 } // namespace mlir::tc
 
 #endif

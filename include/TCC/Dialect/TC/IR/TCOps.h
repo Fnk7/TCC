@@ -12,4 +12,7 @@
 #define GET_OP_CLASSES
 #include "TCC/Dialect/TC/IR/TCOps.h.inc"
 
+#define GET_ATTRDEF_CLASSES
+#include "TCC/Dialect/TC/IR/TCAttributes.h.inc"
+
 #endif
