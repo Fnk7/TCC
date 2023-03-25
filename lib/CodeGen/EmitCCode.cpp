@@ -15,15 +15,14 @@ using namespace mlir;
 using namespace mlir::tc;
 
 namespace {
-class EmitCImpl {
+class EmitCImpl : public codegen::CodeGenBase {
   func::FuncOp funcOp;
   Block &block;
   func::ReturnOp returnOp;
-  llvm::raw_ostream &out;
 
 public:
   EmitCImpl(func::FuncOp funcOp, llvm::raw_ostream &out)
-      : funcOp(funcOp), block(funcOp.front()), out(out) {
+      : CodeGenBase(out), funcOp(funcOp), block(funcOp.front()) {
     returnOp = dyn_cast<func::ReturnOp>(block.getTerminator());
   }
 
@@ -372,11 +371,11 @@ private:
 } // namespace
 
 namespace mlir::tc::codegen {
-void emitCCode(ModuleOp moduleOp) {
-  SymbolTable symTable(moduleOp);
-  auto funcOps = moduleOp.getOps<func::FuncOp>();
+void emitLinalgToC(ModuleOp op, llvm::raw_ostream &out) {
+  SymbolTable symTable(op);
+  auto funcOps = op.getOps<func::FuncOp>();
   for (auto funcOp : funcOps) {
-    EmitCImpl(funcOp, llvm::errs()).emit();
+    EmitCImpl(funcOp, out).emit();
   }
 }
 } // namespace mlir::tc::codegen

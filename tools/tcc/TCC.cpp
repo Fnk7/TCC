@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
     addTCOptimizePipeline(PM);
     addConvertToLinalgPipelin(PM);
     mlir::failed(PM.run(*M));
-    mlir::tc::codegen::emitCCode(M.get());
+    mlir::tc::codegen::emitLinalgToC(M.get());
     return 0;
   }
 
@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
     PM.addPass(mlir::createLinalgElementwiseOpFusionPass());
     PM.addPass(mlir::createCSEPass());
     mlir::failed(PM.run(*M));
-    mlir::tc::codegen::emitCCode(M.get());
+    mlir::tc::codegen::emitLinalgToC(M.get());
     // M->dump();
     return 0;
   }
