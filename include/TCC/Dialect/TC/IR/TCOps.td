@@ -36,9 +36,9 @@ def AddOp : TC_Op<"add", [NoMemoryEffect]> {
     // TODO  
   }];
 
-  let arguments = (ins Variadic<F64Tensor>:$inputs, 
-                       IndexListArrayAttr:$axes_maps,
-                       BoolArrayAttr:$signs);
+  let arguments = (ins Variadic<F64Tensor> : $inputs,
+                       IndexListArrayAttr : $axes_maps,
+                       SignsAttr : $signs);
   let results = (outs F64Tensor : $result);
 
   let builders = [
@@ -47,11 +47,16 @@ def AddOp : TC_Op<"add", [NoMemoryEffect]> {
                    "SignsTy&" : $signs)>,
     OpBuilder<(ins "ValueRange" : $inputs,
                    "AxesMapsTy&" : $axesMaps,
-                   "ArrayAttr" : $signs)>,
+                   "SignsAttr" : $signs)>,
     OpBuilder<(ins "ValueRange" : $inputs,
                    "AxesMapsTy&" : $axesMaps)>
   ];
   let hasCanonicalizer = 1;
+
+  let extraClassDeclaration = [{
+    /// Helper function to get axes_maps as SmallVector<SmallVector<int64_t>>.
+    SignsTy getSignsArray();
+  }];
 }
 
 def ContractOp : TC_Op<"contract", [NoMemoryEffect]> {

@@ -51,15 +51,6 @@ template <typename T> inline AxesMapTy getAxesMap(T op) {
   return getI64ArrayFromAttr(axesMapAttr);
 }
 
-inline SignsTy getSigns(AddOp op) {
-  SignsTy signs;
-  auto signsAttr = op.getSigns();
-  for (auto signAttr : signsAttr) {
-    signs.emplace_back(signAttr.cast<BoolAttr>().getValue());
-  }
-  return signs;
-}
-
 // Encoded tensor type utils
 Type getEncodedTensorType(OpBuilder &builder, TShapeTy &shape,
                           SizeIDsTy &encoding);

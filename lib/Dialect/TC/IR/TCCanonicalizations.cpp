@@ -20,20 +20,17 @@ struct AddReorderPattern : public OpRewritePattern<AddOp> {
     auto newOrder = getNewInputsOrder(inputs);
     if (newOrder.empty())
       return failure();
-    auto signsAttr = op.getSigns();
-    auto axesMapsAttr = op.getAxesMaps();
+    auto signsRef = op.getSigns();
+    auto axesMaps = getAxesMaps(op);
     SmallVector<Value> newInputs;
-    SmallVector<Attribute> newSigns;
-    SmallVector<Attribute> newAxesMaps;
+    SignsTy newSigns;
+    AxesMapsTy newAxesMaps;
     for (auto idx : newOrder) {
       newInputs.emplace_back(inputs[idx]);
-      newSigns.emplace_back(signsAttr[idx]);
-      newAxesMaps.emplace_back(axesMapsAttr[idx]);
+      newSigns.emplace_back(signsRef[idx]);
+      newAxesMaps.emplace_back(axesMaps[idx]);
     }
-    auto newSignsAttr = rewriter.getArrayAttr(newSigns);
-    auto newAxesMapsAttr = rewriter.getArrayAttr(newAxesMaps);
-    rewriter.replaceOpWithNewOp<AddOp>(op, op.getType(), newInputs,
-                                       newAxesMapsAttr, newSignsAttr);
+    rewriter.replaceOpWithNewOp<AddOp>(op, newInputs, newAxesMaps, newSigns);
     return success();
   }
 };
@@ -64,11 +61,10 @@ struct AddNegFlodPattern : public OpRewritePattern<AddOp> {
                                 PatternRewriter &rewriter) const override {
     bool change = false;
     auto inputs = op.getInputs();
-    auto signsAttr = op.getSigns();
+    auto signsRef = op.getSigns();
     SmallVector<Value> newInputs;
     SmallVector<bool> newSigns;
-    for (auto [input, signAttr] : llvm::zip(inputs, signsAttr)) {
-      auto sign = signAttr.cast<BoolAttr>().getValue();
+    for (auto [input, sign] : llvm::zip(inputs, signsRef)) {
       if (auto negOp = input.getDefiningOp<NegOp>()) {
         change = true;
         newInputs.emplace_back(negOp.getInput());
@@ -81,9 +77,8 @@ struct AddNegFlodPattern : public OpRewritePattern<AddOp> {
     if (!change) {
       return failure();
     }
-    auto newSignsAttr = rewriter.getBoolArrayAttr(newSigns);
-    rewriter.replaceOpWithNewOp<AddOp>(op, op.getType(), newInputs,
-                                       op.getAxesMaps(), newSignsAttr);
+    auto axesMaps = getAxesMaps(op);
+    rewriter.replaceOpWithNewOp<AddOp>(op, newInputs, axesMaps, newSigns);
     return success();
   }
 };
@@ -96,7 +91,7 @@ struct AddAddFoldPattern : public OpRewritePattern<AddOp> {
                                 PatternRewriter &rewriter) const override {
     auto inputs = op.getInputs();
     auto axesMaps = getAxesMaps(op);
-    auto signs = getSigns(op);
+    auto signs = op.getSignsArray();
     SmallVector<Value> newInputs;
     AxesMapsTy newAxesMaps;
     SignsTy newSigns;
@@ -106,7 +101,7 @@ struct AddAddFoldPattern : public OpRewritePattern<AddOp> {
         changed = true;
         auto inputs2 = op2.getInputs();
         auto axesMaps2 = getAxesMaps(op2);
-        auto signs2 = getSigns(op2);
+        auto signs2 = op2.getSignsArray();
         for (auto [input2, axesMap2, sign2] :
              llvm::zip(inputs2, axesMaps2, signs2)) {
           for (auto &axis : axesMap2) {

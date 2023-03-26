@@ -161,7 +161,7 @@ Value doSinkIntoAddOp(Value input, AxesMapTy &sinkAxesMap, AddOp addOp) {
   // sinkAxesMap : input axis map to addOp result axis is mul axis
   auto inputs = addOp.getInputs();
   auto axesMaps = getAxesMaps(addOp);
-  auto signs = getSigns(addOp);
+  auto signs = addOp.getSignsArray();
   SmallVector<Value> newInputs;
   for (auto [addInput, addAxesMap] : llvm::zip(inputs, axesMaps)) {
     auto sinkAxesMap2 = getAxesMapToAxesMapMap(sinkAxesMap, addAxesMap);

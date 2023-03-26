@@ -33,7 +33,7 @@ void groupAddOp(AddOp op) {
     return;
   }
   auto axesMaps = getAxesMaps(op);
-  auto signs = getSigns(op);
+  auto signs = op.getSignsArray();
   OpBuilder builder(op);
   SmallVector<Value> outerInputs;
   AxesMapsTy outerAxesMaps;
