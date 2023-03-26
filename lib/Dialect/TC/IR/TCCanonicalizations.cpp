@@ -211,10 +211,10 @@ struct MulNegSwapPattern : public OpRewritePattern<MulOp> {
     }
     if (negCount % 2 == 0) {
       rewriter.replaceOpWithNewOp<MulOp>(op, op.getType(), newInputs,
-                                         op.getAxesMaps());
+                                         op.getAxesMapsAttr());
     } else {
       auto newMulOp = rewriter.create<MulOp>(op.getLoc(), op.getType(),
-                                             newInputs, op.getAxesMaps());
+                                             newInputs, op.getAxesMapsAttr());
       rewriter.replaceOpWithNewOp<NegOp>(op, op.getType(), newMulOp);
     }
     return success();
@@ -231,16 +231,14 @@ struct MulReorderPattern : public OpRewritePattern<MulOp> {
     auto newOrder = getNewInputsOrder(inputs);
     if (newOrder.empty())
       return failure();
-    auto axesMapsAttr = op.getAxesMaps();
+    auto axesMapsAttr = op.getAxesMapsArray();
     SmallVector<Value> newInputs;
-    SmallVector<Attribute> newAxesMaps;
+    AxesMapsTy newAxesMaps;
     for (auto idx : newOrder) {
       newInputs.emplace_back(inputs[idx]);
       newAxesMaps.emplace_back(axesMapsAttr[idx]);
     }
-    auto newAxesMapsAttr = rewriter.getArrayAttr(newAxesMaps);
-    rewriter.replaceOpWithNewOp<MulOp>(op, op.getType(), newInputs,
-                                       newAxesMapsAttr);
+    rewriter.replaceOpWithNewOp<MulOp>(op, newInputs, newAxesMaps);
     return success();
   }
 };

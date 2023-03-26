@@ -24,10 +24,10 @@ void MulOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
   assert(inputs.size() >= 2);
   assert(inputs.size() == axesMaps.size());
   auto resultType = getResultTypeByAxesMaps(builder, inputs, axesMaps);
-  auto axesMapsAttr = mlir::tc::getAxesMapsAttr(builder, axesMaps);
+  auto axesMapsAttr = AxesMapsAttr::get(builder.getContext(), axesMaps);
   MulOp::build(builder, state, resultType, inputs, axesMapsAttr);
 }
-AxesMapsTy MulOp::getAxesMapsArray() { return ::getAxesMapsArray(*this); }
+AxesMapsTy MulOp::getAxesMapsArray() { return AxesMapsTy(getAxesMaps()); }
 
 void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
                   AxesMapsTy &axesMaps, SignsAttr signsAttr) {
@@ -35,7 +35,7 @@ void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
   assert(inputs.size() == axesMaps.size());
   assert(inputs.size() == signsAttr.getSigns().size());
   auto resultType = getResultTypeByAxesMaps(builder, inputs, axesMaps);
-  auto axesMapsAttr = mlir::tc::getAxesMapsAttr(builder, axesMaps);
+  auto axesMapsAttr = AxesMapsAttr::get(builder.getContext(), axesMaps);
   AddOp::build(builder, state, resultType, inputs, axesMapsAttr, signsAttr);
 }
 void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
@@ -48,6 +48,7 @@ void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
   SignsTy signs(inputs.size(), true);
   AddOp::build(builder, state, inputs, axesMaps, signs);
 }
+AxesMapsTy AddOp::getAxesMapsArray() { return AxesMapsTy(getAxesMaps()); }
 SignsTy AddOp::getSignsArray() { return SignsTy(getSigns()); }
 
 void ContractOp::build(OpBuilder &builder, OperationState &state, Value input,
@@ -69,9 +70,7 @@ void PermuteOp::build(OpBuilder &builder, OperationState &state, Value input,
   auto axesMapAttr = AxesMapsAttr::get(builder.getContext(), axesMapsRef);
   PermuteOp::build(builder, state, resultType, input, axesMapAttr);
 }
-AxesMapTy PermuteOp::getAxesMapArray() {
-  return getAxesMap()[0];
-}
+AxesMapTy PermuteOp::getAxesMapArray() { return getAxesMap()[0]; }
 
 void ConstantOp::build(OpBuilder &builder, OperationState &state,
                        double value) {

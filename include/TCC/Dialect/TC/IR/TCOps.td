@@ -13,13 +13,14 @@ def MulOp : TC_Op<"mul", []> {
   let summary = "Tensor expanded elementwise multiplication.";
   let description = [{}];
 
-  let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps);
+  let arguments = (ins Variadic<F64Tensor> : $inputs,
+                       AxesMapsAttr : $axes_maps);
   let results = (outs F64Tensor : $result);
 
   let builders = [OpBuilder<(ins "ValueRange" : $inputs,
                                  "AxesMapsTy&" : $axesMaps)>];
   let extraClassDeclaration = [{
-    /// Helper function to get axes_maps as SmallVector<SmallVector<int64_t>>.
+    /// Helper function to get axes_maps as SmallVector<SmallVector<AxisTy>>.
     AxesMapsTy getAxesMapsArray();
   }];
   let hasCanonicalizer = 1;
@@ -32,7 +33,7 @@ def AddOp : TC_Op<"add", [NoMemoryEffect]> {
   }];
 
   let arguments = (ins Variadic<F64Tensor> : $inputs,
-                       IndexListArrayAttr : $axes_maps,
+                       AxesMapsAttr : $axes_maps,
                        SignsAttr : $signs);
   let results = (outs F64Tensor : $result);
 
@@ -46,12 +47,13 @@ def AddOp : TC_Op<"add", [NoMemoryEffect]> {
     OpBuilder<(ins "ValueRange" : $inputs,
                    "AxesMapsTy&" : $axesMaps)>
   ];
-  let hasCanonicalizer = 1;
-
   let extraClassDeclaration = [{
-    /// Helper function to get axes_maps as SmallVector<SmallVector<int64_t>>.
+    /// Helper function to get axes_maps as SmallVector<SmallVector<AxisTy>>.
+    AxesMapsTy getAxesMapsArray();
+    /// Helper function to get signs as SmallVector<bool>.
     SignsTy getSignsArray();
   }];
+  let hasCanonicalizer = 1;
 }
 
 def ContractOp : TC_Op<"contract", [NoMemoryEffect]> {
@@ -65,7 +67,7 @@ def ContractOp : TC_Op<"contract", [NoMemoryEffect]> {
   let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
-    /// Helper function to get axes_maps as SmallVector<SmallVector<int64_t>>.
+    /// Helper function to get axes as SmallVector<AxisTy>.
     AxesTy getAxesArray();
   }];
 }
@@ -81,7 +83,7 @@ def PermuteOp : TC_Op<"permute", [NoMemoryEffect]> {
   let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
-    /// Helper function to get axes_maps as SmallVector<SmallVector<int64_t>>.
+    /// Helper function to get axes_map as SmallVector<AxisTy>.
     AxesMapTy getAxesMapArray();
   }];
 }
