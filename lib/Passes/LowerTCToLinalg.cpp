@@ -241,7 +241,7 @@ struct PermuteOpLowering : public OpConversionPattern<PermuteOp> {
     auto loc = op.getLoc();
     auto input = adaptor.getInput();
     auto output = createEmptyTensorForLinalgOuts(rewriter, op.getResult());
-    auto axesMap = getAxesMap(op);
+    auto axesMap = op.getAxesMapArray();
     auto rank = axesMap.size();
     SmallVector<Value> ins(1, input);
     SmallVector<Value> outs(1, output);

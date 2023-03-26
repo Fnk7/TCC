@@ -75,8 +75,12 @@ AxesTy ContractOp::getAxesArray() {
 void PermuteOp::build(OpBuilder &builder, OperationState &state, Value input,
                       AxesMapTy &axesMap) {
   auto resultType = getResultTypeByAxesMap(builder, input, axesMap);
-  auto axesMapAttr = builder.getI64ArrayAttr(axesMap);
+  AxesMapsRefTy axesMapsRef(axesMap);
+  auto axesMapAttr = AxesMapsAttr::get(builder.getContext(), axesMapsRef);
   PermuteOp::build(builder, state, resultType, input, axesMapAttr);
+}
+AxesMapTy PermuteOp::getAxesMapArray() {
+  return getAxesMap()[0];
 }
 
 void ConstantOp::build(OpBuilder &builder, OperationState &state,

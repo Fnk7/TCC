@@ -78,11 +78,16 @@ def PermuteOp : TC_Op<"permute", [NoMemoryEffect]> {
   let summary = "Tensor dimensions' permuting.";
   let description = "TODO";
 
-  let arguments = (ins F64Tensor : $input, I64ArrayAttr : $axes_map);
+  let arguments = (ins F64Tensor : $input, AxesMapsAttr : $axes_map);
   let results = (outs F64Tensor : $result);
 
   let builders = [OpBuilder<(ins "Value" : $input, "AxesMapTy&" : $axesMap)>];
   let hasCanonicalizer = 1;
+
+  let extraClassDeclaration = [{
+    /// Helper function to get axes_maps as SmallVector<SmallVector<int64_t>>.
+    AxesMapTy getAxesMapArray();
+  }];
 }
 
 def ConstantOp : TC_Op<"constant", [NoMemoryEffect]> {
@@ -125,19 +130,16 @@ def DiagonalOp : TC_Op<"diagonal", [NoMemoryEffect]> {
   let summary = "Diagonal values of two axis pairs of tensor.";
   let description = "TODO";
 
-  let arguments = (ins F64Tensor
-                   : $input, I64ArrayAttr
-                   : $axes_map, IndexListArrayAttr
-                   : $axes_pairs);
+  let arguments = (ins F64Tensor : $input,
+                       I64ArrayAttr : $axes_map,
+                       IndexListArrayAttr : $axes_pairs);
   let results = (outs F64Tensor : $result);
 
   let builders = [
-    OpBuilder<(ins "Value"
-               : $input, "AxesMapTy&"
-               : $axes)>,
-    OpBuilder<(ins "Value"
-               : $input, "AxesPairsTy&"
-               : $axesPairs)>
+    OpBuilder<(ins "Value" : $input,
+                   "AxesMapTy&" : $axes)>,
+    OpBuilder<(ins "Value" : $input,
+                   "AxesPairsTy&" : $axesPairs)>
   ];
 }
 

@@ -103,7 +103,7 @@ void collectPermuteOpSymmInfo(ValueSymmInfoMap &symmInfos, PermuteOp op) {
   auto input = op.getInput();
   if (!symmInfos.count(input))
     return;
-  auto axesMap = getAxesMap(op);
+  auto axesMap = op.getAxesMapArray();
   auto &symmInfo = symmInfos[op.getResult()];
   for (auto &pair : symmInfo) {
     pair.first = axesMap[pair.first];

@@ -139,7 +139,7 @@ struct AddPermuteFoldPattern : public OpRewritePattern<AddOp> {
     for (auto [input, axesMap] : llvm::zip(inputs, axesMaps)) {
       if (auto permuteOp = input.getDefiningOp<PermuteOp>()) {
         changed = true;
-        auto permuteMap = getAxesMap(permuteOp);
+        auto permuteMap = permuteOp.getAxesMapArray();
         assert(axesMap.size() == permuteMap.size());
         // Permute Input  [s0,s1,s2,s3], b0~b3
         // Permute Result [s3,s0,s2,s1], a0~a3
@@ -422,7 +422,7 @@ struct MulPermuteFoldPattern : public OpRewritePattern<MulOp> {
     for (auto [input, axesMap] : llvm::zip(inputs, axesMaps)) {
       if (auto permuteOp = input.getDefiningOp<PermuteOp>()) {
         changed = true;
-        auto permuteMap = getAxesMap(permuteOp);
+        auto permuteMap = permuteOp.getAxesMapArray();
         assert(axesMap.size() == permuteMap.size());
         // Permute Input  [s0,s1,s2,s3], b0~b3
         // Permute Result [s3,s0,s2,s1], a0~a3
@@ -476,7 +476,7 @@ struct PermuteFoldPattern : public OpRewritePattern<PermuteOp> {
   using OpRewritePattern<PermuteOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(PermuteOp op,
                                 PatternRewriter &rewriter) const override {
-    auto axesMap = getAxesMap(op);
+    auto axesMap = op.getAxesMapArray();
     if (isOrderedAxesMap(axesMap)) {
       rewriter.replaceOp(op, op.getInput());
       return success();
@@ -494,8 +494,8 @@ struct PermutePermuteFoldPattern : public OpRewritePattern<PermuteOp> {
     auto input = op.getInput();
     if (auto op2 = input.getDefiningOp<PermuteOp>()) {
       auto input2 = op2.getInput();
-      auto axesMap1 = getAxesMap(op);
-      auto axesMap2 = getAxesMap(op2);
+      auto axesMap1 = op.getAxesMapArray();
+      auto axesMap2 = op.getAxesMapArray();
       for (auto &axis : axesMap2) {
         axis = axesMap1[axis];
       }
@@ -630,7 +630,7 @@ struct ContractPermuteSwapPattern : public OpRewritePattern<ContractOp> {
       // [x,0,x,1], i2oAxisMap
       // [0,1], newAxesMap
       auto axes = op.getAxesArray();
-      auto axesMap = getAxesMap(permuteOp);
+      auto axesMap = permuteOp.getAxesMapArray();
       AxesTy newAxes;
       for (auto axis : axes) {
         for (auto e : llvm::enumerate(axesMap)) {
