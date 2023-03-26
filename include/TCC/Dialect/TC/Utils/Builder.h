@@ -1,9 +1,11 @@
 #ifndef TCC_DIALECT_TC_UTILS_BUILDER_H
 #define TCC_DIALECT_TC_UTILS_BUILDER_H
 
-#include "TCC/Dialect/TC/IR/Common.h"
-
 #include "mlir/IR/Builders.h"
+
+#include "TCC/Dialect/TC/IR/Common.h"
+#include "TCC/Dialect/Utils/Axis.h"
+#include "TCC/Dialect/Utils/Tensor.h"
 
 namespace mlir::tc::utils {
 using MappedInputTy = std::pair<Value, AxesMapTy>;
