@@ -2,6 +2,7 @@
 #define TCC_DIALECT_TC_IR_TCOPS_TD
 
 include "./TCBase.td"
+include "./TCAttributes.td"
 // For NoMemoryEffect
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
@@ -12,11 +13,16 @@ def MulOp : TC_Op<"mul", []> {
   let summary = "Tensor expanded elementwise multiplication.";
   let description = [{}];
 
-  let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps);
+  let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps, AxesMapsAttr:$maps);
   let results = (outs F64Tensor : $result);
 
   let builders = [OpBuilder<(ins "ValueRange" : $inputs,
-                                 "AxesMapsTy&" : $axesMaps)>];
+                                 "AxesMapsTy&" : $axesMaps)>,
+//   static void build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState &odsState,
+//  ::mlir::Type result, ::mlir::ValueRange inputs, ::mlir::ArrayAttr axes_maps, ::mlir::tc::AxesMapsAttr maps);
+                  OpBuilder<(ins "::mlir::Type" : $result,
+                                 "::mlir::ValueRange" : $inputs,
+                                 "::mlir::ArrayAttr" : $axes_maps)>];
   let extraClassDeclaration = [{
     /// Helper function to get axes_maps as SmallVector<SmallVector<int64_t>>.
     AxesMapsTy getAxesMapsArray();

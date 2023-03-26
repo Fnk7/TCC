@@ -27,6 +27,16 @@ void MulOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
   auto axesMapsAttr = mlir::tc::getAxesMapsAttr(builder, axesMaps);
   MulOp::build(builder, state, resultType, inputs, axesMapsAttr);
 }
+void MulOp::build(OpBuilder &builder, OperationState &state,
+                  ::mlir::Type result, ::mlir::ValueRange inputs,
+                  ::mlir::ArrayAttr axes_maps) {
+  AxesMapsTy maps(2);
+  maps[0].emplace_back(1);
+  maps[0].emplace_back(2);
+  maps[1].emplace_back(2);
+  auto mapsAttr = AxesMapsAttr::get(builder.getContext(), maps);
+  MulOp::build(builder, state, result, inputs, axes_maps, mapsAttr);
+}
 AxesMapsTy MulOp::getAxesMapsArray() { return ::getAxesMapsArray(*this); }
 
 void AddOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,

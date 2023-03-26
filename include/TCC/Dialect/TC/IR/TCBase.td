@@ -4,10 +4,12 @@
 include "mlir/IR/OpBase.td"
 
 def TC_Dialect : Dialect {
-  let name = "tc";
   let summary = "Tensor Contraction Dialect";
+
+  let name = "tc";
   let cppNamespace = "::mlir::tc";
   let dependentDialects = ["func::FuncDialect"];
+  let useDefaultAttributePrinterParser = 1;
 }
 
 #endif

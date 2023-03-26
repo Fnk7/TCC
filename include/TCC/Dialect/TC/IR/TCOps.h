@@ -14,10 +14,10 @@ using SignsTy = SmallVector<bool>;
 using I64ArrayTy = SmallVector<int64_t>;
 } // namespace mlir::tc
 
-#define GET_OP_CLASSES
-#include "TCC/Dialect/TC/IR/TCOps.h.inc"
-
 #define GET_ATTRDEF_CLASSES
 #include "TCC/Dialect/TC/IR/TCAttributes.h.inc"
+
+#define GET_OP_CLASSES
+#include "TCC/Dialect/TC/IR/TCOps.h.inc"
 
 #endif
