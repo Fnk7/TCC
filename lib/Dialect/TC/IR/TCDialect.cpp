@@ -27,26 +27,15 @@ void TCDialect::initialize() {
 
 void AxesAttr::print(AsmPrinter &printer) const {
   auto axesRef = getAxes();
-  printer << "<";
+  printer << "<(";
   llvm::interleaveComma(axesRef, printer);
-  printer << ">";
+  printer << ")>";
 }
 
 Attribute AxesAttr::parse(AsmParser &parser, Type odsType) {
   AxesTy axes;
+  assert(axes.size() && "TODO: Custom parser for AxesAttr.");
   return AxesAttr::get(odsType.getContext(), axes);
-}
-
-void AxesMapAttr::print(AsmPrinter &printer) const {
-  auto axesMapRef = getAxesMap();
-  printer << "<";
-  llvm::interleaveComma(axesMapRef, printer);
-  printer << ">";
-}
-
-Attribute AxesMapAttr::parse(AsmParser &parser, Type odsType) {
-  AxesMapTy axesMap;
-  return AxesMapAttr::get(odsType.getContext(), axesMap);
 }
 
 void AxesMapsAttr::print(AsmPrinter &printer) const {
@@ -62,5 +51,25 @@ void AxesMapsAttr::print(AsmPrinter &printer) const {
 
 Attribute AxesMapsAttr::parse(AsmParser &parser, Type odsType) {
   AxesMapsTy axesMaps;
+  assert(axesMaps.size() && "TODO: Custom parser for AxesAttr.");
   return AxesMapsAttr::get(odsType.getContext(), axesMaps);
+}
+
+void SignsAttr::print(AsmPrinter &printer) const {
+  auto signsRef = getSigns();
+  printer << "<";
+  llvm::interleaveComma(signsRef, printer, [&](bool sign) {
+    if (sign) {
+      printer << "+";
+    } else {
+      printer << "-";
+    }
+  });
+  printer << ">";
+}
+
+Attribute SignsAttr::parse(AsmParser &parser, Type odsType) {
+  SignsTy signs;
+  assert(signs.size() && "TODO: Custom parser for AxesAttr.");
+  return SignsAttr::get(odsType.getContext(), signs);
 }
