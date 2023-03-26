@@ -11,6 +11,7 @@
 
 namespace mlir::tc {
 using SignsTy = SmallVector<bool>;
+using SignsRefTy = ArrayRef<bool>;
 using I64ArrayTy = SmallVector<int64_t>;
 } // namespace mlir::tc
 
