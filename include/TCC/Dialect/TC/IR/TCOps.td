@@ -13,15 +13,11 @@ def MulOp : TC_Op<"mul", []> {
   let summary = "Tensor expanded elementwise multiplication.";
   let description = [{}];
 
-  let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps, AxesMapsAttr:$maps);
+  let arguments = (ins Variadic<F64Tensor>:$inputs, IndexListArrayAttr:$axes_maps);
   let results = (outs F64Tensor : $result);
 
   let builders = [OpBuilder<(ins "ValueRange" : $inputs,
-                                 "AxesMapsTy&" : $axesMaps)>,
-                  /// TODO: Delete it!
-                  OpBuilder<(ins "::mlir::Type" : $result,
-                                 "::mlir::ValueRange" : $inputs,
-                                 "::mlir::ArrayAttr" : $axes_maps)>];
+                                 "AxesMapsTy&" : $axesMaps)>];
   let extraClassDeclaration = [{
     /// Helper function to get axes_maps as SmallVector<SmallVector<int64_t>>.
     AxesMapsTy getAxesMapsArray();
@@ -119,10 +115,9 @@ def SliceOp : TC_Op<"slice", [NoMemoryEffect]> {
   let arguments = (ins F64Tensor : $input, Variadic<Index> : $indices, AxesAttr : $axes);
   let results = (outs F64Tensor : $result);
 
-  let builders = [OpBuilder<(ins "Value"
-                             : $input, "ValueRange"
-                             : $indices, "AxesTy&"
-                             : $axes)>];
+  let builders = [OpBuilder<(ins "Value" : $input,
+                                 "ValueRange" : $indices,
+                                 "AxesTy&" : $axes)>];
   // let hasCanonicalizer = 1;
 }
 
