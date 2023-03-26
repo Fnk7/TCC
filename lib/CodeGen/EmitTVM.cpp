@@ -46,6 +46,7 @@ private:
     }
   }
 
+  SmallVector<std::string> inputTensorNames;
   void emitInputTensors() {
     for (auto argValue : funcOp.getArguments()) {
       if (argValue.getType().isa<RankedTensorType>()) {
@@ -54,6 +55,7 @@ private:
         emitTensorSizes(argValue);
         emitTENameArgument(name);
         valueNameMap[argValue] = name;
+        inputTensorNames.emplace_back(name);
       }
     }
   }
@@ -86,6 +88,8 @@ private:
         emitTCPermuteOp(pmOp);
       } else if (auto cstOp = dyn_cast_or_null<ConstantOp>(&op)) {
         emitTCConstantOp(cstOp);
+      } else if (auto returnOp = dyn_cast_or_null<func::ReturnOp>(&op)) {
+        emitFuncReturnOp(returnOp);
       } else {
         out.indent(indent) << "# TODO: " << op.getName() << "\n";
       }
@@ -207,6 +211,17 @@ private:
     op.getValue().toString(value);
     out.indent(indent) << name << " = " << value << "\n";
     valueNameMap[op.getResult()] = name;
+  }
+
+  void emitFuncReturnOp(func::ReturnOp op) {
+    out.indent(indent) << "return [";
+    llvm::interleaveComma(inputTensorNames, out);
+    auto inputs = op.getOperands();
+    out << ", ";
+    llvm::interleaveComma(inputs, out, [&](Value value) {
+      out << valueNameMap[value];
+    });
+    out << "]\n";
   }
 };
 } // namespace
