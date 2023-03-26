@@ -3,7 +3,6 @@
 
 #include "mlir/IR/Builders.h"
 
-#include "TCC/Dialect/TC/IR/Common.h"
 #include "TCC/Dialect/Utils/Axis.h"
 #include "TCC/Dialect/Utils/Tensor.h"
 

@@ -1,7 +1,6 @@
 #ifndef TCC_DIALECT_TC_UTILS_AXESMAP_H
 #define TCC_DIALECT_TC_UTILS_AXESMAP_H
 
-#include "TCC/Dialect/TC/IR/Common.h"
 #include "TCC/Dialect/Utils/Axis.h"
 #include "TCC/Dialect/Utils/Tensor.h"
 
