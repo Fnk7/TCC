@@ -24,6 +24,9 @@ def MulOp : TC_Op<"mul", []> {
     AxesMapsTy getAxesMapsArray();
   }];
   let hasCanonicalizer = 1;
+  let assemblyFormat = "(`(` $inputs^ `)`)? "
+                       "`{` `axesmap` $axes_maps `}` `:` attr-dict ` ` "
+                       "`(`type($inputs)`)` `->` type($result)";
 }
 
 def AddOp : TC_Op<"add", [NoMemoryEffect]> {
@@ -54,6 +57,9 @@ def AddOp : TC_Op<"add", [NoMemoryEffect]> {
     SignsTy getSignsArray();
   }];
   let hasCanonicalizer = 1;
+  let assemblyFormat = "(`(` $inputs^ `)`)? "
+                       "`{` `axesmap` $axes_maps `,` `signs` $signs `}` `:` attr-dict ` ` "
+                       "`(`type($inputs)`)` `->` type($result)";
 }
 
 def ContractOp : TC_Op<"contract", [NoMemoryEffect]> {
@@ -64,12 +70,14 @@ def ContractOp : TC_Op<"contract", [NoMemoryEffect]> {
   let results = (outs F64Tensor : $result);
 
   let builders = [OpBuilder<(ins "Value" : $input, "AxesTy&" : $axes)>];
-  let hasCanonicalizer = 1;
-
   let extraClassDeclaration = [{
     /// Helper function to get axes as SmallVector<AxisTy>.
     AxesTy getAxesArray();
   }];
+  let hasCanonicalizer = 1;
+  let assemblyFormat = "`(` $input `)` "
+                       "`{` `axes` $axes `}` `:` attr-dict ` ` "
+                       "type($input) `->` type($result)";
 }
 
 def PermuteOp : TC_Op<"permute", [NoMemoryEffect]> {
@@ -80,12 +88,14 @@ def PermuteOp : TC_Op<"permute", [NoMemoryEffect]> {
   let results = (outs F64Tensor : $result);
 
   let builders = [OpBuilder<(ins "Value" : $input, "AxesMapTy&" : $axesMap)>];
-  let hasCanonicalizer = 1;
-
   let extraClassDeclaration = [{
     /// Helper function to get axes_map as SmallVector<AxisTy>.
     AxesMapTy getAxesMapArray();
   }];
+  let hasCanonicalizer = 1;
+  let assemblyFormat = "`(` $input `)` "
+                       "`{` `axesmap` $axes_map `}` `:` attr-dict ` ` "
+                       "type($input) `->` type($result)";
 }
 
 def ConstantOp : TC_Op<"constant", [NoMemoryEffect]> {

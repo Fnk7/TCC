@@ -2,6 +2,7 @@
 #include "TCC/Dialect/TC/Utils/Utils.h"
 
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/OpImplementation.h"
 
 #include <algorithm>
 

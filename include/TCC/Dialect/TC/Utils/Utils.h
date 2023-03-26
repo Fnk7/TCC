@@ -46,10 +46,10 @@ template <typename T> inline AxesMapsTy getAxesMaps(T op) {
   }
   return axesMaps;
 }
-template<> inline AxesMapsTy getAxesMaps(MulOp op) {
+template <> inline AxesMapsTy getAxesMaps(MulOp op) {
   return op.getAxesMapsArray();
 }
-template<> inline AxesMapsTy getAxesMaps(AddOp op) {
+template <> inline AxesMapsTy getAxesMaps(AddOp op) {
   return op.getAxesMapsArray();
 }
 template <typename T> inline AxesMapTy getAxesMap(T op) {

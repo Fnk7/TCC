@@ -27,9 +27,9 @@ void TCDialect::initialize() {
 
 void AxesAttr::print(AsmPrinter &printer) const {
   auto axesRef = getAxes();
-  printer << "<(";
+  printer << "[";
   llvm::interleaveComma(axesRef, printer);
-  printer << ")>";
+  printer << "]";
 }
 
 Attribute AxesAttr::parse(AsmParser &parser, Type odsType) {
@@ -40,13 +40,13 @@ Attribute AxesAttr::parse(AsmParser &parser, Type odsType) {
 
 void AxesMapsAttr::print(AsmPrinter &printer) const {
   auto axesMapsRef = getAxesMaps();
-  printer << "<";
+  printer << "[";
   llvm::interleaveComma(axesMapsRef, printer, [&](AxesMapRefTy axesMapRef) {
     printer << "(";
     llvm::interleaveComma(axesMapRef, printer);
     printer << ")";
   });
-  printer << ">";
+  printer << "]";
 }
 
 Attribute AxesMapsAttr::parse(AsmParser &parser, Type odsType) {
@@ -57,7 +57,7 @@ Attribute AxesMapsAttr::parse(AsmParser &parser, Type odsType) {
 
 void SignsAttr::print(AsmPrinter &printer) const {
   auto signsRef = getSigns();
-  printer << "<";
+  printer << "[";
   llvm::interleaveComma(signsRef, printer, [&](bool sign) {
     if (sign) {
       printer << "+";
@@ -65,7 +65,7 @@ void SignsAttr::print(AsmPrinter &printer) const {
       printer << "-";
     }
   });
-  printer << ">";
+  printer << "]";
 }
 
 Attribute SignsAttr::parse(AsmParser &parser, Type odsType) {
