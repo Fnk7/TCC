@@ -93,7 +93,7 @@ void NegOp::build(OpBuilder &builder, OperationState &state, Value input) {
 void SliceOp::build(OpBuilder &builder, OperationState &state, Value input,
                     ValueRange indices, AxesTy &axes) {
   auto resultType = getResultTypeWithoutAxes(builder, input, axes);
-  auto axesAttr = builder.getI64ArrayAttr(axes);
+  auto axesAttr = AxesAttr::get(builder.getContext(), axes);
   SliceOp::build(builder, state, resultType, input, indices, axesAttr);
 }
 

@@ -18,8 +18,7 @@ def MulOp : TC_Op<"mul", []> {
 
   let builders = [OpBuilder<(ins "ValueRange" : $inputs,
                                  "AxesMapsTy&" : $axesMaps)>,
-//   static void build(::mlir::OpBuilder &odsBuilder, ::mlir::OperationState &odsState,
-//  ::mlir::Type result, ::mlir::ValueRange inputs, ::mlir::ArrayAttr axes_maps, ::mlir::tc::AxesMapsAttr maps);
+                  /// TODO: Delete it!
                   OpBuilder<(ins "::mlir::Type" : $result,
                                  "::mlir::ValueRange" : $inputs,
                                  "::mlir::ArrayAttr" : $axes_maps)>];
@@ -112,7 +111,7 @@ def SliceOp : TC_Op<"slice", [NoMemoryEffect]> {
   let summary = "A slice of a tensor.";
   let description = "TODO";
 
-  let arguments = (ins F64Tensor : $input, Variadic<Index> : $indices, I64ArrayAttr : $axes);
+  let arguments = (ins F64Tensor : $input, Variadic<Index> : $indices, AxesAttr : $axes);
   let results = (outs F64Tensor : $result);
 
   let builders = [OpBuilder<(ins "Value"
