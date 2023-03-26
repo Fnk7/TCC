@@ -50,9 +50,9 @@ template <typename T> inline AxesMapTy getAxesMap(T op) {
   auto axesMapAttr = op.getAxesMap();
   return getI64ArrayFromAttr(axesMapAttr);
 }
-template <typename T> inline AxesTy getAxes(T op) {
-  auto axesAttr = op.getAxes();
-  return getI64ArrayFromAttr(axesAttr);
+inline AxesTy getAxes(ContractOp op) {
+  auto axesRef = op.getAxes();
+  return llvm::to_vector(axesRef);
 }
 inline SignsTy getSigns(AddOp op) {
   SignsTy signs;

@@ -58,11 +58,16 @@ def ContractOp : TC_Op<"contract", [NoMemoryEffect]> {
   let summary = "Tensor contraction.";
   let description = "TODO";
 
-  let arguments = (ins F64Tensor : $input, I64ArrayAttr : $axes);
+  let arguments = (ins F64Tensor : $input, AxesAttr : $axes);
   let results = (outs F64Tensor : $result);
 
   let builders = [OpBuilder<(ins "Value" : $input, "AxesTy&" : $axes)>];
   let hasCanonicalizer = 1;
+
+  let extraClassDeclaration = [{
+    /// Helper function to get axes_maps as SmallVector<SmallVector<int64_t>>.
+    AxesTy getAxesArray();
+  }];
 }
 
 def PermuteOp : TC_Op<"permute", [NoMemoryEffect]> {

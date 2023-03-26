@@ -63,8 +63,12 @@ void ContractOp::build(OpBuilder &builder, OperationState &state, Value input,
                        AxesTy &axes) {
   std::sort(axes.begin(), axes.end());
   auto resultType = getResultTypeWithoutAxes(builder, input, axes);
-  auto axesAttr = builder.getI64ArrayAttr(axes);
+  auto axesAttr = AxesAttr::get(builder.getContext(), axes);
   ContractOp::build(builder, state, resultType, input, axesAttr);
+}
+AxesTy ContractOp::getAxesArray() {
+  auto axesRef = getAxes();
+  return llvm::to_vector(axesRef);
 }
 
 void PermuteOp::build(OpBuilder &builder, OperationState &state, Value input,
