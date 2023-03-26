@@ -24,7 +24,7 @@ public:
   void emit() {
     /// TVM auto_scheduler
     out << "@auto_scheduler.register_workload\n";
-    out << "def " << funcOp.getName() << "(";
+    out << "def tc_generated(";
     emitInputSizes();
     out << "):\n";
     indent += 4;
@@ -52,7 +52,7 @@ private:
         std::string name = "t" + std::to_string(argValue.getArgNumber());
         out.indent(indent) << name << " = te.placeholder(";
         emitTensorSizes(argValue);
-        out << ", name=" << name << ")\n";
+        emitTENameArgument(name);
         valueNameMap[argValue] = name;
       }
     }
@@ -77,20 +77,136 @@ private:
   void emitFuncionBody() {
     for (auto &op : block) {
       if (auto addOp = dyn_cast_or_null<AddOp>(&op)) {
-        out.indent(indent) << "# TODO: " << op.getName() << "\n";
+        emitTCAddOp(addOp);
       } else if (auto mulOp = dyn_cast_or_null<MulOp>(&op)) {
-        emitMulOp(mulOp);
+        emitTCMulOp(mulOp);
+      } else if (auto ctOp = dyn_cast_or_null<ContractOp>(&op)) {
+        emitTCContractOp(ctOp);
+      } else if (auto pmOp = dyn_cast_or_null<PermuteOp>(&op)) {
+        emitTCPermuteOp(pmOp);
+      } else if (auto cstOp = dyn_cast_or_null<ConstantOp>(&op)) {
+        emitTCConstantOp(cstOp);
       } else {
         out.indent(indent) << "# TODO: " << op.getName() << "\n";
       }
     }
   }
 
-  template <typename Op> void emitTCAddOrMulOp(Op op) {}
+  void emitSizeID(int64_t size, int64_t sizeID) {
+    if (size >= 0) {
+      out << size;
+    } else {
+      out << "s" << sizeID;
+    }
+  }
 
-  void emitMulOp(MulOp op) {
+  int varIdx = 0;
+  void emitTEComputeForValue(Value value) {
+    auto [shape, sizeIDs] = getTensorSizeInfos(value);
+    std::string name = "var" + std::to_string(varIdx++);
+    out.indent(indent) << name << " = te.compute((";
+    for (auto [idx, size] : llvm::enumerate(shape)) {
+      if (idx != 0) {
+        out << ", ";
+      }
+      emitSizeID(size, sizeIDs[idx]);
+    }
+    out << "), lambda *ls: ";
+    valueNameMap[value] = name;
+  }
+  void emitTENameArgument(Value value) {
+    emitTENameArgument(valueNameMap[value]);
+  }
+  void emitTENameArgument(std::string name) {
+    out << ", name=\"" << name << "\")\n";
+  }
+
+  void emitTCMulOp(MulOp op) {
     auto inputs = op.getInputs();
-    auto axesMaps = op.getAxesMapsArray();
+    auto result = op.getResult();
+    auto axesMapsRef = op.getAxesMaps();
+    emitTEComputeForValue(result);
+    for (auto [idx, input] : llvm::enumerate(inputs)) {
+      if (idx != 0) {
+        out << " * ";
+      }
+      out << valueNameMap[input];
+      for (auto axis : axesMapsRef[idx]) {
+        out << "[ls[" << axis << "]]";
+      }
+    }
+    emitTENameArgument(result);
+  }
+
+  void emitTCAddOp(AddOp op) {
+    auto inputs = op.getInputs();
+    auto result = op.getResult();
+    auto axesMapsRef = op.getAxesMaps();
+    emitTEComputeForValue(result);
+    for (auto [idx, input] : llvm::enumerate(inputs)) {
+      if (idx != 0) {
+        out << " + ";
+      }
+      out << valueNameMap[input];
+      for (auto axis : axesMapsRef[idx]) {
+        out << "[ls[" << axis << "]]";
+      }
+    }
+    emitTENameArgument(result);
+  }
+
+  int reduceAxisIdx = 0;
+  std::string emitTEReductAxis(int64_t size, int64_t sizeIDs) {
+    std::string name = "a" + std::to_string(reduceAxisIdx++);
+    out.indent(indent) << name << " = te.reduce_axis((0, ";
+    emitSizeID(size, sizeIDs);
+    out << ")";
+    emitTENameArgument(name);
+    return name;
+  }
+
+  void emitTCContractOp(ContractOp op) {
+    auto input = op.getInput();
+    auto result = op.getResult();
+    auto axes = op.getAxes();
+    assert(axes.size() == 1 && "Only support 1 contract axes");
+    auto axis = axes[0];
+    auto [shape, sizeIDs] = getTensorSizeInfos(input);
+    auto reduceAxis = emitTEReductAxis(shape[axis], sizeIDs[axis]);
+    emitTEComputeForValue(result);
+    out << "te.sum(" << valueNameMap[input];
+    for (auto inAxis : llvm::seq<int>(0, shape.size())) {
+      if (inAxis == axis) {
+        out << "[" << reduceAxis << "]";
+      } else {
+        if (inAxis > axis)
+          inAxis -= 1;
+        out << "[ls[" << inAxis << "]]";
+      }
+    }
+    out << ", axis=" << reduceAxis << ")";
+    emitTENameArgument(result);
+  }
+
+  void emitTCPermuteOp(PermuteOp op) {
+    auto input = op.getInput();
+    auto result = op.getResult();
+    auto axesMap = op.getAxesMapArray();
+    emitTEComputeForValue(result);
+    out << valueNameMap[input];
+    for (auto axis : axesMap) {
+      out << "[ls[" << axis << "]]";
+    }
+    emitTENameArgument(result);
+  }
+
+  int cstIdx = 0;
+  void emitTCConstantOp(ConstantOp op) {
+    std::string name = "cst" + std::to_string(cstIdx++);
+    SmallVector<char> value;
+    op.getValue().toString(value);
+    out.indent(indent) << name << " = " << value << "\n";
+    valueNameMap[op.getResult()] = name;
   }
 };
 } // namespace
