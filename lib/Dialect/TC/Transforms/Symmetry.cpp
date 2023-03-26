@@ -60,7 +60,7 @@ void collectContractOpSymmInfo(ValueSymmInfoMapTy &symmInfos, ContractOp op) {
   if (!symmInfos.count(input))
     return;
   auto rank = getTensorRank(input);
-  auto axes = getAxes(op);
+  auto axes = op.getAxesArray();
   auto i2oAxisMap = getContractOpInput2OutputAxisMap(axes, rank);
   SymmetryInfoTy symmInfo;
   for (auto &pair : symmInfos[input]) {

@@ -32,7 +32,7 @@ struct ConvertTCToTBLASPass
         auto inputs = mulOp.getInputs();
         if (inputs.size() == 2) {
           auto rank = tc::getTensorRank(input);
-          auto axes = tc::getAxes(ctOp);
+          auto axes = ctOp.getAxesArray();
           auto axesMaps = tc::getAxesMaps(mulOp);
           auto &axesMap1 = axesMaps[0];
           auto &axesMap2 = axesMaps[1];

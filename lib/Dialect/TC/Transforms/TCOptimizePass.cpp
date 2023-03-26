@@ -384,7 +384,7 @@ public:
   CtOpPlan() : rootNode(nullptr) {}
   CtOpPlan(ContractOp ctOp) {
     auto input = ctOp.getInput();
-    axes = getAxes(ctOp);
+    axes = ctOp.getAxesArray();
     auto mulOp = input.getDefiningOp<MulOp>();
     if (mulOp) {
       axesMaps = getAxesMaps(mulOp);

@@ -35,7 +35,7 @@ struct LiftMulPass : public tc::impl::LiftMulBase<LiftMulPass> {
       }
       for (auto ctOp : worklist) {
         auto input = ctOp.getInput();
-        auto axes = getAxes(ctOp);
+        auto axes = ctOp.getAxesArray();
         auto rank = getTensorRank(input);
         auto i2oAxisMap = getContractOpInput2OutputAxisMap(axes, rank);
         auto mulOp = input.getDefiningOp<MulOp>();

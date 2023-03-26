@@ -367,7 +367,7 @@ struct ContractOpLowering : public OpConversionPattern<ContractOp> {
     auto loc = op.getLoc();
     auto input = adaptor.getInput();
     auto rank = getTensorRank(input);
-    auto axes = getAxes(op);
+    auto axes = op.getAxesArray();
     auto out = createZeroTensorForLinalgOuts(rewriter, op.getResult());
     SmallVector<Value> ins(1, input);
     SmallVector<Value> outs(1, out);

@@ -50,10 +50,7 @@ template <typename T> inline AxesMapTy getAxesMap(T op) {
   auto axesMapAttr = op.getAxesMap();
   return getI64ArrayFromAttr(axesMapAttr);
 }
-inline AxesTy getAxes(ContractOp op) {
-  auto axesRef = op.getAxes();
-  return llvm::to_vector(axesRef);
-}
+
 inline SignsTy getSigns(AddOp op) {
   SignsTy signs;
   auto signsAttr = op.getSigns();
@@ -130,7 +127,7 @@ inline AxesMapTy getContractOpInput2OutputAxisMap(AxesTy &axes,
   return axesMap;
 }
 inline AxesMapTy getContractOpInput2OutputAxisMap(ContractOp ctOp) {
-  auto axes = getAxes(ctOp);
+  auto axes = ctOp.getAxesArray();
   auto inputDim = getTensorRank(ctOp.getInput());
   return getContractOpInput2OutputAxisMap(axes, inputDim);
 }

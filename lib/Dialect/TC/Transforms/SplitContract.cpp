@@ -21,7 +21,7 @@ using namespace mlir::tc::utils;
 
 void splitContractOpWithMulOp(ContractOp op) {
   auto input = op.getInput();
-  auto axes = getAxes(op);
+  auto axes = op.getAxesArray();
   auto mulOp = input.getDefiningOp<MulOp>();
   if (axes.size() < 2 || !mulOp) {
     return;
@@ -361,7 +361,7 @@ void splitContractAndLiftMul(ContractOp op2) {
   if (!op3) {
     return;
   }
-  auto axes2 = getAxes(op2);
+  auto axes2 = op2.getAxesArray();
   SmallVector<Value> inputs(op3.getInputs());
   auto axesMaps3 = getAxesMaps(op3);
   Axis2InputSetMapTy inputSetMap = getAxis2InputSetMap(axes2, axesMaps3);

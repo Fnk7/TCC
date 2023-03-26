@@ -53,7 +53,7 @@ void TreeAnalysis(AddOp op) {
     if (auto contractOp = input.getDefiningOp<ContractOp>()) {
       auto input2 = contractOp.getInput();
       auto rank = getTensorRank(input2);
-      auto axes2 = getAxes(contractOp);
+      auto axes2 = contractOp.getAxesArray();
       auto i2oAxisMap = getContractOpInput2OutputAxisMap(axes2, rank);
       if (auto mulOp = input2.getDefiningOp<MulOp>()) {
         insertValueAxesToAxisMap(map1, mulOp, axesMap, i2oAxisMap);
@@ -92,7 +92,7 @@ void TreeAnalysis(AddOp op) {
     if (auto contractOp = input.getDefiningOp<ContractOp>()) {
       auto input2 = contractOp.getInput();
       auto rank = getTensorRank(input2);
-      auto axes2 = getAxes(contractOp);
+      auto axes2 = contractOp.getAxesArray();
       auto axesMap2 = getContractOpInput2OutputAxisMap(axes2, rank);
       if (auto mulOp = input2.getDefiningOp<MulOp>()) {
         auto inputs3 = mulOp.getInputs();
@@ -183,7 +183,7 @@ void TreeAnalysis(AddOp op) {
   SizeIDMapTy map3;
   for (auto [pos, input] : llvm::enumerate(inputs)) {
     if (auto contractOp = input.getDefiningOp<ContractOp>()) {
-      auto axes = getAxes(contractOp);
+      auto axes = contractOp.getAxesArray();
       auto sizeIDs = getTensorSizeIDs(contractOp.getInput());
       for (auto [idx, axis] : llvm::enumerate(axes)) {
         auto sizeID = sizeIDs[axis];
@@ -264,7 +264,7 @@ void TreeAnalysis2(AddOp op) {
     if (auto contractOp = input1.getDefiningOp<ContractOp>()) {
       auto input2 = contractOp.getInput();
       auto rank2 = getTensorRank(input2);
-      auto axes2 = getAxes(contractOp);
+      auto axes2 = contractOp.getAxesArray();
       auto axesMap2 = getContractOpInput2OutputAxisMap(axes2, rank2);
       if (auto mulOp = input2.getDefiningOp<MulOp>()) {
         PositionTy pos(pos1, true, -1);
@@ -329,7 +329,7 @@ void TreeAnalysis2(AddOp op) {
     }
     ctInputs.insert(ctOp);
     auto inputs3 = mulOp.getInputs();
-    auto axes2 = getAxes(ctOp);
+    auto axes2 = ctOp.getAxesArray();
     for (auto axis3 : axes2) {
       map4[ctOp][axis3] = SmallVector<int64_t>();
     }
@@ -362,7 +362,7 @@ void TreeAnalysis2(AddOp op) {
   for (auto ctOp : ctInputs) {
     ctOp.getInput().dump();
     auto axisPosMap = map4[ctOp];
-    auto axes = getAxes(ctOp);
+    auto axes = ctOp.getAxesArray();
     llvm::SetVector<int64_t> axisSet(axes.begin(), axes.end());
     AxesTy sortedAxes;
     llvm::SetVector<int64_t> resultAxes;

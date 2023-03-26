@@ -26,7 +26,7 @@ using SizeIDs2PosSetMapTy = DenseMap<SizeIDsTy, PostionsTy>;
 
 void insertContractOpPositionIntoGroups(ContractOp ctOp, int64_t pos,
                                         SizeIDs2PosSetMapTy &ctOpGroups) {
-  auto axes = getAxes(ctOp);
+  auto axes = ctOp.getAxesArray();
   auto input = ctOp.getInput();
   auto sizeIDs = getTensorSizeIDs(input);
   auto ctSizeIDs = llvm::to_vector(
@@ -46,7 +46,7 @@ Value sinkMulIntoContract(MulOp mulOp) {
   }
   assert(ctPos != -1);
   auto ctOp = inputs[ctPos].getDefiningOp<ContractOp>();
-  auto axes = getAxes(ctOp);
+  auto axes = ctOp.getAxesArray();
   auto newInputs = llvm::to_vector(inputs);
   auto newAxesMaps = getAxesMaps(mulOp);
   auto i2oAxisMap = getContractOpInput2OutputAxisMap(ctOp);
@@ -115,7 +115,7 @@ void mergeAddOfContract(AddOp op) {
   SizeIDs2PosSetMapTy ctOpGroups;
   for (auto [pos, input] : llvm::enumerate(inputs)) {
     if (auto ctOp = input.getDefiningOp<ContractOp>()) {
-      auto axes = getAxes(ctOp);
+      auto axes = ctOp.getAxesArray();
       auto input = ctOp.getInput();
       auto sizeIDs = getTensorSizeIDs(input);
       auto ctSizeIDs = llvm::to_vector(
@@ -159,7 +159,7 @@ void mergeAddOfContract(AddOp op) {
         auto contractOp = inputs[pos].getDefiningOp<ContractOp>();
         auto input = contractOp.getInput();
         auto &axesMap = axesMaps[pos];
-        auto axes = getAxes(contractOp);
+        auto axes = contractOp.getAxesArray();
         auto sizeIDs = getTensorSizeIDs(input);
         auto i2oAxisMap = getContractOpInput2OutputAxisMap(
             axes, axesMap.size() + axes.size());

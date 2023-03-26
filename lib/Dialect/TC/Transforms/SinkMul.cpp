@@ -112,7 +112,7 @@ struct SinkMulPass : public tc::impl::SinkMulBase<SinkMulPass> {
           auto ctOp = inputs[ctPos].getDefiningOp<ContractOp>();
           auto &ctAxesMap = axesMaps[ctPos];
           auto input = ctOp.getInput();
-          auto axes = getAxes(ctOp);
+          auto axes = ctOp.getAxesArray();
           auto rank = getTensorRank(input);
           auto i2oAxisMap = getContractOpInput2OutputAxisMap(axes, rank);
           AxesMapTy o2iAxisMap(i2oAxisMap.size() - axes.size());

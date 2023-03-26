@@ -215,7 +215,7 @@ int64_t sinkIntoCtOp(Value input, AxesMapTy &sinkAxesMap, ContractOp ctOp) {
     return 0;
   }
   auto ctInput = ctOp.getInput();
-  auto axes = getAxes(ctOp);
+  auto axes = ctOp.getAxesArray();
   auto ctAxesMap =
       getContractOpInput2OutputAxisMap(axes, getTensorRank(ctInput));
   if (auto mulOp = ctInput.getDefiningOp<MulOp>()) {
@@ -227,7 +227,7 @@ int64_t sinkIntoCtOp(Value input, AxesMapTy &sinkAxesMap, ContractOp ctOp) {
 }
 Value doSinkIntoCtOp(Value input, AxesMapTy &sinkAxesMap, ContractOp ctOp) {
   auto ctInput = ctOp.getInput();
-  auto axes = getAxes(ctOp);
+  auto axes = ctOp.getAxesArray();
   auto ctAxesMap =
       getContractOpInput2OutputAxisMap(axes, getTensorRank(ctInput));
   auto mulOp = ctInput.getDefiningOp<MulOp>();
