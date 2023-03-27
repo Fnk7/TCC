@@ -67,13 +67,9 @@ private:
       if (idx != 0) {
         out << ", ";
       }
-      if (size >= 0) {
-        out << size;
-      } else {
-        out << "s" << sizeIDs[idx];
-      }
+      emitSizeID(size, sizeIDs[idx]);
     }
-    out << ")";
+    out << ",)";
   }
 
   void emitFuncionBody() {
@@ -106,16 +102,10 @@ private:
 
   int varIdx = 0;
   void emitTEComputeForValue(Value value) {
-    auto [shape, sizeIDs] = getTensorSizeInfos(value);
     std::string name = "var" + std::to_string(varIdx++);
-    out.indent(indent) << name << " = te.compute((";
-    for (auto [idx, size] : llvm::enumerate(shape)) {
-      if (idx != 0) {
-        out << ", ";
-      }
-      emitSizeID(size, sizeIDs[idx]);
-    }
-    out << "), lambda *ls: ";
+    out.indent(indent) << name << " = te.compute(";
+    emitTensorSizes(value);
+    out << ", lambda *ls: ";
     valueNameMap[value] = name;
   }
   void emitTENameArgument(Value value) {
@@ -218,9 +208,8 @@ private:
     llvm::interleaveComma(inputTensorNames, out);
     auto inputs = op.getOperands();
     out << ", ";
-    llvm::interleaveComma(inputs, out, [&](Value value) {
-      out << valueNameMap[value];
-    });
+    llvm::interleaveComma(inputs, out,
+                          [&](Value value) { out << valueNameMap[value]; });
     out << "]\n";
   }
 };

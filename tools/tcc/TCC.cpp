@@ -36,11 +36,12 @@ static cl::opt<std::string> InputFileName(cl::Positional,
                                           cl::init("-"),
                                           cl::value_desc("filename"));
 
-static cl::opt<bool> CTCSE("opt-cse", cl::desc("Contraction Dialect CSE Opt"),
-                           cl::init(false));
+static cl::opt<bool> TCNoOpt("tc-no-opt", cl::desc("TC Dialect Optimization"),
+                             cl::init(false));
 
-static cl::opt<bool> OptLinalg("opt-linalg", cl::desc("Use linalg opt"),
-                               cl::init(false));
+static cl::opt<bool> LinalgFuse("linalg-fuse",
+                                cl::desc("Fuse linalg generic parallel loop."),
+                                cl::init(false));
 
 static cl::opt<bool> LowerLinalg("lower-linalg",
                                  cl::desc("Lower linalg dialect"),
@@ -92,6 +93,13 @@ void addConvertToLinalgPipelin(mlir::PassManager &PM) {
   PM.addPass(mlir::createCSEPass());
   PM.addPass(mlir::createCanonicalizerPass());
 }
+
+void addLinalgFusePass(mlir::PassManager &PM) {
+  if (LinalgFuse) {
+    PM.addPass(mlir::createLinalgElementwiseOpFusionPass());
+    PM.addPass(mlir::createCSEPass());
+  }
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -113,20 +121,18 @@ int main(int argc, char **argv) {
   mlir::PassManager PM(&Ctx);
   auto M = mlir::tc::MLIRGen(Ctx, *CF);
   if (Emit == DumpMLIR) {
-    if (CTCSE) {
+    if (!TCNoOpt) {
       addTCOptimizePipeline(PM);
-      PM.addPass(mlir::tc::createTCOptimizePass());
-      mlir::OpPassManager &FuncPM2 = PM.nest<mlir::func::FuncOp>();
-      FuncPM2.addPass(mlir::LLVM::createRequestCWrappersPass());
       mlir::failed(PM.run(*M));
     }
-    M->dump();
+    M->print(llvm::outs());
     return 0;
   }
 
   if (Emit == EmitScopC) {
     addTCOptimizePipeline(PM);
     addConvertToLinalgPipelin(PM);
+    addLinalgFusePass(PM);
     mlir::failed(PM.run(*M));
     mlir::tc::codegen::emitLinalgToC(M.get());
     return 0;
@@ -157,13 +163,8 @@ int main(int argc, char **argv) {
 
   if (Emit == DumpMLIRLINALG) {
     addTCOptimizePipeline(PM);
-    mlir::OpPassManager &FuncPM2 = PM.nest<mlir::func::FuncOp>();
-    FuncPM2.addPass(mlir::LLVM::createRequestCWrappersPass());
-    PM.addPass(mlir::tc::createConvertTCToLinalgPass());
-    PM.addPass(mlir::createCSEPass());
-    if (OptLinalg) {
-      PM.addPass(mlir::createLinalgElementwiseOpFusionPass());
-    }
+    addConvertToLinalgPipelin(PM);
+    addLinalgFusePass(PM);
     if (LowerLinalg) {
       PM.addPass(mlir::func::createFuncBufferizePass());
       mlir::OpPassManager &FuncPM3 = PM.nest<mlir::func::FuncOp>();
@@ -176,7 +177,6 @@ int main(int argc, char **argv) {
     }
     mlir::failed(PM.run(*M));
     M->print(llvm::outs());
-    M->dump();
     return 0;
   }
   PM.addPass(mlir::tc::createLowerToAffinePass());
