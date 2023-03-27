@@ -53,6 +53,7 @@ private:
         std::string name = "t" + std::to_string(argValue.getArgNumber());
         out.indent(indent) << name << " = te.placeholder(";
         emitTensorSizes(argValue);
+        emitTEDtypeArgument();
         emitTENameArgument(name);
         valueNameMap[argValue] = name;
         inputTensorNames.emplace_back(name);
@@ -107,6 +108,10 @@ private:
     emitTensorSizes(value);
     out << ", lambda *ls: ";
     valueNameMap[value] = name;
+  }
+
+  void emitTEDtypeArgument() {
+    out << ", dtype=\"float64\"";
   }
   void emitTENameArgument(Value value) {
     emitTENameArgument(valueNameMap[value]);
