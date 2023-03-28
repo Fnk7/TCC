@@ -36,7 +36,7 @@ private:
 
   using IndexedValueTy = std::pair<Value, IndexUsesTy>;
 
-  auto getTensorTypeOfShape(ShapeTy &Shape) {
+  auto getTensorTypeOfShape(SizesTy &Shape) {
     SmallVector<int64_t> TShape;
     for (auto Size : Shape) {
       if (Size->isConstant()) {
@@ -195,7 +195,7 @@ private:
       }
     }
     assert(indexUses.size() == axesMap.size());
-    ShapeTy shape;
+    SizesTy shape;
     for (auto &index : indexDefs) {
       shape.emplace_back(index->getSize());
     }
@@ -209,7 +209,7 @@ private:
   IndexedValueTy generateNode(ContractionNode &node) {
     auto [input, indexUses] = generateNode(node.getChild());
     auto &indexDefs = node.getIndexes();
-    ShapeTy outputShape;
+    SizesTy outputShape;
     IndexUsesTy outputIndexUses;
     AxesTy axes;
     for (auto axis : llvm::seq<int64_t>(0, indexUses.size())) {
@@ -241,7 +241,7 @@ private:
   IndexedValueTy generateNode(AdditionNode &node) {
     auto &childs = node.getChilds();
     SmallVector<Value> operands;
-    ShapeTy outputShape;
+    SizesTy outputShape;
     IndexUsesTy outputIndexUses;
     AxesMapsTy axesMaps(childs.size());
     for (auto [child, axesMap] : llvm::zip(childs, axesMaps)) {
@@ -270,7 +270,7 @@ private:
   IndexedValueTy generateNode(MultiplicationNode &node) {
     auto &childs = node.getChilds();
     SmallVector<Value> operands;
-    ShapeTy outputShape;
+    SizesTy outputShape;
     IndexUsesTy outputIndexUses;
     AxesMapsTy axesMaps(childs.size());
     for (auto [child, axesMap] : llvm::zip(childs, axesMaps)) {
@@ -309,7 +309,7 @@ private:
     IndexUsesTy UIndexUses;
     {
       auto &IndexUses = LN.getIndexUses();
-      ShapeTy SliceShape;
+      SizesTy SliceShape;
       SmallVector<int64_t> SliceAxes;
       SmallVector<Value> PIndexValues;
       for (size_t IU = 0; IU < IndexUses.size(); ++IU) {
@@ -332,7 +332,7 @@ private:
     }
     {
       DenseMap<IndexPtr, SmallVector<int64_t>> IndexPosMap;
-      ShapeTy DiagShape;
+      SizesTy DiagShape;
       for (size_t IU = 0; IU < IIndexUses.size(); ++IU) {
         auto Index = IIndexUses[IU];
         if (!IndexPosMap.count(Index)) {

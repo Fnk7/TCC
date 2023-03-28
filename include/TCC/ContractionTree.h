@@ -79,7 +79,7 @@ class SizeSymbol;
 using SizeID = int64_t;
 using SizePtr = SizeSymbol *;
 using SizesTy = SmallVector<SizePtr, 4>;
-using ShapeTy = SizesTy;
+using SizesTy = SizesTy;
 // SizeID map to SizeSymbol
 using SizesMapTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 class SizeSymbol : public Symbol {
@@ -275,12 +275,12 @@ public:
 
 class InputTensor : public Symbol {
 private:
-  ShapeTy Shape;
+  SizesTy Shape;
 
 public:
-  InputTensor(StringRef Name, ShapeTy Shape)
+  InputTensor(StringRef Name, SizesTy Shape)
       : Symbol(SK_InTenser, Name), Shape(Shape) {}
-  ShapeTy &getShape() { return Shape; }
+  SizesTy &getShape() { return Shape; }
   int64_t getDimension() { return Shape.size(); }
   // For LLVM RTTI
   static bool classof(const Symbol *S) { return S->getKind() == SK_InTenser; }
@@ -334,7 +334,7 @@ public:
 // RootNode: Write result into tensor, and define indexes.
 class RootNode : public Node {
 private:
-  ShapeTy Shape;
+  SizesTy Shape;
   IndexDefsTy IndexDefs;
   RootNode(IndexDefsTy &IndexDefs, NodePtr Child)
       : Node(NK_Root, std::move(Child)) {
@@ -351,7 +351,7 @@ public:
   }
   // Functions
   Node &getChild() { return *Childs[0]; }
-  ShapeTy &getShape() { return Shape; }
+  SizesTy &getShape() { return Shape; }
   IndexDefsTy &getIndexes() { return IndexDefs; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_Root; }
@@ -561,7 +561,7 @@ public:
     assert(llvm::isa<RootNode>(this->Root.get()));
   }
   RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
-  ShapeTy &getShape() { return getRootNode().getShape(); }
+  SizesTy &getShape() { return getRootNode().getShape(); }
   int64_t getDimension() { return getShape().size(); }
   // For LLVM RTTI
   static bool classof(const Symbol *S) { return S->getKind() == SK_CTensor; }
@@ -672,7 +672,7 @@ public:
   }
 
   // Done 12-08
-  InTensorPtr addInputTensorDefine(StringRef Name, ShapeTy Shape) {
+  InTensorPtr addInputTensorDefine(StringRef Name, SizesTy Shape) {
     assert(!SymbolsMap.count(Name));
     assert(!InTensorsMap.count(Name));
     auto IT = new InputTensor(Name, Shape);
@@ -682,7 +682,7 @@ public:
     return IT;
   }
   InTensorPtr addInputTensorDefine(StringRef Name, int Dim) {
-    ShapeTy Shape;
+    SizesTy Shape;
     for (int Axis = 0; Axis < Dim; ++Axis) {
       Shape.emplace_back(addSizeDefine());
     }

@@ -137,7 +137,7 @@ class Parser {
   NodePtr parseIndexedTensor();
   NodePtr parseContraction();
 
-  void inferenceIndexSizes(ShapeTy &Shape, IndexUsesTy &IndexUses) {
+  void inferenceIndexSizes(SizesTy &Shape, IndexUsesTy &IndexUses) {
     assert(Shape.size() == IndexUses.size() && "TODO: Error handle.");
     for (auto Pack : llvm::zip(Shape, IndexUses)) {
       auto Size = std::get<0>(Pack);
@@ -249,27 +249,28 @@ void Parser::parseIndexStatement() {
   }
 }
 
+// Modified 23-03-28
 void Parser::parseInputStatement() {
-  LLVM_DEBUG(dbgs() << "Parse input line\n");
+  LLVM_DEBUG(dbgs() << "Parse input statement\n");
   curToken = lx.getNextToken();
   while (curToken == Token_Identifier) {
-    auto Name = lx.getIdentifier();
+    auto name = lx.getIdentifier();
     curToken = lx.getNextToken();
-    ShapeTy Shape;
+    SizesTy shape;
     if (curToken == Token_ParentheseOpen) {
       curToken = lx.getNextToken();
       while (true) {
         if (curToken == Token_Identifier) {
-          auto Name = lx.getIdentifier();
-          if (auto Sym = CF->getSymbolOfName(Name)) {
+          auto name = lx.getIdentifier();
+          if (auto Sym = CF->getSymbolOfName(name)) {
             auto Size = cast<SizeSymbol>(Sym);
-            Shape.emplace_back(Size);
+            shape.emplace_back(Size);
           } else {
-            Shape.emplace_back(CF->addSizeDefine(Name));
+            shape.emplace_back(CF->addSizeDefine(name));
           }
           curToken = lx.getNextToken();
         } else if (curToken == Token_Multiplication) {
-          Shape.emplace_back(CF->addSizeDefine());
+          shape.emplace_back(CF->addSizeDefine());
           curToken = lx.getNextToken();
         } else {
           break;
@@ -282,7 +283,7 @@ void Parser::parseInputStatement() {
       assert(curToken == Token_ParentheseClose);
       curToken = lx.getNextToken();
     }
-    CF->addInputTensorDefine(Name, Shape);
+    CF->addInputTensorDefine(name, shape);
     if (curToken == Token_Comma)
       curToken = lx.getNextToken();
     else
