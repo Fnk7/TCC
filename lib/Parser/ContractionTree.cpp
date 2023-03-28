@@ -15,9 +15,9 @@ const std::string Node::getKindString(NodeKind K) {
     return "Addition";
   case NK_Multiplication:
     return "Multiplication";
-  case NK_TreeAsLeaf:
+  case NK_TreeTensor:
     return "TreeRef";
-  case NK_InputAsLeaf:
+  case NK_InputTensor:
     return "InputRef";
   case NK_Negative:
     return "Negative";
@@ -82,14 +82,14 @@ void ContractionNode::dump(int indent) {
   dumpIndexes(IndexDefs);
   dumpChilds(indent);
 }
-void TreeAsLeafNode::dump(int indent) {
+void TreeTensorNode::dump(int indent) {
   errs().indent(indent);
   errs() << TreeRef->getName();
   errs() << " [CTree] ";
   dumpIndexes(IndexUses);
   dumpChilds(indent);
 }
-void InputAsLeafNode::dump(int indent) {
+void InputTensorNode::dump(int indent) {
   errs().indent(indent);
   errs() << InputRef->getName();
   errs() << " [Input] ";
@@ -129,9 +129,9 @@ void Node::dump(int indent) {
     dumpChilds(indent);
     errs().indent(indent);
     errs() << "}\n";
-  } else if (auto *TLN = dyn_cast<TreeAsLeafNode>(this)) {
+  } else if (auto *TLN = dyn_cast<TreeTensorNode>(this)) {
     TLN->dump(indent);
-  } else if (auto *ILN = dyn_cast<InputAsLeafNode>(this)) {
+  } else if (auto *ILN = dyn_cast<InputTensorNode>(this)) {
     ILN->dump(indent);
   } else if (auto N = dyn_cast<NegativeNode>(this)) {
     N->dump(indent);

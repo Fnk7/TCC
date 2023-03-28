@@ -225,6 +225,8 @@ protected:
 
 public:
   // Member Functions
+  /// isImplicit means the index is used as A(i,3),
+  /// where the second index symbol "ci#3"
   bool isImplicit() { return getName().substr(0, 3) == "ci#"; }
   void setSize(SizePtr Size) { this->Size = Size; }
   SizePtr getSize() { return Size; }
@@ -300,8 +302,8 @@ public:
     NK_Negative,
     NK_Leaf,
     NK_Constant,
-    NK_TreeAsLeaf,
-    NK_InputAsLeaf
+    NK_TreeTensor,
+    NK_InputTensor
   };
 
 protected:
@@ -454,44 +456,44 @@ public:
   }
   // For LLVM RTTI
   static bool classof(const Node *N) {
-    return N->getKind() == NK_TreeAsLeaf || N->getKind() == NK_InputAsLeaf;
+    return N->getKind() == NK_TreeTensor || N->getKind() == NK_InputTensor;
   }
 };
 
-// TreeAsLeafNode: Reference to a contraction expression result.
-class TreeAsLeafNode : public LeafNode {
+// TreeTensorNode: Reference to a contraction expression result.
+class TreeTensorNode : public LeafNode {
 private:
   CTreePtr TreeRef;
-  TreeAsLeafNode(IndexUsesTy &IndexUses, CTreePtr TreeRef)
-      : LeafNode(NK_TreeAsLeaf, IndexUses), TreeRef(TreeRef) {}
+  TreeTensorNode(IndexUsesTy &IndexUses, CTreePtr TreeRef)
+      : LeafNode(NK_TreeTensor, IndexUses), TreeRef(TreeRef) {}
 
 public:
   static NodePtr get(IndexUsesTy &IndexUses, CTreePtr TreeRef) {
-    return NodePtr(new TreeAsLeafNode(IndexUses, TreeRef));
+    return NodePtr(new TreeTensorNode(IndexUses, TreeRef));
   }
   // Member Functions
   CTreePtr getTree() { return TreeRef; }
   // For LLVM RTTI
-  static bool classof(const Node *N) { return N->getKind() == NK_TreeAsLeaf; }
+  static bool classof(const Node *N) { return N->getKind() == NK_TreeTensor; }
   // dump
   void dump(int);
 };
 
-// InputAsLeafNode: Reference to an input tensor.
-class InputAsLeafNode : public LeafNode {
+// InputTensorNode: Reference to an input tensor.
+class InputTensorNode : public LeafNode {
 private:
   InTensorPtr InputRef;
-  InputAsLeafNode(IndexUsesTy &IndexUses, InTensorPtr InputRef)
-      : LeafNode(NK_InputAsLeaf, IndexUses), InputRef(InputRef) {}
+  InputTensorNode(IndexUsesTy &IndexUses, InTensorPtr InputRef)
+      : LeafNode(NK_InputTensor, IndexUses), InputRef(InputRef) {}
 
 public:
   static NodePtr get(IndexUsesTy &IndexUses, InTensorPtr InputRef) {
-    return NodePtr(new InputAsLeafNode(IndexUses, InputRef));
+    return NodePtr(new InputTensorNode(IndexUses, InputRef));
   }
   // Member Functions
   InTensorPtr getInput() { return InputRef; }
   // For LLVM RTTI
-  static bool classof(const Node *N) { return N->getKind() == NK_InputAsLeaf; }
+  static bool classof(const Node *N) { return N->getKind() == NK_InputTensor; }
   // dump
   void dump(int);
 };
@@ -541,9 +543,9 @@ inline void Node::deleteNode() {
     delete N;
   } else if (auto *N = llvm::dyn_cast<MultiplicationNode>(this)) {
     delete N;
-  } else if (auto *N = llvm::dyn_cast<TreeAsLeafNode>(this)) {
+  } else if (auto *N = llvm::dyn_cast<TreeTensorNode>(this)) {
     delete N;
-  } else if (auto *N = llvm::dyn_cast<InputAsLeafNode>(this)) {
+  } else if (auto *N = llvm::dyn_cast<InputTensorNode>(this)) {
     delete N;
   } else if (auto *N = llvm::dyn_cast<NegativeNode>(this)) {
     delete N;

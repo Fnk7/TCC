@@ -107,7 +107,7 @@ public:
 using NamesTy = SmallVector<std::string, 4>;
 class Parser {
 
-  Lexer &lx;
+  Lexer &lexer;
   Token curToken;
 
   std::unique_ptr<ContractionForest> CF;
@@ -128,47 +128,45 @@ class Parser {
   void parseKeepStatement();
   IndexUsesTy parseIndexUses();
   IndexDefsTy parseIndexDefines();
-  void eraseIterIndexDefines(IndexDefsTy &IndexDefs);
+  void eraseIndexDefines(IndexDefsTy &indexDefs);
   NamesTy parseIndexNames();
   NodePtr parseAdditionExpression();
-  NodePtr parseSingleNode();
-  NodePtr parseNegative();
+  NodePtr parseExpressionFactor();
+  NodePtr parseNegativeExpression();
   NodePtr parseMultiplicationExpression();
   NodePtr parseIndexedTensor();
-  NodePtr parseContraction();
+  NodePtr parseContractionExpression();
 
   template <typename Func> void parseCommaSplitTerms(Func parseTerm) {
     while (parseTerm() && curToken == Token_Comma) {
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
     }
   }
 
-  void inferenceIndexSizes(SizesTy &Shape, IndexUsesTy &IndexUses) {
-    assert(Shape.size() == IndexUses.size() && "TODO: Error handle.");
-    for (auto Pack : llvm::zip(Shape, IndexUses)) {
-      auto Size = std::get<0>(Pack);
-      auto Index = std::get<1>(Pack);
-      if (Index->isImplicit())
+  void inferenceIndexSizes(SizesTy &shape, IndexUsesTy &indexUses) {
+    assert(shape.size() == indexUses.size() && "TODO: Error handle.");
+    for (auto [size, index] : llvm::zip(shape, indexUses)) {
+      if (index->isImplicit())
         continue;
-      if (Index->getSize()) {
-        SizeSymbol::makeSizeEqual(*Size, *(Index->getSize()));
+      if (index->getSize()) {
+        SizeSymbol::makeSizeEqual(*size, *(index->getSize()));
       } else {
-        Index->setSize(Size);
+        index->setSize(size);
       }
     }
   }
 
 public:
-  Parser(Lexer &lx) : lx(lx) {}
+  Parser(Lexer &lexer) : lexer(lexer) {}
   std::unique_ptr<ContractionForest> parse();
 };
 
 std::unique_ptr<ContractionForest> Parser::parse() {
   CF = std::make_unique<ContractionForest>();
-  curToken = lx.getNextToken();
+  curToken = lexer.getNextToken();
   while (curToken != Token_EOF) {
     parseStatement();
-    curToken = lx.getNextToken();
+    curToken = lexer.getNextToken();
   }
   // TODO: After Parse
   CF->finishForestConstruct();
@@ -194,38 +192,38 @@ void Parser::parseStatement() {
 // Modified 23-03-28
 void Parser::parseSizeStatement() {
   LLVM_DEBUG(dbgs() << "Parsing size statement\n");
-  curToken = lx.getNextToken();
+  curToken = lexer.getNextToken();
   auto parseTerm = [&]() -> bool {
     if (curToken != Token_Identifier)
       return false;
-    auto name = lx.getIdentifier();
-    curToken = lx.getNextToken();
+    auto name = lexer.getIdentifier();
+    curToken = lexer.getNextToken();
     int64_t lowerBound = 0, upperBound = 0;
     if (curToken == Token_Equal) {
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
       if (curToken == Token_Number) {
-        auto cst = lx.getAPInt().getSExtValue();
+        auto cst = lexer.getAPInt().getSExtValue();
         lowerBound = cst;
         upperBound = cst;
-        curToken = lx.getNextToken();
+        curToken = lexer.getNextToken();
       } else {
         assert(curToken == Token_ParentheseOpen &&
                "Error: Size value/range define failed.");
-        curToken = lx.getNextToken();
+        curToken = lexer.getNextToken();
         if (curToken == Token_Number) {
-          lowerBound = lx.getAPInt().getSExtValue();
-          curToken = lx.getNextToken();
+          lowerBound = lexer.getAPInt().getSExtValue();
+          curToken = lexer.getNextToken();
         }
         assert(curToken == Token_Comma &&
                "Error: Size value/range define failed.");
-        curToken = lx.getNextToken();
+        curToken = lexer.getNextToken();
         if (curToken == Token_Number) {
-          upperBound = lx.getAPInt().getSExtValue();
-          curToken = lx.getNextToken();
+          upperBound = lexer.getAPInt().getSExtValue();
+          curToken = lexer.getNextToken();
         }
         assert(curToken == Token_ParentheseClose &&
                "Error: Size value/range define failed.");
-        curToken = lx.getNextToken();
+        curToken = lexer.getNextToken();
       }
     }
     CF->addSizeDefine(name, upperBound, lowerBound);
@@ -237,19 +235,19 @@ void Parser::parseSizeStatement() {
 // Modified 23-03-28
 void Parser::parseIndexStatement() {
   LLVM_DEBUG(dbgs() << "Parsing index statement\n");
-  curToken = lx.getNextToken();
+  curToken = lexer.getNextToken();
   auto parseTerm = [&]() -> bool {
     if (curToken != Token_Identifier)
       return false;
-    auto name = lx.getIdentifier();
-    curToken = lx.getNextToken();
+    auto name = lexer.getIdentifier();
+    curToken = lexer.getNextToken();
     auto value = ParamIndexSymbol::Undefined;
     if (curToken == Token_Equal) {
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
       assert(curToken == Token_Number && "TODO: Error handle.");
-      value = lx.getAPInt().getSExtValue();
+      value = lexer.getAPInt().getSExtValue();
       assert(value >= 0 && "Error: Index defined should not less than 0.");
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
       CF->addParamIndexDefine(value, name);
     }
     return true;
@@ -260,22 +258,22 @@ void Parser::parseIndexStatement() {
 // Modified 23-03-28
 void Parser::parseInputStatement() {
   LLVM_DEBUG(dbgs() << "Parsing input statement\n");
-  curToken = lx.getNextToken();
+  curToken = lexer.getNextToken();
   SizesTy shape;
   auto parseSize = [&]() -> bool {
     if (curToken == Token_Identifier) {
-      auto name = lx.getIdentifier();
+      auto name = lexer.getIdentifier();
       if (auto symbol = CF->getSymbolOfName(name)) {
         auto size = cast<SizeSymbol>(symbol);
         shape.emplace_back(size);
       } else {
         shape.emplace_back(CF->addSizeDefine(name));
       }
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
       return true;
     } else if (curToken == Token_Multiplication) {
       shape.emplace_back(CF->addSizeDefine());
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
       return true;
     }
     return false;
@@ -283,14 +281,14 @@ void Parser::parseInputStatement() {
   auto parseTerm = [&]() -> bool {
     if (curToken != Token_Identifier)
       return false;
-    auto name = lx.getIdentifier();
-    curToken = lx.getNextToken();
+    auto name = lexer.getIdentifier();
+    curToken = lexer.getNextToken();
     shape.clear();
     if (curToken == Token_ParentheseOpen) {
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
       parseCommaSplitTerms(parseSize);
       assert(curToken == Token_ParentheseClose && "Error: Need token ')'.");
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
     }
     CF->addInputTensorDefine(name, shape);
     return true;
@@ -300,37 +298,19 @@ void Parser::parseInputStatement() {
 
 void Parser::parseFormulaStatement() {
   // get Name
-  auto name = std::string(lx.getIdentifier());
-  curToken = lx.getNextToken();
+  auto name = std::string(lexer.getIdentifier());
+  curToken = lexer.getNextToken();
   // parse Indexes
   indexID = 0;
   IndexDefsTy indexDefs = parseIndexDefines();
   // parse expressions
   assert(curToken == Token_Equal);
-  curToken = lx.getNextToken();
+  curToken = lexer.getNextToken();
   auto child = parseAdditionExpression();
-  eraseIterIndexDefines(indexDefs);
+  eraseIndexDefines(indexDefs);
   // create tree
   auto root = RootNode::get(indexDefs, std::move(child));
   CF->addContractionTree(name, std::move(root));
-}
-
-NamesTy Parser::parseIndexNames() {
-  NamesTy names;
-  if (curToken != Token_ParentheseOpen)
-    return names;
-  curToken = lx.getNextToken();
-  auto parseTerm = [&]() -> bool {
-    while (curToken != Token_Identifier)
-      return false;
-    names.emplace_back(lx.getIdentifier());
-    curToken = lx.getNextToken();
-    return true;
-  };
-  parseCommaSplitTerms(parseTerm);
-  assert(curToken == Token_ParentheseClose && "TODO: Error handle.");
-  curToken = lx.getNextToken();
-  return names;
 }
 
 NodePtr Parser::parseAdditionExpression() {
@@ -340,10 +320,10 @@ NodePtr Parser::parseAdditionExpression() {
     childs.emplace_back(parseMultiplicationExpression());
     if (curToken == Token_Addition) {
       signs.emplace_back(true);
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
     } else if (curToken == Token_Negative) {
       signs.emplace_back(false);
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
       assert(curToken != Token_Negative &&
              "TODO: double negative, too complex.");
     } else {
@@ -355,51 +335,60 @@ NodePtr Parser::parseAdditionExpression() {
   return AdditionNode::get(childs, signs);
 }
 
-NodePtr Parser::parseSingleNode() {
-  if (curToken == Token_Contraction) {
-    return parseContraction();
-  } else if (curToken == Token_Negative) {
-    return parseNegative();
-  } else if (curToken == Token_ParentheseOpen) {
-    curToken = lx.getNextToken();
-    auto Child = parseAdditionExpression();
-    assert(curToken == Token_ParentheseClose);
-    curToken = lx.getNextToken();
-    return Child;
-  } else if (curToken == Token_Identifier) {
-    return parseIndexedTensor();
-  } else if (curToken == Token_Number) {
-    auto Value = lx.getAPFloat().convertToDouble();
-    curToken = lx.getNextToken();
-    return ConstantNode::get(Value);
-  } else {
-    llvm_unreachable("TODO: Expression should begin with sum or identifier or "
-                     "open parenthese or negative.");
-  }
-}
-
-NodePtr Parser::parseNegative() {
-  assert(curToken == Token_Negative);
-  curToken = lx.getNextToken();
-  assert(curToken != Token_Negative);
-  auto Child = parseSingleNode();
-  return NegativeNode::get(std::move(Child));
-}
-
 NodePtr Parser::parseMultiplicationExpression() {
-  ChildNodesTy Childs;
+  ChildNodesTy childs;
   while (true) {
-    Childs.emplace_back(parseSingleNode());
+    childs.emplace_back(parseExpressionFactor());
     if (curToken != Token_Multiplication)
       break;
-    curToken = lx.getNextToken();
+    curToken = lexer.getNextToken();
   }
-  if (Childs.size() == 1)
-    return std::move(Childs[0]);
-  return MultiplicationNode::get(Childs);
+  if (childs.size() == 1)
+    return std::move(childs[0]);
+  return MultiplicationNode::get(childs);
 }
 
-// Done 12-08
+NodePtr Parser::parseExpressionFactor() {
+  if (curToken == Token_Identifier) {
+    return parseIndexedTensor();
+  } else if (curToken == Token_Contraction) {
+    return parseContractionExpression();
+  } else if (curToken == Token_ParentheseOpen) {
+    curToken = lexer.getNextToken();
+    auto child = parseAdditionExpression();
+    assert(curToken == Token_ParentheseClose);
+    curToken = lexer.getNextToken();
+    return child;
+  } else if (curToken == Token_Negative) {
+    return parseNegativeExpression();
+  } else if (curToken == Token_Number) {
+    auto value = lexer.getAPFloat().convertToDouble();
+    curToken = lexer.getNextToken();
+    return ConstantNode::get(value);
+  } else {
+    llvm_unreachable("Error: Expression should begin with identifier, sum, "
+                     "number, '(' or '-'.");
+  }
+}
+
+// Modified 23-03-28
+NamesTy Parser::parseIndexNames() {
+  NamesTy names;
+  if (curToken != Token_ParentheseOpen)
+    return names;
+  curToken = lexer.getNextToken();
+  auto parseTerm = [&]() -> bool {
+    while (curToken != Token_Identifier)
+      return false;
+    names.emplace_back(lexer.getIdentifier());
+    curToken = lexer.getNextToken();
+    return true;
+  };
+  parseCommaSplitTerms(parseTerm);
+  assert(curToken == Token_ParentheseClose && "TODO: Error handle.");
+  curToken = lexer.getNextToken();
+  return names;
+}
 IndexDefsTy Parser::parseIndexDefines() {
   NamesTy names = parseIndexNames();
   IndexDefsTy indexDefs;
@@ -412,28 +401,36 @@ IndexDefsTy Parser::parseIndexDefines() {
   }
   return indexDefs;
 }
-void Parser::eraseIterIndexDefines(IndexDefsTy &indexDefs) {
+void Parser::eraseIndexDefines(IndexDefsTy &indexDefs) {
   for (auto &index : indexDefs) {
     assert(indicesMap.erase(index->getName()));
   }
 }
 
+NodePtr Parser::parseNegativeExpression() {
+  assert(curToken == Token_Negative);
+  curToken = lexer.getNextToken();
+  assert(curToken != Token_Negative);
+  auto child = parseExpressionFactor();
+  return NegativeNode::get(std::move(child));
+}
+
 // Done 12-08
-NodePtr Parser::parseContraction() {
+NodePtr Parser::parseContractionExpression() {
   assert(curToken == Token_Contraction);
-  curToken = lx.getNextToken();
+  curToken = lexer.getNextToken();
   assert(curToken == Token_ParentheseOpen);
-  curToken = lx.getNextToken();
+  curToken = lexer.getNextToken();
   // parse Indexes
-  IndexDefsTy IndexDefs = parseIndexDefines();
-  curToken = lx.getNextToken();
+  IndexDefsTy indexDefs = parseIndexDefines();
+  curToken = lexer.getNextToken();
   // parse expression
   auto child = parseAdditionExpression();
   assert(curToken == Token_ParentheseClose);
-  curToken = lx.getNextToken();
-  eraseIterIndexDefines(IndexDefs);
+  curToken = lexer.getNextToken();
+  eraseIndexDefines(indexDefs);
   // create Node
-  return ContractionNode::get(IndexDefs, std::move(child));
+  return ContractionNode::get(indexDefs, std::move(child));
 }
 
 // Done 12-08
@@ -441,11 +438,11 @@ IndexUsesTy Parser::parseIndexUses() {
   IndexUsesTy IndexUses;
   if (curToken != Token_ParentheseOpen)
     return IndexUses;
-  curToken = lx.getNextToken();
+  curToken = lexer.getNextToken();
   while (true) {
     if (curToken == Token_Identifier) {
       // Iter index
-      auto Name = lx.getIdentifier();
+      auto Name = lexer.getIdentifier();
       if (indicesMap.count(Name)) {
         IndexUses.emplace_back(indicesMap[Name]);
       } else {
@@ -455,73 +452,73 @@ IndexUsesTy Parser::parseIndexUses() {
       }
     } else if (curToken == Token_Number) {
       // Const index
-      auto Value = lx.getAPInt().getSExtValue();
+      auto Value = lexer.getAPInt().getSExtValue();
       assert(Value >= 0);
       auto PIndex = CF->getParamIndex(Value);
       IndexUses.emplace_back(PIndex);
     } else
       break;
-    curToken = lx.getNextToken();
+    curToken = lexer.getNextToken();
     if (curToken == Token_Comma)
-      curToken = lx.getNextToken();
+      curToken = lexer.getNextToken();
     else
       break;
   }
   assert(curToken == Token_ParentheseClose && "TODO: Error handle.");
-  curToken = lx.getNextToken();
+  curToken = lexer.getNextToken();
   return IndexUses;
 }
 
 // Done 12-08
 NodePtr Parser::parseIndexedTensor() {
   // Parse tensor
-  auto Name = std::string(lx.getIdentifier());
-  curToken = lx.getNextToken();
+  auto name = std::string(lexer.getIdentifier());
+  curToken = lexer.getNextToken();
   // Parse indices
-  auto IndexUses = parseIndexUses();
-  auto T = CF->getSymbolOfName(Name);
-  if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(T)) {
+  auto indexUses = parseIndexUses();
+  auto tensor = CF->getSymbolOfName(name);
+  if (auto treeTensor = llvm::dyn_cast_if_present<ContractionTree>(tensor)) {
     // Parse contracted tensor
-    inferenceIndexSizes(CT->getShape(), IndexUses);
-    return TreeAsLeafNode::get(IndexUses, CT);
+    inferenceIndexSizes(treeTensor->getShape(), indexUses);
+    return TreeTensorNode::get(indexUses, treeTensor);
   } else {
     // Parse input tensor
-    assert(!T || llvm::isa<InputTensor>(T));
-    auto IT = llvm::cast_if_present<InputTensor>(T);
+    assert(!tensor || llvm::isa<InputTensor>(tensor));
+    auto IT = llvm::cast_if_present<InputTensor>(tensor);
     if (!IT) {
-      IT = CF->addInputTensorDefine(Name, IndexUses.size());
+      IT = CF->addInputTensorDefine(name, indexUses.size());
     }
-    inferenceIndexSizes(IT->getShape(), IndexUses);
-    return InputAsLeafNode::get(IndexUses, IT);
+    inferenceIndexSizes(IT->getShape(), indexUses);
+    return InputTensorNode::get(indexUses, IT);
   }
 }
 
 // Modified 23-03-28
 void Parser::parseKeepStatement() {
   LLVM_DEBUG(dbgs() << "Parsing keep statement\n");
-  curToken = lx.getNextToken();
+  curToken = lexer.getNextToken();
   auto parseTerm = [&]() -> bool {
     if (curToken != Token_Identifier)
       return false;
-    auto name = lx.getIdentifier();
+    auto name = lexer.getIdentifier();
     CF->addTensorKeeped(name);
-    curToken = lx.getNextToken();
+    curToken = lexer.getNextToken();
     return true;
   };
   parseCommaSplitTerms(parseTerm);
 }
 } // namespace parser
 
-std::unique_ptr<ContractionForest> parseInputFile(StringRef FileName) {
+std::unique_ptr<ContractionForest> parseInputFile(StringRef filename) {
   ErrorOr<std::unique_ptr<MemoryBuffer>> fileOrErr =
-      MemoryBuffer::getFileOrSTDIN(FileName);
+      MemoryBuffer::getFileOrSTDIN(filename);
   if (std::error_code EC = fileOrErr.getError()) {
     errs() << "Open input file failed: " << EC.message() << "\n";
     return nullptr;
   }
-  parser::Lexer Lexer{std::move(fileOrErr.get())};
-  parser::Parser Parser{Lexer};
-  auto CF = Parser.parse();
+  parser::Lexer lexer{std::move(fileOrErr.get())};
+  parser::Parser parser{lexer};
+  auto CF = parser.parse();
   return CF;
 }
 } // namespace tc

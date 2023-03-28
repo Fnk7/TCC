@@ -297,10 +297,10 @@ private:
 
   IndexedValueTy generateNode(LeafNode &LN) {
     StringRef Name;
-    if (llvm::isa<TreeAsLeafNode>(LN)) {
-      Name = llvm::cast<TreeAsLeafNode>(LN).getTree()->getName();
-    } else if (llvm::isa<InputAsLeafNode>(LN)) {
-      Name = llvm::cast<InputAsLeafNode>(LN).getInput()->getName();
+    if (llvm::isa<TreeTensorNode>(LN)) {
+      Name = llvm::cast<TreeTensorNode>(LN).getTree()->getName();
+    } else if (llvm::isa<InputTensorNode>(LN)) {
+      Name = llvm::cast<InputTensorNode>(LN).getInput()->getName();
     }
     Value value = SymbolValueMap[Name];
     assert(value);
