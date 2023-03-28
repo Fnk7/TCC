@@ -110,9 +110,7 @@ private:
     valueNameMap[value] = name;
   }
 
-  void emitTEDtypeArgument() {
-    out << ", dtype=\"float64\"";
-  }
+  void emitTEDtypeArgument() { out << ", dtype=\"float64\""; }
   void emitTENameArgument(Value value) {
     emitTENameArgument(valueNameMap[value]);
   }

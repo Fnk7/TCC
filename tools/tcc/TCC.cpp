@@ -88,8 +88,9 @@ void addTCOptimizePipeline(mlir::PassManager &PM) {
   funcPM.addPass(mlir::createCSEPass());
 }
 
-void addConvertToLinalgPipelin(mlir::PassManager &PM) {
-  PM.addPass(mlir::tc::createConvertTCToLinalgPass());
+void addConvertToLinalgPipeline(mlir::PassManager &PM,
+                                bool eraseEncoding = false) {
+  PM.addPass(mlir::tc::createConvertTCToLinalgPass(eraseEncoding));
   PM.addPass(mlir::createCSEPass());
   PM.addPass(mlir::createCanonicalizerPass());
 }
@@ -131,7 +132,7 @@ int main(int argc, char **argv) {
 
   if (Emit == EmitScopC) {
     addTCOptimizePipeline(PM);
-    addConvertToLinalgPipelin(PM);
+    addConvertToLinalgPipeline(PM);
     addLinalgFusePass(PM);
     mlir::failed(PM.run(*M));
     mlir::tc::codegen::emitLinalgToC(M.get());
@@ -163,7 +164,7 @@ int main(int argc, char **argv) {
 
   if (Emit == DumpMLIRLINALG) {
     addTCOptimizePipeline(PM);
-    addConvertToLinalgPipelin(PM);
+    addConvertToLinalgPipeline(PM, true);
     addLinalgFusePass(PM);
     if (LowerLinalg) {
       PM.addPass(mlir::func::createFuncBufferizePass());
