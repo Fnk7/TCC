@@ -5,7 +5,8 @@
 using namespace llvm;
 
 namespace tc {
-const std::string IndexSymbol::implictPrefix = "ci#";
+const std::string SizeSymbol::implicitPrefix = "sz#";
+const std::string IndexSymbol::implicitPrefix = "ci#";
 
 const std::string Node::getKindString(NodeKind K) {
   switch (K) {

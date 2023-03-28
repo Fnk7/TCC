@@ -115,8 +115,9 @@ private:
   }
 
 public:
+  static const std::string implicitPrefix;
   SizeSymbol(SizeID ID) : Symbol(SK_Size, ""), ID(ID) {
-    name = "sz#" + std::to_string(ID);
+    name = implicitPrefix + std::to_string(ID);
     EqualityInfo = nullptr;
   }
   SizeSymbol(SizeID ID, StringRef name, int64_t UB = 0, int64_t LB = 0)
@@ -126,7 +127,7 @@ public:
     setLowerBound(LB);
   }
   // Member Functions
-  bool isImplicit() { return name.substr(0, 3) == "sz#"; }
+  bool isImplicit() { return name.substr(0, 3) == implicitPrefix; }
   bool operator==(const SizeSymbol &Sz) {
     return EqualityInfo && EqualityInfo == Sz.EqualityInfo;
   }
@@ -165,7 +166,7 @@ public:
   void setUID(SizeID UID) {
     getInfo()->UID = UID;
     if (getInfo()->name.empty())
-      getInfo()->name = "sz#" + std::to_string(UID);
+      getInfo()->name = implicitPrefix + std::to_string(UID);
   }
   StringRef getUName() { return getInfo()->name; }
   auto getID() { return getInfo()->ID; }
@@ -223,11 +224,11 @@ protected:
   IndexSymbol(SymbolKind K, StringRef name) : Symbol(K, name), Size(nullptr) {}
 
 public:
-  const static std::string implictPrefix;
+  const static std::string implicitPrefix;
   // Member Functions
   /// isImplicit means the index is used as A(i,3),
   /// where the second index symbol "ci#3"
-  bool isImplicit() { return getName().substr(0, 3) == implictPrefix; }
+  bool isImplicit() { return getName().substr(0, 3) == implicitPrefix; }
   void setSize(SizePtr Size) { this->Size = Size; }
   SizePtr getSize() { return Size; }
   // For LLVM RTTI
@@ -589,6 +590,12 @@ class ContractionForest {
   // Const Indexes
   // Input Tensors
 
+  /// Context, hold global resources
+  /// Global indices
+  ParamIndicesHoldTy paramIndices;
+  /// Sizes
+  SizesHoldTy sizeIDSymbolMap;
+
   InTensorsMapTy InTensorsMap;
   InputTensorPtrsTy ReservedInputs;
   // Contraction Tree Tensors
@@ -596,8 +603,6 @@ class ContractionForest {
   CTreesMapTy CTreesMap;
   CTreePtrsTy OutputCTrees;
   // For resource release
-  SizesHoldTy SizeIDSymbolMap;
-  ParamIndicesHoldTy ParamIndices;
   InputTensorsHoldTy InputTensors;
   // Function Argument
   SizePtrsTy ArgSizes;
@@ -636,7 +641,7 @@ public:
   // For indices
   void insertParamIndex(ParamIndexPtr index) {
     insertSymbol(index);
-    ParamIndices.emplace_back(index);
+    paramIndices.emplace_back(index);
   }
   void addParamIndexDefine(StringRef name, int64_t value) {
     LLVM_DEBUG(llvm::dbgs() << "Add param index: " << name);
@@ -648,28 +653,27 @@ public:
   }
   auto getImplicitParamIndex(int64_t value) {
     assert(value >= 0);
-    std::string name = IndexSymbol::implictPrefix + std::to_string(value);
+    std::string name = IndexSymbol::implicitPrefix + std::to_string(value);
     if (auto index = getSymbolIfPresent<ParamIndexSymbol>(name))
       return index;
     auto index = new ParamIndexSymbol(name, value);
     insertParamIndex(index);
     return index;
   }
-
-  // Done 12-08
+  // For sizes
   SizePtr addSizeDefine() {
-    SizeID ID = SizeIDSymbolMap.size();
-    auto SS = new SizeSymbol(ID);
-    SizeIDSymbolMap.emplace_back(SS);
-    return SS;
+    SizeID sizeID = sizeIDSymbolMap.size();
+    auto size = new SizeSymbol(sizeID);
+    sizeIDSymbolMap.emplace_back(size);
+    return size;
   }
   SizePtr addSizeDefine(StringRef name, int64_t UB = 0, int64_t LB = 0) {
     assert(!symbolMap.count(name));
-    SizeID ID = SizeIDSymbolMap.size();
-    auto SS = new SizeSymbol(ID, name, UB, LB);
-    SizeIDSymbolMap.emplace_back(SS);
-    insertSymbol(SS);
-    return SS;
+    SizeID sizeID = sizeIDSymbolMap.size();
+    auto size = new SizeSymbol(sizeID, name, UB, LB);
+    sizeIDSymbolMap.emplace_back(size);
+    insertSymbol(size);
+    return size;
   }
 
   // Done 12-08
@@ -722,7 +726,7 @@ public:
     }
   }
   void finishForestConstruct() {
-    for (auto &Size : SizeIDSymbolMap) {
+    for (auto &Size : sizeIDSymbolMap) {
       if (Size->isFirstAppear()) {
         if (!Size->isConstant()) {
           Size->setUID(ArgSizes.size());
@@ -736,7 +740,7 @@ public:
     for (auto Size : ConstSizes) {
       Size->setUID(UID++);
     }
-    for (auto &Index : ParamIndices) {
+    for (auto &Index : paramIndices) {
       if (!Index->hasValue()) {
         ArgIndices.emplace_back(Index.get());
       } else {
