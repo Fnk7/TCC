@@ -470,7 +470,7 @@ NodePtr Parser::parseIndexedTensor() {
   // Parse indices
   auto indexUses = parseIndexUses();
   // Parse tree tensor
-  if (auto treeTensor = CF->getSymbolIfCanCast<ContractionTree>(name)) {
+  if (auto treeTensor = CF->getSymbolOrNull<ContractionTree>(name)) {
     inferenceIndexSizes(treeTensor->getShape(), indexUses);
     return TreeTensorNode::get(indexUses, treeTensor);
   } else {

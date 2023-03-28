@@ -239,7 +239,7 @@ void ContractionForest::dump() {
     errs() << (Comma ? "\n" : "");
   }
   errs() << "Contraction Trees:\n";
-  for (auto &Tree : CTrees)
+  for (auto &Tree : treeTensors)
     Tree->dump();
   errs() << "Result outputs: ";
   if (OutputCTrees.size()) {

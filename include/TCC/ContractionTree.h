@@ -40,10 +40,9 @@ using InputTensorPtrsTy = SmallVector<InputTensorPtr>;
 // some calculation (contraction is major) and store value to a tensor. The
 // result can be used by succeed Expression.
 class ContractionTree;
-using CTreesTy = SmallVector<std::unique_ptr<ContractionTree>>;
+using TreeTensorsTy = SmallVector<std::unique_ptr<ContractionTree>>;
 using CTreePtr = ContractionTree *;
 using CTreePtrsTy = SmallVector<CTreePtr>;
-using CTreesMapTy = DenseMap<StringRef, CTreePtr>;
 
 class Symbol {
 public:
@@ -564,6 +563,9 @@ public:
     assert(llvm::isa<RootNode>(this->Root.get()));
   }
   RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
+  // Although ContractionTree is a tensor symbol, it's shape stores in
+  // root node, but can use trait to make it works as tensor.
+  // It's not important.
   SizesTy &getShape() { return getRootNode().getShape(); }
   int64_t getDimension() { return getShape().size(); }
   // For LLVM RTTI
@@ -581,7 +583,7 @@ using SizePtrsTy = SmallVector<SizePtr>;
 using ParamIndexPtrsTy = SmallVector<ParamIndexSymbol *>;
 class ContractionForest {
   std::string name;
-  /// Symbols
+  /// Symbol Map
   using SymbolMapTy = DenseMap<StringRef, SymbolPtr>;
   SymbolMapTy symbolMap;
   using InputTensorsMapTy = DenseMap<StringRef, InputTensorPtr>;
@@ -593,11 +595,13 @@ class ContractionForest {
   SizesHoldTy sizeIDSymbolMap;
   // Input tensors
   InputTensorsHoldTy inputTensors;
+  // Calculated tensors
+  TreeTensorsTy treeTensors;
+  /// Function argument
+  /// Function results
 
   InputTensorPtrsTy ReservedInputs;
   // Contraction Tree Tensors
-  CTreesTy CTrees;
-  CTreesMapTy CTreesMap;
   CTreePtrsTy OutputCTrees;
   // For resource release
 
@@ -635,7 +639,7 @@ public:
     }
     return nullptr;
   }
-  template <typename T> T *getSymbolIfCanCast(StringRef name) {
+  template <typename T> T *getSymbolOrNull(StringRef name) {
     if (symbolMap.count(name)) {
       auto symbol = symbolMap[name];
       return llvm::dyn_cast_or_null<T>(symbol);
@@ -698,12 +702,11 @@ public:
     addInputTensorDefine(name, shape);
     return getSymbol<InputTensor>(name);
   }
-
-  void addContractionTree(StringRef name, NodePtr Root) {
-    CTrees.emplace_back(new ContractionTree(name, std::move(Root)));
-    auto CT = CTrees.back().get();
-    insertSymbol(CT);
-    CTreesMap[CT->getName()] = CT;
+  // For tree Tensors
+  void addContractionTree(StringRef name, NodePtr root) {
+    auto treeTensor = new ContractionTree(name, std::move(root));
+    treeTensors.emplace_back(treeTensor);
+    insertSymbol(treeTensor);
   }
   // Add Keep
   void addTensorKeeped(StringRef name) {
@@ -761,7 +764,7 @@ public:
   StringRef getName() { return name; }
   auto &getInputTensors() { return inputTensors; }
   CTreePtrsTy &getOutputTensors() { return OutputCTrees; }
-  CTreesTy &getContractionTrees() { return CTrees; }
+  TreeTensorsTy &getContractionTrees() { return treeTensors; }
 
   auto &getArgSizes() { return ArgSizes; }
   auto &getArgIndices() { return ArgIndices; }
