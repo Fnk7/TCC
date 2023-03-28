@@ -207,9 +207,9 @@ void ContractionForest::dump() {
     }
     errs() << "\n";
   }
-  if (ConstIndices.size()) {
+  if (constantIndices.size()) {
     bool Comma = false;
-    for (auto Index : ConstIndices) {
+    for (auto Index : constantIndices) {
       if (Index->isImplicit())
         continue;
       errs() << (Comma ? ", " : "Constant indices: ");
@@ -219,11 +219,11 @@ void ContractionForest::dump() {
     errs() << (Comma ? "\n" : "");
   }
   errs() << "Input tensors: ";
-  if (ArgTensors.size()) {
-    ArgTensors[0]->dump();
+  if (argTensors.size()) {
+    argTensors[0]->dump();
     for (size_t i = 1; i < inputTensors.size(); i++) {
       errs() << ", ";
-      ArgTensors[i]->dump();
+      argTensors[i]->dump();
     }
   }
   errs() << "\n";

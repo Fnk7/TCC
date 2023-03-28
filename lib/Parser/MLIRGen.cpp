@@ -61,14 +61,14 @@ public:
     // create mlir function
     auto &argSizes = CF.getArgSizes();
     auto &argIndices = CF.getArgIndices();
-    auto &ArgTensors = CF.getArgTensors();
-    auto &RetTensors = CF.getRetTensors();
+    auto &argTensors = CF.getArgTensors();
+    auto &RetTensors = CF.getResultTensors();
     SmallVector<Type> InputTypes;
     InputTypes.append(
         SmallVector<Type>(argSizes.size(), builder.getIndexType()));
     InputTypes.append(
         SmallVector<Type>(argIndices.size(), builder.getIndexType()));
-    for (auto &IT : ArgTensors) {
+    for (auto &IT : argTensors) {
       auto Ty = getTensorTypeOfShape(IT->getShape());
       InputTypes.emplace_back(Ty);
     }
@@ -77,9 +77,9 @@ public:
     for (auto *CT : RetTensors) {
       auto Ty = getTensorTypeOfShape(CT->getShape());
       ResultTypes.emplace_back(Ty);
-      int64_t ITIdx = ArgTensors.size() - 1;
+      int64_t ITIdx = argTensors.size() - 1;
       for (; ITIdx >= 0; ITIdx--) {
-        if (CT->getName() == ArgTensors[ITIdx]->getName())
+        if (CT->getName() == argTensors[ITIdx]->getName())
           break;
       }
       if (ITIdx >= 0)
@@ -94,7 +94,7 @@ public:
          builder.getNamedAttr("num_input_indices",
                               builder.getI64IntegerAttr(argIndices.size())),
          builder.getNamedAttr("num_input_tensors",
-                              builder.getI64IntegerAttr(ArgTensors.size())),
+                              builder.getI64IntegerAttr(argTensors.size())),
          builder.getNamedAttr("wirtebacks",
                               builder.getI64ArrayAttr(WriteBacks))});
     auto Func =
@@ -103,7 +103,7 @@ public:
     builder.setInsertionPointToEnd(EntryB);
     // Set argument names
     auto argIdxOffset = argSizes.size() + argIndices.size();
-    for (auto [argIdx, IT] : llvm::enumerate(ArgTensors)) {
+    for (auto [argIdx, IT] : llvm::enumerate(argTensors)) {
       argIdx = argIdx + argIdxOffset;
       Func.setArgAttr(argIdx, "func.name",
                       builder.getStringAttr(IT->getName()));
@@ -120,11 +120,11 @@ public:
           EntryB->getArgument(ArgIdx + Offset);
     }
     Offset += argIndices.size();
-    for (size_t ArgIdx = 0; ArgIdx < ArgTensors.size(); ArgIdx++) {
-      SymbolValueMap[ArgTensors[ArgIdx]->getName()] =
+    for (size_t ArgIdx = 0; ArgIdx < argTensors.size(); ArgIdx++) {
+      SymbolValueMap[argTensors[ArgIdx]->getName()] =
           EntryB->getArgument(ArgIdx + Offset);
     }
-    for (auto Index : CF.getConstIndices()) {
+    for (auto Index : CF.getConstantIndices()) {
       SymbolValueMap[Index->getName()] =
           builder.create<arith::ConstantIndexOp>(Loc, Index->getValue());
     }

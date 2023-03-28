@@ -573,8 +573,6 @@ public:
 
 #define DEBUG_TYPE "tcc-ast"
 
-using SizePtrsTy = SmallVector<SizePtr>;
-using ParamIndexPtrsTy = SmallVector<ParamIndexSymbol *>;
 class ContractionForest {
   std::string name;
 
@@ -598,23 +596,22 @@ class ContractionForest {
   // Calculated tensors
   TreeTensorsHoldTy treeTensors;
 
+  using SizePtrsTy = SmallVector<SizePtr>;
   using InputTensorPtrsTy = SmallVector<InputTensorPtr>;
+  using ParamIndexPtrsTy = SmallVector<ParamIndexPtr>;
   /// Function argument
   SizePtrsTy argSizes;
-  /// Function results
+  ParamIndexPtrsTy argIndices;
+  InputTensorPtrsTy argTensors;
+
   using TreeTensorPtrsTy = SmallVector<ContractionTreePtr>;
+  /// Function results
   TreeTensorPtrsTy resultTensors;
   InputTensorPtrsTy keepedInputTensors;
 
-  // Contraction Tree Tensors
-  // For resource release
-
-  // Function Argument
-  ParamIndexPtrsTy argIndices;
-  InputTensorPtrsTy ArgTensors;
-  // Others
+  // Constants
   SizePtrsTy constantSizes;
-  ParamIndexPtrsTy ConstIndices;
+  ParamIndexPtrsTy constantIndices;
 
 public:
   ContractionForest() { name = "CT"; }
@@ -723,6 +720,7 @@ public:
   }
   // For function arguments
   void finishForestConstruct() {
+    // Set size with SizeID
     for (auto &size : sizeIDSymbolMap) {
       if (size->isFirstAppear()) {
         if (!size->isConstant()) {
@@ -737,36 +735,26 @@ public:
     for (auto size : constantSizes) {
       size->setUID(sizeID++);
     }
-    for (auto &Index : paramIndices) {
-      if (!Index->hasValue()) {
-        argIndices.emplace_back(Index.get());
+    for (auto &index : paramIndices) {
+      if (!index->hasValue()) {
+        argIndices.emplace_back(index.get());
       } else {
-        ConstIndices.emplace_back(Index.get());
+        constantIndices.emplace_back(index.get());
       }
     }
     for (auto &InTensor : inputTensors) {
-      ArgTensors.emplace_back(InTensor.get());
+      argTensors.emplace_back(InTensor.get());
     }
   }
-  int64_t getInputSizeOf(SizePtr Sz) { return Sz->getUID(); }
 
   StringRef getName() { return name; }
-  auto &getInputTensors() { return inputTensors; }
-  auto &getOutputTensors() { return resultTensors; }
-  auto &getContractionTrees() { return treeTensors; }
-
   auto &getArgSizes() { return argSizes; }
   auto &getArgIndices() { return argIndices; }
   auto &getArgTensors() { return inputTensors; }
-  auto &getConstIndices() { return ConstIndices; }
-  auto &getRetTensors() { return resultTensors; }
-
-  // TODO:
-
-  int getNumInputSizs() { return argSizes.size(); }
-
-  int getNumInputTensors() { return inputTensors.size(); }
-  int getNumOutputTensors() { return resultTensors.size(); }
+  auto &getResultTensors() { return resultTensors; }
+  auto &getConstantSizes() { return constantSizes; }
+  auto &getConstantIndices() { return constantIndices; }
+  auto &getContractionTrees() { return treeTensors; }
 };
 
 #undef DEBUG_TYPE
