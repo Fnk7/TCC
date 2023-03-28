@@ -112,9 +112,9 @@ class Parser {
 
   std::unique_ptr<ContractionForest> CF;
 
-  // Indexes
+  // Indices
   IndexID indexID;
-  DenseMap<StringRef, IndexPtr> IndexesMap;
+  DenseMap<StringRef, IndexPtr> indicesMap;
 
   inline bool isNextLineToken() {
     return curToken == Token_NewLine || curToken == Token_EOF;
@@ -130,10 +130,10 @@ class Parser {
   IndexDefsTy parseIndexDefines();
   void eraseIterIndexDefines(IndexDefsTy &IndexDefs);
   NamesTy parseIndexNames();
-  NodePtr parseAddition();
+  NodePtr parseAdditionExpression();
   NodePtr parseSingleNode();
   NodePtr parseNegative();
-  NodePtr parseMultiplication();
+  NodePtr parseMultiplicationExpression();
   NodePtr parseIndexedTensor();
   NodePtr parseContraction();
 
@@ -308,7 +308,7 @@ void Parser::parseFormulaStatement() {
   // parse expressions
   assert(curToken == Token_Equal);
   curToken = lx.getNextToken();
-  auto child = parseAddition();
+  auto child = parseAdditionExpression();
   eraseIterIndexDefines(indexDefs);
   // create tree
   auto root = RootNode::get(indexDefs, std::move(child));
@@ -333,16 +333,16 @@ NamesTy Parser::parseIndexNames() {
   return names;
 }
 
-NodePtr Parser::parseAddition() {
-  SmallVector<bool> AddOrSub(1, true);
-  ChildNodesTy Childs;
+NodePtr Parser::parseAdditionExpression() {
+  AdditionNode::SignsTy signs(1, true);
+  ChildNodesTy childs;
   while (true) {
-    Childs.emplace_back(parseMultiplication());
+    childs.emplace_back(parseMultiplicationExpression());
     if (curToken == Token_Addition) {
-      AddOrSub.emplace_back(true);
+      signs.emplace_back(true);
       curToken = lx.getNextToken();
     } else if (curToken == Token_Negative) {
-      AddOrSub.emplace_back(false);
+      signs.emplace_back(false);
       curToken = lx.getNextToken();
       assert(curToken != Token_Negative &&
              "TODO: double negative, too complex.");
@@ -350,9 +350,9 @@ NodePtr Parser::parseAddition() {
       break;
     }
   }
-  if (Childs.size() == 1)
-    return std::move(Childs[0]);
-  return AdditionNode::get(Childs, AddOrSub);
+  if (childs.size() == 1)
+    return std::move(childs[0]);
+  return AdditionNode::get(childs, signs);
 }
 
 NodePtr Parser::parseSingleNode() {
@@ -362,7 +362,7 @@ NodePtr Parser::parseSingleNode() {
     return parseNegative();
   } else if (curToken == Token_ParentheseOpen) {
     curToken = lx.getNextToken();
-    auto Child = parseAddition();
+    auto Child = parseAdditionExpression();
     assert(curToken == Token_ParentheseClose);
     curToken = lx.getNextToken();
     return Child;
@@ -386,7 +386,7 @@ NodePtr Parser::parseNegative() {
   return NegativeNode::get(std::move(Child));
 }
 
-NodePtr Parser::parseMultiplication() {
+NodePtr Parser::parseMultiplicationExpression() {
   ChildNodesTy Childs;
   while (true) {
     Childs.emplace_back(parseSingleNode());
@@ -401,29 +401,20 @@ NodePtr Parser::parseMultiplication() {
 
 // Done 12-08
 IndexDefsTy Parser::parseIndexDefines() {
-  NamesTy names;
+  NamesTy names = parseIndexNames();
   IndexDefsTy indexDefs;
-  if (curToken != Token_ParentheseOpen)
-    return indexDefs;
-  curToken = lx.getNextToken();
-  while (curToken == Token_Identifier) {
-    auto name = lx.getIdentifier();
-    assert(!IndexesMap.count(name) && "TODO: Error handle.");
-    auto IIndex = new IterIndexSymbol(indexID++, name);
-    IndexesMap[IIndex->getName()] = IIndex;
-    indexDefs.emplace_back(IIndex);
-    curToken = lx.getNextToken();
-    if (curToken != Token_Comma)
-      break;
-    curToken = lx.getNextToken();
+  for (auto name : names) {
+    assert(!indicesMap.count(name) &&
+           "Error: Index definition already exists.");
+    auto *index = new IterIndexSymbol(indexID++, name);
+    indicesMap[index->getName()] = index;
+    indexDefs.emplace_back(index);
   }
-  assert(curToken == Token_ParentheseClose && "TODO: Error handle.");
-  curToken = lx.getNextToken();
   return indexDefs;
 }
-void Parser::eraseIterIndexDefines(IndexDefsTy &IndexDefs) {
-  for (auto &IndexDef : IndexDefs) {
-    assert(IndexesMap.erase(IndexDef->getName()));
+void Parser::eraseIterIndexDefines(IndexDefsTy &indexDefs) {
+  for (auto &index : indexDefs) {
+    assert(indicesMap.erase(index->getName()));
   }
 }
 
@@ -437,7 +428,7 @@ NodePtr Parser::parseContraction() {
   IndexDefsTy IndexDefs = parseIndexDefines();
   curToken = lx.getNextToken();
   // parse expression
-  auto child = parseAddition();
+  auto child = parseAdditionExpression();
   assert(curToken == Token_ParentheseClose);
   curToken = lx.getNextToken();
   eraseIterIndexDefines(IndexDefs);
@@ -455,8 +446,8 @@ IndexUsesTy Parser::parseIndexUses() {
     if (curToken == Token_Identifier) {
       // Iter index
       auto Name = lx.getIdentifier();
-      if (IndexesMap.count(Name)) {
-        IndexUses.emplace_back(IndexesMap[Name]);
+      if (indicesMap.count(Name)) {
+        IndexUses.emplace_back(indicesMap[Name]);
       } else {
         // Param Index
         auto PIndex = CF->getParamIndex(Name);

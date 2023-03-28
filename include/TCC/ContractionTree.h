@@ -397,13 +397,16 @@ public:
 
 // AdditionNode: tensor addition, more than elementwise.
 class AdditionNode : public ArithNode {
+public:
+  using SignsTy = SmallVector<bool>;
+
 private:
-  SmallVector<bool> AddOrSub;
+  SignsTy AddOrSub;
   AdditionNode(ChildNodesTy &Childs, SmallVector<bool> &AddOrSub)
       : ArithNode(NK_Addition, Childs), AddOrSub(AddOrSub) {}
 
 public:
-  static NodePtr get(ChildNodesTy &Childs, SmallVector<bool> &AddOrSub) {
+  static NodePtr get(ChildNodesTy &Childs, SignsTy &AddOrSub) {
     return NodePtr(new AdditionNode(Childs, AddOrSub));
   }
   auto &getAddOrSub() { return AddOrSub; }
