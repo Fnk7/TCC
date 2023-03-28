@@ -39,8 +39,7 @@ using InputTensorPtr = InputTensor *;
 // some calculation (contraction is major) and store value to a tensor. The
 // result can be used by succeed Expression.
 class ContractionTree;
-using TreeTensorsTy = SmallVector<std::unique_ptr<ContractionTree>>;
-using CTreePtr = ContractionTree *;
+using ContractionTreePtr = ContractionTree *;
 
 class Symbol {
 public:
@@ -458,16 +457,16 @@ public:
 // TreeTensorNode: Reference to a contraction expression result.
 class TreeTensorNode : public LeafNode {
 private:
-  CTreePtr TreeRef;
-  TreeTensorNode(IndexUsesTy &IndexUses, CTreePtr TreeRef)
+  ContractionTreePtr TreeRef;
+  TreeTensorNode(IndexUsesTy &IndexUses, ContractionTreePtr TreeRef)
       : LeafNode(NK_TreeTensor, IndexUses), TreeRef(TreeRef) {}
 
 public:
-  static NodePtr get(IndexUsesTy &IndexUses, CTreePtr TreeRef) {
+  static NodePtr get(IndexUsesTy &IndexUses, ContractionTreePtr TreeRef) {
     return NodePtr(new TreeTensorNode(IndexUses, TreeRef));
   }
   // Member Functions
-  CTreePtr getTree() { return TreeRef; }
+  ContractionTreePtr getTree() { return TreeRef; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_TreeTensor; }
   // dump
@@ -574,18 +573,21 @@ public:
 
 #define DEBUG_TYPE "tcc-ast"
 
-using SizesHoldTy = SmallVector<std::unique_ptr<SizeSymbol>>;
-using ParamIndicesHoldTy = SmallVector<std::unique_ptr<ParamIndexSymbol>>;
-using InputTensorsHoldTy = SmallVector<std::unique_ptr<InputTensor>>;
 using SizePtrsTy = SmallVector<SizePtr>;
 using ParamIndexPtrsTy = SmallVector<ParamIndexSymbol *>;
 class ContractionForest {
   std::string name;
-  /// Symbol Map
+
   using SymbolMapTy = DenseMap<StringRef, SymbolPtr>;
-  SymbolMapTy symbolMap;
   using InputTensorsMapTy = DenseMap<StringRef, InputTensorPtr>;
+  /// Symbol Map
+  SymbolMapTy symbolMap;
   InputTensorsMapTy inputTensorMap;
+
+  using ParamIndicesHoldTy = SmallVector<std::unique_ptr<ParamIndexSymbol>>;
+  using SizesHoldTy = SmallVector<std::unique_ptr<SizeSymbol>>;
+  using InputTensorsHoldTy = SmallVector<std::unique_ptr<InputTensor>>;
+  using TreeTensorsHoldTy = SmallVector<std::unique_ptr<ContractionTree>>;
   /// Context, hold global resources
   // Global indices
   ParamIndicesHoldTy paramIndices;
@@ -594,11 +596,11 @@ class ContractionForest {
   // Input tensors
   InputTensorsHoldTy inputTensors;
   // Calculated tensors
-  TreeTensorsTy treeTensors;
+  TreeTensorsHoldTy treeTensors;
   /// Function argument
   using InputTensorPtrsTy = SmallVector<InputTensorPtr>;
   /// Function results
-  using TreeTensorPtrsTy = SmallVector<CTreePtr>;
+  using TreeTensorPtrsTy = SmallVector<ContractionTreePtr>;
   TreeTensorPtrsTy resultTensors;
   InputTensorPtrsTy keepedInputTensors;
 
@@ -763,7 +765,7 @@ public:
   StringRef getName() { return name; }
   auto &getInputTensors() { return inputTensors; }
   auto &getOutputTensors() { return resultTensors; }
-  TreeTensorsTy &getContractionTrees() { return treeTensors; }
+  auto &getContractionTrees() { return treeTensors; }
 
   auto &getArgSizes() { return ArgSizes; }
   auto &getArgIndices() { return ArgIndices; }
