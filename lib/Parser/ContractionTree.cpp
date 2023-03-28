@@ -242,9 +242,9 @@ void ContractionForest::dump() {
   for (auto &Tree : treeTensors)
     Tree->dump();
   errs() << "Result outputs: ";
-  if (OutputCTrees.size()) {
+  if (resultTensors.size()) {
     bool Comma = false;
-    for (auto CT : OutputCTrees) {
+    for (auto CT : resultTensors) {
       if (Comma)
         errs() << ", ";
       errs() << CT->getName();
@@ -253,10 +253,10 @@ void ContractionForest::dump() {
     }
   }
   errs() << "\n";
-  if (ReservedInputs.size()) {
+  if (keepedInputTensors.size()) {
     errs() << "Reserved inputs: ";
     bool Comma = false;
-    for (auto RI : ReservedInputs) {
+    for (auto RI : keepedInputTensors) {
       if (Comma)
         errs() << ", ";
       errs() << RI->getName();

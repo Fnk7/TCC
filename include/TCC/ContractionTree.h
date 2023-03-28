@@ -34,7 +34,6 @@ using SymbolPtr = Symbol *;
 // defined by predecessor expressions.
 class InputTensor;
 using InputTensorPtr = InputTensor *;
-using InputTensorPtrsTy = SmallVector<InputTensorPtr>;
 
 // ContractionTree - Line of the Contraction Expression, which do
 // some calculation (contraction is major) and store value to a tensor. The
@@ -42,7 +41,6 @@ using InputTensorPtrsTy = SmallVector<InputTensorPtr>;
 class ContractionTree;
 using TreeTensorsTy = SmallVector<std::unique_ptr<ContractionTree>>;
 using CTreePtr = ContractionTree *;
-using CTreePtrsTy = SmallVector<CTreePtr>;
 
 class Symbol {
 public:
@@ -598,11 +596,13 @@ class ContractionForest {
   // Calculated tensors
   TreeTensorsTy treeTensors;
   /// Function argument
+  using InputTensorPtrsTy = SmallVector<InputTensorPtr>;
   /// Function results
+  using TreeTensorPtrsTy = SmallVector<CTreePtr>;
+  TreeTensorPtrsTy resultTensors;
+  InputTensorPtrsTy keepedInputTensors;
 
-  InputTensorPtrsTy ReservedInputs;
   // Contraction Tree Tensors
-  CTreePtrsTy OutputCTrees;
   // For resource release
 
   // Function Argument
@@ -708,13 +708,12 @@ public:
     treeTensors.emplace_back(treeTensor);
     insertSymbol(treeTensor);
   }
-  // Add Keep
+  // For keep statement
   void addTensorKeeped(StringRef name) {
-    auto Sym = getSymbol(name);
-    if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(Sym)) {
-      OutputCTrees.emplace_back(CT);
-    } else if (auto inputTensor = llvm::dyn_cast_if_present<InputTensor>(Sym)) {
-      ReservedInputs.emplace_back(inputTensor);
+    if (auto treeTensor = getSymbolOrNull<ContractionTree>(name)) {
+      resultTensors.emplace_back(treeTensor);
+    } else if (auto inputTensor = getSymbolOrNull<InputTensor>(name)) {
+      keepedInputTensors.emplace_back(inputTensor);
     } else {
       llvm_unreachable("Input or CTree Tensor not defined!");
     }
@@ -763,21 +762,21 @@ public:
 
   StringRef getName() { return name; }
   auto &getInputTensors() { return inputTensors; }
-  CTreePtrsTy &getOutputTensors() { return OutputCTrees; }
+  auto &getOutputTensors() { return resultTensors; }
   TreeTensorsTy &getContractionTrees() { return treeTensors; }
 
   auto &getArgSizes() { return ArgSizes; }
   auto &getArgIndices() { return ArgIndices; }
   auto &getArgTensors() { return inputTensors; }
   auto &getConstIndices() { return ConstIndices; }
-  auto &getRetTensors() { return OutputCTrees; }
+  auto &getRetTensors() { return resultTensors; }
 
   // TODO:
 
   int getNumInputSizs() { return ArgSizes.size(); }
 
   int getNumInputTensors() { return inputTensors.size(); }
-  int getNumOutputTensors() { return OutputCTrees.size(); }
+  int getNumOutputTensors() { return resultTensors.size(); }
 };
 
 #undef DEBUG_TYPE
