@@ -33,10 +33,8 @@ using SymbolPtr = Symbol *;
 // InputTensor - The arrays used by Contraction Expression that not
 // defined by predecessor expressions.
 class InputTensor;
-using InTensorsTy = SmallVector<std::unique_ptr<InputTensor>>;
-using InTensorPtr = InputTensor *;
-using InputTensorPtrsTy = SmallVector<InTensorPtr>;
-using InTensorsMapTy = DenseMap<StringRef, InTensorPtr>;
+using InputTensorPtr = InputTensor *;
+using InputTensorPtrsTy = SmallVector<InputTensorPtr>;
 
 // ContractionTree - Line of the Contraction Expression, which do
 // some calculation (contraction is major) and store value to a tensor. The
@@ -78,7 +76,6 @@ class SizeSymbol;
 using SizeID = int64_t;
 using SizePtr = SizeSymbol *;
 using SizesTy = SmallVector<SizePtr, 4>;
-using SizesTy = SizesTy;
 // SizeID map to SizeSymbol
 using SizesMapTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 class SizeSymbol : public Symbol {
@@ -483,16 +480,16 @@ public:
 // InputTensorNode: Reference to an input tensor.
 class InputTensorNode : public LeafNode {
 private:
-  InTensorPtr InputRef;
-  InputTensorNode(IndexUsesTy &IndexUses, InTensorPtr InputRef)
+  InputTensorPtr InputRef;
+  InputTensorNode(IndexUsesTy &IndexUses, InputTensorPtr InputRef)
       : LeafNode(NK_InputTensor, IndexUses), InputRef(InputRef) {}
 
 public:
-  static NodePtr get(IndexUsesTy &IndexUses, InTensorPtr InputRef) {
+  static NodePtr get(IndexUsesTy &IndexUses, InputTensorPtr InputRef) {
     return NodePtr(new InputTensorNode(IndexUses, InputRef));
   }
   // Member Functions
-  InTensorPtr getInput() { return InputRef; }
+  InputTensorPtr getInput() { return InputRef; }
   // For LLVM RTTI
   static bool classof(const Node *N) { return N->getKind() == NK_InputTensor; }
   // dump
@@ -584,26 +581,26 @@ using SizePtrsTy = SmallVector<SizePtr>;
 using ParamIndexPtrsTy = SmallVector<ParamIndexSymbol *>;
 class ContractionForest {
   std::string name;
-  // Symbols
+  /// Symbols
   using SymbolMapTy = DenseMap<StringRef, SymbolPtr>;
   SymbolMapTy symbolMap;
-  // Const Indexes
-  // Input Tensors
-
+  using InputTensorsMapTy = DenseMap<StringRef, InputTensorPtr>;
+  InputTensorsMapTy inputTensorMap;
   /// Context, hold global resources
-  /// Global indices
+  // Global indices
   ParamIndicesHoldTy paramIndices;
-  /// Sizes
+  // Sizes
   SizesHoldTy sizeIDSymbolMap;
+  // Input tensors
+  InputTensorsHoldTy inputTensors;
 
-  InTensorsMapTy InTensorsMap;
   InputTensorPtrsTy ReservedInputs;
   // Contraction Tree Tensors
   CTreesTy CTrees;
   CTreesMapTy CTreesMap;
   CTreePtrsTy OutputCTrees;
   // For resource release
-  InputTensorsHoldTy InputTensors;
+
   // Function Argument
   SizePtrsTy ArgSizes;
   ParamIndexPtrsTy ArgIndices;
@@ -635,6 +632,13 @@ public:
       auto symbol = symbolMap[name];
       assert(llvm::isa<T>(symbol));
       return llvm::cast<T>(symbol);
+    }
+    return nullptr;
+  }
+  template <typename T> T *getSymbolIfCanCast(StringRef name) {
+    if (symbolMap.count(name)) {
+      auto symbol = symbolMap[name];
+      return llvm::dyn_cast_or_null<T>(symbol);
     }
     return nullptr;
   }
@@ -675,23 +679,24 @@ public:
     insertSymbol(size);
     return size;
   }
-
-  // Done 12-08
-  InTensorPtr addInputTensorDefine(StringRef name, SizesTy Shape) {
+  // For input tensors
+  void addInputTensorDefine(StringRef name, SizesTy shape) {
     assert(!symbolMap.count(name));
-    assert(!InTensorsMap.count(name));
-    auto IT = new InputTensor(name, Shape);
-    InputTensors.emplace_back(IT);
-    insertSymbol(IT);
-    InTensorsMap[IT->getName()] = IT;
-    return IT;
+    assert(!inputTensorMap.count(name));
+    auto inputTensor = new InputTensor(name, shape);
+    inputTensors.emplace_back(inputTensor);
+    inputTensorMap[inputTensor->getName()] = inputTensor;
+    insertSymbol(inputTensor);
   }
-  InTensorPtr addInputTensorDefine(StringRef name, int Dim) {
-    SizesTy Shape;
-    for (int Axis = 0; Axis < Dim; ++Axis) {
-      Shape.emplace_back(addSizeDefine());
+  InputTensorPtr getOrAddInputTensorDefine(StringRef name, int rank) {
+    if (auto inputTensor = getSymbolIfPresent<InputTensor>(name))
+      return inputTensor;
+    SizesTy shape;
+    for (int i = 0; i < rank; i++) {
+      shape.emplace_back(addSizeDefine());
     }
-    return addInputTensorDefine(name, Shape);
+    addInputTensorDefine(name, shape);
+    return getSymbol<InputTensor>(name);
   }
 
   void addContractionTree(StringRef name, NodePtr Root) {
@@ -705,8 +710,8 @@ public:
     auto Sym = getSymbol(name);
     if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(Sym)) {
       OutputCTrees.emplace_back(CT);
-    } else if (auto IT = llvm::dyn_cast_if_present<InputTensor>(Sym)) {
-      ReservedInputs.emplace_back(IT);
+    } else if (auto inputTensor = llvm::dyn_cast_if_present<InputTensor>(Sym)) {
+      ReservedInputs.emplace_back(inputTensor);
     } else {
       llvm_unreachable("Input or CTree Tensor not defined!");
     }
@@ -747,20 +752,20 @@ public:
         ConstIndices.emplace_back(Index.get());
       }
     }
-    for (auto &InTensor : InputTensors) {
+    for (auto &InTensor : inputTensors) {
       ArgTensors.emplace_back(InTensor.get());
     }
   }
   int64_t getInputSizeOf(SizePtr Sz) { return Sz->getUID(); }
 
   StringRef getName() { return name; }
-  InTensorsTy &getInputTensors() { return InputTensors; }
+  auto &getInputTensors() { return inputTensors; }
   CTreePtrsTy &getOutputTensors() { return OutputCTrees; }
   CTreesTy &getContractionTrees() { return CTrees; }
 
   auto &getArgSizes() { return ArgSizes; }
   auto &getArgIndices() { return ArgIndices; }
-  auto &getArgTensors() { return InputTensors; }
+  auto &getArgTensors() { return inputTensors; }
   auto &getConstIndices() { return ConstIndices; }
   auto &getRetTensors() { return OutputCTrees; }
 
@@ -768,7 +773,7 @@ public:
 
   int getNumInputSizs() { return ArgSizes.size(); }
 
-  int getNumInputTensors() { return InputTensors.size(); }
+  int getNumInputTensors() { return inputTensors.size(); }
   int getNumOutputTensors() { return OutputCTrees.size(); }
 };
 

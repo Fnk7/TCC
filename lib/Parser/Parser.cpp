@@ -469,18 +469,13 @@ NodePtr Parser::parseIndexedTensor() {
   curToken = lexer.getNextToken();
   // Parse indices
   auto indexUses = parseIndexUses();
-  auto tensor = CF->getSymbol(name);
-  if (auto treeTensor = llvm::dyn_cast_if_present<ContractionTree>(tensor)) {
-    // Parse contracted tensor
+  // Parse tree tensor
+  if (auto treeTensor = CF->getSymbolIfCanCast<ContractionTree>(name)) {
     inferenceIndexSizes(treeTensor->getShape(), indexUses);
     return TreeTensorNode::get(indexUses, treeTensor);
   } else {
     // Parse input tensor
-    assert(!tensor || llvm::isa<InputTensor>(tensor));
-    auto inputTensor = llvm::cast_if_present<InputTensor>(tensor);
-    if (!inputTensor) {
-      inputTensor = CF->addInputTensorDefine(name, indexUses.size());
-    }
+    auto inputTensor = CF->getOrAddInputTensorDefine(name, indexUses.size());
     inferenceIndexSizes(inputTensor->getShape(), indexUses);
     return InputTensorNode::get(indexUses, inputTensor);
   }

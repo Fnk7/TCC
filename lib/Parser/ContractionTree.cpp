@@ -221,7 +221,7 @@ void ContractionForest::dump() {
   errs() << "Input tensors: ";
   if (ArgTensors.size()) {
     ArgTensors[0]->dump();
-    for (size_t i = 1; i < InputTensors.size(); i++) {
+    for (size_t i = 1; i < inputTensors.size(); i++) {
       errs() << ", ";
       ArgTensors[i]->dump();
     }
