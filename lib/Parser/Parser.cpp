@@ -267,8 +267,7 @@ void Parser::parseInputStatement() {
   auto parseSize = [&]() -> bool {
     if (curToken == Token_Identifier) {
       auto name = lexer.getIdentifier();
-      if (auto symbol = CF->getSymbol(name)) {
-        auto size = cast<SizeSymbol>(symbol);
+      if (auto size = CF->getSymbolIfPresent<SizeSymbol>(name)) {
         shape.emplace_back(size);
       } else {
         shape.emplace_back(CF->addSizeDefine(name));

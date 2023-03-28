@@ -625,13 +625,10 @@ public:
     return llvm::cast<T>(symbol);
   }
   template <typename T> T *getSymbolIfPresent(StringRef name) {
-    if (!symbolMap.count(name))
-      return nullptr;
-    auto symbol = symbolMap[name];
+    auto symbol = getSymbol(name);
     assert(llvm::isa<T>(symbol));
     return llvm::cast<T>(symbol);
   }
-  // Done 12-08
   // Done 12-08
   void addParamIndexDefine(int64_t Value, StringRef name = "") {
     if (!name.empty()) {
@@ -658,9 +655,7 @@ public:
   }
   // Done: 12-08
   auto getParamIndex(StringRef name) {
-    auto Sym = getSymbol(name);
-    assert(Sym && llvm::isa<ParamIndexSymbol>(Sym));
-    return llvm::cast<ParamIndexSymbol>(Sym);
+    return getSymbol<ParamIndexSymbol>(name);
   }
   // Done: 12-08
   auto getParamIndex(int64_t Value) {

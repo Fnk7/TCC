@@ -3,8 +3,9 @@
 
 #include "llvm/ADT/StringRef.h"
 
+#include "TCC/ContractionTree.h"
+
 namespace tc {
-class ContractionForest;
 std::unique_ptr<ContractionForest> parseInputFile(llvm::StringRef FileName);
 } // namespace tc
 
