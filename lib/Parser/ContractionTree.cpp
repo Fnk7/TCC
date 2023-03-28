@@ -5,6 +5,8 @@
 using namespace llvm;
 
 namespace tc {
+const std::string IndexSymbol::implictPrefix = "ci#";
+
 const std::string Node::getKindString(NodeKind K) {
   switch (K) {
   case NK_Root:

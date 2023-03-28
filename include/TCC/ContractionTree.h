@@ -223,10 +223,11 @@ protected:
   IndexSymbol(SymbolKind K, StringRef name) : Symbol(K, name), Size(nullptr) {}
 
 public:
+  const static std::string implictPrefix;
   // Member Functions
   /// isImplicit means the index is used as A(i,3),
   /// where the second index symbol "ci#3"
-  bool isImplicit() { return getName().substr(0, 3) == "ci#"; }
+  bool isImplicit() { return getName().substr(0, 3) == implictPrefix; }
   void setSize(SizePtr Size) { this->Size = Size; }
   SizePtr getSize() { return Size; }
   // For LLVM RTTI
@@ -610,7 +611,7 @@ public:
   ContractionForest() { name = "CT"; }
   void dump();
 
-  // Done 12-08
+  // Modified 23-03-28
   void insertSymbol(SymbolPtr symbol) {
     LLVM_DEBUG(llvm::dbgs() << "Insert " << symbol->getName() << "\n");
     symbolMap[symbol->getName()] = symbol;
@@ -625,46 +626,34 @@ public:
     return llvm::cast<T>(symbol);
   }
   template <typename T> T *getSymbolIfPresent(StringRef name) {
-    auto symbol = getSymbol(name);
-    assert(llvm::isa<T>(symbol));
-    return llvm::cast<T>(symbol);
-  }
-  // Done 12-08
-  void addParamIndexDefine(int64_t Value, StringRef name = "") {
-    if (!name.empty()) {
-      LLVM_DEBUG(llvm::dbgs() << "Add param index: " << name);
-      LLVM_DEBUG(if (Value >= 0) llvm::dbgs() << " = " << Value);
-      LLVM_DEBUG(llvm::dbgs() << "\n");
-      assert(!symbolMap.count(name) && "TODO: Error handle.");
-      auto PIndex = new ParamIndexSymbol(name, Value);
-      // For later use
-      insertSymbol(PIndex);
-      // For resource release
-      ParamIndices.emplace_back(PIndex);
+    if (symbolMap.count(name)) {
+      auto symbol = symbolMap[name];
+      assert(llvm::isa<T>(symbol));
+      return llvm::cast<T>(symbol);
     }
-    if (Value >= 0) {
-      // Const Index Define
-      LLVM_DEBUG(llvm::dbgs() << "Add const index: " << Value << "\n");
-      std::string ConstName = "ci#" + std::to_string(Value);
-      if (!symbolMap.count(ConstName)) {
-        auto PIndex = new ParamIndexSymbol(ConstName, Value);
-        insertSymbol(PIndex);
-        ParamIndices.emplace_back(PIndex);
-      }
-    }
+    return nullptr;
   }
-  // Done: 12-08
-  auto getParamIndex(StringRef name) {
-    return getSymbol<ParamIndexSymbol>(name);
+  // For indices
+  void insertParamIndex(ParamIndexPtr index) {
+    insertSymbol(index);
+    ParamIndices.emplace_back(index);
   }
-  // Done: 12-08
-  auto getParamIndex(int64_t Value) {
-    assert(Value >= 0);
-    std::string ConstName = "ci#" + std::to_string(Value);
-    if (!symbolMap.count(ConstName)) {
-      addParamIndexDefine(Value);
-    }
-    return getParamIndex(ConstName);
+  void addParamIndexDefine(StringRef name, int64_t value) {
+    LLVM_DEBUG(llvm::dbgs() << "Add param index: " << name);
+    LLVM_DEBUG(if (value >= 0) llvm::dbgs() << " = " << value);
+    LLVM_DEBUG(llvm::dbgs() << "\n");
+    assert(!symbolMap.count(name) && "TODO: Error handle.");
+    auto index = new ParamIndexSymbol(name, value);
+    insertParamIndex(index);
+  }
+  auto getImplicitParamIndex(int64_t value) {
+    assert(value >= 0);
+    std::string name = IndexSymbol::implictPrefix + std::to_string(value);
+    if (auto index = getSymbolIfPresent<ParamIndexSymbol>(name))
+      return index;
+    auto index = new ParamIndexSymbol(name, value);
+    insertParamIndex(index);
+    return index;
   }
 
   // Done 12-08

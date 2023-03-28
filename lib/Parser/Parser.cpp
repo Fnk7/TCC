@@ -252,7 +252,7 @@ void Parser::parseIndexStatement() {
       value = lexer.getAPInt().getSExtValue();
       assert(value >= 0 && "Error: Index defined should not less than 0.");
       curToken = lexer.getNextToken();
-      CF->addParamIndexDefine(value, name);
+      CF->addParamIndexDefine(name, value);
     }
     return true;
   };
@@ -444,14 +444,14 @@ IndexUsesTy Parser::parseIndexUses() {
       if (indicesMap.count(name))
         indexUses.emplace_back(indicesMap[name]);
       else
-        indexUses.emplace_back(CF->getParamIndex(name));
+        indexUses.emplace_back(CF->getSymbol<ParamIndexSymbol>(name));
       return true;
     } else if (curToken == Token_Number) {
       curToken = lexer.getNextToken();
       // Implicit constant index
       auto value = lexer.getAPInt().getSExtValue();
       assert(value >= 0);
-      indexUses.emplace_back(CF->getParamIndex(value));
+      indexUses.emplace_back(CF->getImplicitParamIndex(value));
       return true;
     }
     return false;
