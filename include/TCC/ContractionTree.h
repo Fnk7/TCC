@@ -29,7 +29,6 @@ using NodePtr = std::unique_ptr<Node, NodeDeleter>;
 // include input tensor, contraction tensor, index, constant index and size.
 class Symbol;
 using SymbolPtr = Symbol *;
-using SymbolsMapTy = DenseMap<StringRef, SymbolPtr>;
 
 // InputTensor - The arrays used by Contraction Expression that not
 // defined by predecessor expressions.
@@ -61,12 +60,12 @@ public:
 protected:
   const SymbolKind Kind;
   int UsedCount = 0;
-  std::string Name;
-  Symbol(SymbolKind K, StringRef Name) : Kind(K), Name(Name) {}
+  std::string name;
+  Symbol(SymbolKind K, StringRef name) : Kind(K), name(name) {}
 
 public:
   // Member Functions
-  StringRef getName() { return Name; }
+  StringRef getName() { return name; }
   // For LLVM RTTI
   SymbolKind getKind() const { return Kind; }
 };
@@ -88,7 +87,7 @@ private:
 
   class EqualityStorage {
   public:
-    std::string Name;
+    std::string name;
     SizeID ID;
     SizeID UID = -1;
     int64_t UpperBound = 0;
@@ -110,24 +109,24 @@ private:
       EqualityInfo = new EqualityStorage{{this}};
       EqualityInfo->ID = ID;
       if (!isImplicit())
-        EqualityInfo->Name = Name;
+        EqualityInfo->name = name;
     }
     return EqualityInfo;
   }
 
 public:
   SizeSymbol(SizeID ID) : Symbol(SK_Size, ""), ID(ID) {
-    Name = "sz#" + std::to_string(ID);
+    name = "sz#" + std::to_string(ID);
     EqualityInfo = nullptr;
   }
-  SizeSymbol(SizeID ID, StringRef Name, int64_t UB = 0, int64_t LB = 0)
-      : Symbol(SK_Size, Name), ID(ID) {
+  SizeSymbol(SizeID ID, StringRef name, int64_t UB = 0, int64_t LB = 0)
+      : Symbol(SK_Size, name), ID(ID) {
     EqualityInfo = nullptr;
     setUpperBound(UB);
     setLowerBound(LB);
   }
   // Member Functions
-  bool isImplicit() { return Name.substr(0, 3) == "sz#"; }
+  bool isImplicit() { return name.substr(0, 3) == "sz#"; }
   bool operator==(const SizeSymbol &Sz) {
     return EqualityInfo && EqualityInfo == Sz.EqualityInfo;
   }
@@ -141,8 +140,8 @@ public:
       Info->Aliases.emplace_back(&Sz2);
       Sz2.EqualityInfo = Info;
       Info->setID(Sz2.ID);
-      if (Info->Name.empty() && !Sz2.isImplicit()) {
-        Info->Name = Sz2.Name;
+      if (Info->name.empty() && !Sz2.isImplicit()) {
+        Info->name = Sz2.name;
       }
     } else {
       auto Info1 = Sz1.EqualityInfo;
@@ -150,8 +149,8 @@ public:
       Info1->setID(Info2->ID);
       Info1->setUpperBound(Info2->UpperBound);
       Info1->setLowerBound(Info2->LowerBound);
-      if (Info1->Name.empty()) {
-        Info1->Name = Info2->Name;
+      if (Info1->name.empty()) {
+        Info1->name = Info2->name;
       }
       for (auto Alias : Sz2.EqualityInfo->Aliases) {
         Info1->Aliases.emplace_back(Alias);
@@ -165,10 +164,10 @@ public:
   bool isFirstAppear() { return ID == getInfo()->ID; }
   void setUID(SizeID UID) {
     getInfo()->UID = UID;
-    if (getInfo()->Name.empty())
-      getInfo()->Name = "sz#" + std::to_string(UID);
+    if (getInfo()->name.empty())
+      getInfo()->name = "sz#" + std::to_string(UID);
   }
-  StringRef getUName() { return getInfo()->Name; }
+  StringRef getUName() { return getInfo()->name; }
   auto getID() { return getInfo()->ID; }
   auto getUID() { return getInfo()->UID; }
   auto getUpperBound() { return getInfo()->UpperBound; }
@@ -221,7 +220,7 @@ using IndexUsesTy = IndexesTy;
 class IndexSymbol : public Symbol {
 protected:
   SizePtr Size;
-  IndexSymbol(SymbolKind K, StringRef Name) : Symbol(K, Name), Size(nullptr) {}
+  IndexSymbol(SymbolKind K, StringRef name) : Symbol(K, name), Size(nullptr) {}
 
 public:
   // Member Functions
@@ -243,8 +242,8 @@ private:
   IndexID ID;
 
 public:
-  IterIndexSymbol(IndexID ID, StringRef Name)
-      : IndexSymbol(SK_IterIndex, Name), ID(ID) {}
+  IterIndexSymbol(IndexID ID, StringRef name)
+      : IndexSymbol(SK_IterIndex, name), ID(ID) {}
   // Member Functions
   IndexID getID() { return ID; }
   // For LLVM RTTI
@@ -261,8 +260,8 @@ private:
 
 public:
   static const int64_t Undefined = -1;
-  ParamIndexSymbol(StringRef Name, int64_t Value)
-      : IndexSymbol(SK_ParamIndex, Name), Value(Value) {}
+  ParamIndexSymbol(StringRef name, int64_t Value)
+      : IndexSymbol(SK_ParamIndex, name), Value(Value) {}
   // Member Functions
   bool hasValue() { return Value >= 0; }
   int64_t getValue() {
@@ -277,13 +276,13 @@ public:
 
 class InputTensor : public Symbol {
 private:
-  SizesTy Shape;
+  SizesTy shape;
 
 public:
-  InputTensor(StringRef Name, SizesTy Shape)
-      : Symbol(SK_InTenser, Name), Shape(Shape) {}
-  SizesTy &getShape() { return Shape; }
-  int64_t getDimension() { return Shape.size(); }
+  InputTensor(StringRef name, SizesTy Shape)
+      : Symbol(SK_InTenser, name), shape(Shape) {}
+  SizesTy &getShape() { return shape; }
+  int64_t getDimension() { return shape.size(); }
   // For LLVM RTTI
   static bool classof(const Symbol *S) { return S->getKind() == SK_InTenser; }
   // dump
@@ -561,8 +560,8 @@ private:
   NodePtr Root;
 
 public:
-  ContractionTree(StringRef Name, NodePtr Root)
-      : Symbol(SK_CTensor, Name), Root(std::move(Root)) {
+  ContractionTree(StringRef name, NodePtr Root)
+      : Symbol(SK_CTensor, name), Root(std::move(Root)) {
     assert(llvm::isa<RootNode>(this->Root.get()));
   }
   RootNode &getRootNode() { return llvm::cast<RootNode>(*Root); }
@@ -574,7 +573,7 @@ public:
   void dump();
 };
 
-#define DEBUG_TYPE "TCForest"
+#define DEBUG_TYPE "tcc-ast"
 
 using SizesHoldTy = SmallVector<std::unique_ptr<SizeSymbol>>;
 using ParamIndicesHoldTy = SmallVector<std::unique_ptr<ParamIndexSymbol>>;
@@ -582,9 +581,10 @@ using InputTensorsHoldTy = SmallVector<std::unique_ptr<InputTensor>>;
 using SizePtrsTy = SmallVector<SizePtr>;
 using ParamIndexPtrsTy = SmallVector<ParamIndexSymbol *>;
 class ContractionForest {
-  std::string Name;
+  std::string name;
   // Symbols
-  SymbolsMapTy SymbolsMap;
+  using SymbolMapTy = DenseMap<StringRef, SymbolPtr>;
+  SymbolMapTy symbolMap;
   // Const Indexes
   // Input Tensors
 
@@ -607,27 +607,39 @@ class ContractionForest {
   ParamIndexPtrsTy ConstIndices;
 
 public:
-  ContractionForest() { Name = "CT"; }
+  ContractionForest() { name = "CT"; }
   void dump();
 
   // Done 12-08
-  void insertSymbol(SymbolPtr Sym) {
-    LLVM_DEBUG(llvm::dbgs() << "Insert " << Sym->getName() << "\n");
-    SymbolsMap[Sym->getName()] = Sym;
+  void insertSymbol(SymbolPtr symbol) {
+    LLVM_DEBUG(llvm::dbgs() << "Insert " << symbol->getName() << "\n");
+    symbolMap[symbol->getName()] = symbol;
+  }
+  SymbolPtr getSymbol(StringRef name) {
+    return symbolMap.count(name) ? symbolMap[name] : nullptr;
+  }
+  template <typename T> T *getSymbol(StringRef name) {
+    assert(symbolMap.count(name));
+    auto symbol = symbolMap[name];
+    assert(llvm::isa<T>(symbol));
+    return llvm::cast<T>(symbol);
+  }
+  template <typename T> T *getSymbolIfPresent(StringRef name) {
+    if (!symbolMap.count(name))
+      return nullptr;
+    auto symbol = symbolMap[name];
+    assert(llvm::isa<T>(symbol));
+    return llvm::cast<T>(symbol);
   }
   // Done 12-08
-  // Get Tensor
-  SymbolPtr getSymbolOfName(StringRef Name) {
-    return SymbolsMap.count(Name) ? SymbolsMap[Name] : nullptr;
-  }
   // Done 12-08
-  void addParamIndexDefine(int64_t Value, StringRef Name = "") {
-    if (!Name.empty()) {
-      LLVM_DEBUG(llvm::dbgs() << "Add param index: " << Name);
+  void addParamIndexDefine(int64_t Value, StringRef name = "") {
+    if (!name.empty()) {
+      LLVM_DEBUG(llvm::dbgs() << "Add param index: " << name);
       LLVM_DEBUG(if (Value >= 0) llvm::dbgs() << " = " << Value);
       LLVM_DEBUG(llvm::dbgs() << "\n");
-      assert(!SymbolsMap.count(Name) && "TODO: Error handle.");
-      auto PIndex = new ParamIndexSymbol(Name, Value);
+      assert(!symbolMap.count(name) && "TODO: Error handle.");
+      auto PIndex = new ParamIndexSymbol(name, Value);
       // For later use
       insertSymbol(PIndex);
       // For resource release
@@ -637,7 +649,7 @@ public:
       // Const Index Define
       LLVM_DEBUG(llvm::dbgs() << "Add const index: " << Value << "\n");
       std::string ConstName = "ci#" + std::to_string(Value);
-      if (!SymbolsMap.count(ConstName)) {
+      if (!symbolMap.count(ConstName)) {
         auto PIndex = new ParamIndexSymbol(ConstName, Value);
         insertSymbol(PIndex);
         ParamIndices.emplace_back(PIndex);
@@ -645,8 +657,8 @@ public:
     }
   }
   // Done: 12-08
-  auto getParamIndex(StringRef Name) {
-    auto Sym = getSymbolOfName(Name);
+  auto getParamIndex(StringRef name) {
+    auto Sym = getSymbol(name);
     assert(Sym && llvm::isa<ParamIndexSymbol>(Sym));
     return llvm::cast<ParamIndexSymbol>(Sym);
   }
@@ -654,7 +666,7 @@ public:
   auto getParamIndex(int64_t Value) {
     assert(Value >= 0);
     std::string ConstName = "ci#" + std::to_string(Value);
-    if (!SymbolsMap.count(ConstName)) {
+    if (!symbolMap.count(ConstName)) {
       addParamIndexDefine(Value);
     }
     return getParamIndex(ConstName);
@@ -667,42 +679,42 @@ public:
     SizeIDSymbolMap.emplace_back(SS);
     return SS;
   }
-  SizePtr addSizeDefine(StringRef Name, int64_t UB = 0, int64_t LB = 0) {
-    assert(!SymbolsMap.count(Name));
+  SizePtr addSizeDefine(StringRef name, int64_t UB = 0, int64_t LB = 0) {
+    assert(!symbolMap.count(name));
     SizeID ID = SizeIDSymbolMap.size();
-    auto SS = new SizeSymbol(ID, Name, UB, LB);
+    auto SS = new SizeSymbol(ID, name, UB, LB);
     SizeIDSymbolMap.emplace_back(SS);
     insertSymbol(SS);
     return SS;
   }
 
   // Done 12-08
-  InTensorPtr addInputTensorDefine(StringRef Name, SizesTy Shape) {
-    assert(!SymbolsMap.count(Name));
-    assert(!InTensorsMap.count(Name));
-    auto IT = new InputTensor(Name, Shape);
+  InTensorPtr addInputTensorDefine(StringRef name, SizesTy Shape) {
+    assert(!symbolMap.count(name));
+    assert(!InTensorsMap.count(name));
+    auto IT = new InputTensor(name, Shape);
     InputTensors.emplace_back(IT);
     insertSymbol(IT);
     InTensorsMap[IT->getName()] = IT;
     return IT;
   }
-  InTensorPtr addInputTensorDefine(StringRef Name, int Dim) {
+  InTensorPtr addInputTensorDefine(StringRef name, int Dim) {
     SizesTy Shape;
     for (int Axis = 0; Axis < Dim; ++Axis) {
       Shape.emplace_back(addSizeDefine());
     }
-    return addInputTensorDefine(Name, Shape);
+    return addInputTensorDefine(name, Shape);
   }
 
-  void addContractionTree(StringRef Name, NodePtr Root) {
-    CTrees.emplace_back(new ContractionTree(Name, std::move(Root)));
+  void addContractionTree(StringRef name, NodePtr Root) {
+    CTrees.emplace_back(new ContractionTree(name, std::move(Root)));
     auto CT = CTrees.back().get();
     insertSymbol(CT);
     CTreesMap[CT->getName()] = CT;
   }
   // Add Keep
-  void addTensorKeeped(StringRef Name) {
-    auto Sym = getSymbolOfName(Name);
+  void addTensorKeeped(StringRef name) {
+    auto Sym = getSymbol(name);
     if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(Sym)) {
       OutputCTrees.emplace_back(CT);
     } else if (auto IT = llvm::dyn_cast_if_present<InputTensor>(Sym)) {
@@ -753,7 +765,7 @@ public:
   }
   int64_t getInputSizeOf(SizePtr Sz) { return Sz->getUID(); }
 
-  StringRef getName() { return Name; }
+  StringRef getName() { return name; }
   InTensorsTy &getInputTensors() { return InputTensors; }
   CTreePtrsTy &getOutputTensors() { return OutputCTrees; }
   CTreesTy &getContractionTrees() { return CTrees; }

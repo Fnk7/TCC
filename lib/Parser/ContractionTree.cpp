@@ -30,9 +30,8 @@ const std::string Node::getKindString(NodeKind K) {
 
 static void dumpSizes(SizesTy &Sizes) {
   if (Sizes.size()) {
-    errs() << "(" << Sizes[0];
-    for (size_t i = 1; i < Sizes.size(); i++)
-      errs() << ", " << Sizes[i];
+    errs() << "(";
+    interleaveComma(Sizes, errs());
     errs() << ")";
   }
 }
@@ -62,8 +61,8 @@ static void dumpIndexes(IndexDefsTy &Indexes) {
 }
 
 void InputTensor::dump() {
-  errs() << Name;
-  dumpSizes(Shape);
+  errs() << name;
+  dumpSizes(shape);
 }
 
 void RootNode::dump(int indent) {

@@ -1,10 +1,11 @@
 #ifndef TCC_PARSER_H
 #define TCC_PARSER_H
 
-#include "TCC/ContractionTree.h"
+#include "llvm/ADT/StringRef.h"
 
 namespace tc {
-std::unique_ptr<ContractionForest> parseInputFile(StringRef FileName);
+class ContractionForest;
+std::unique_ptr<ContractionForest> parseInputFile(llvm::StringRef FileName);
 } // namespace tc
 
 #endif

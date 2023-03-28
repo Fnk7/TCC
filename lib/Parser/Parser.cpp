@@ -6,6 +6,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "TCC/ContractionTree.h"
 #include "TCC/Parser.h"
 
 #define DEBUG_TYPE "tcc-parser"
@@ -69,14 +70,6 @@ public:
   }
 
   Token getNextToken() {
-    auto t = getNextToken(true);
-    if (t > 0 && t != '\n')
-      llvm::errs() << (char)t << "\n";
-    else
-      llvm::errs() << t << "\n";
-    return t;
-  }
-  Token getNextToken(bool) {
     while (lastChar != '\n' && isspace(lastChar))
       lastChar = getNextChar();
     if (isalpha(lastChar)) {
@@ -274,7 +267,7 @@ void Parser::parseInputStatement() {
   auto parseSize = [&]() -> bool {
     if (curToken == Token_Identifier) {
       auto name = lexer.getIdentifier();
-      if (auto symbol = CF->getSymbolOfName(name)) {
+      if (auto symbol = CF->getSymbol(name)) {
         auto size = cast<SizeSymbol>(symbol);
         shape.emplace_back(size);
       } else {
@@ -308,6 +301,7 @@ void Parser::parseInputStatement() {
 }
 
 void Parser::parseFormulaStatement() {
+  LLVM_DEBUG(dbgs() << "Parsing formula statement\n");
   // get Name
   auto name = std::string(lexer.getIdentifier());
   curToken = lexer.getNextToken();
@@ -476,7 +470,7 @@ NodePtr Parser::parseIndexedTensor() {
   curToken = lexer.getNextToken();
   // Parse indices
   auto indexUses = parseIndexUses();
-  auto tensor = CF->getSymbolOfName(name);
+  auto tensor = CF->getSymbol(name);
   if (auto treeTensor = llvm::dyn_cast_if_present<ContractionTree>(tensor)) {
     // Parse contracted tensor
     inferenceIndexSizes(treeTensor->getShape(), indexUses);
