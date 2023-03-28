@@ -185,35 +185,45 @@ void Parser::parseStatement() {
   assert(isNextLineToken());
 }
 
+// Modified 23-03-28
 void Parser::parseSizeStatement() {
   LLVM_DEBUG(dbgs() << "Parse size statement\n");
   curToken = lx.getNextToken();
   while (curToken == Token_Identifier) {
-    auto Name = lx.getIdentifier();
-    int64_t UB = 0, LB = 0;
+    auto name = lx.getIdentifier();
     curToken = lx.getNextToken();
+    int64_t lowerBound = 0, upperBound = 0;
     if (curToken == Token_Equal) {
       curToken = lx.getNextToken();
-      assert(curToken == Token_ParentheseOpen && "TODO: Error handle.");
-      curToken = lx.getNextToken();
       if (curToken == Token_Number) {
-        LB = lx.getAPInt().getSExtValue();
+        auto cst = lx.getAPInt().getSExtValue();
+        lowerBound = cst;
+        upperBound = cst;
+        curToken = lx.getNextToken();
+      } else {
+        assert(curToken == Token_ParentheseOpen &&
+               "Error: Size value/range define failed.");
+        curToken = lx.getNextToken();
+        if (curToken == Token_Number) {
+          lowerBound = lx.getAPInt().getSExtValue();
+          curToken = lx.getNextToken();
+        }
+        assert(curToken == Token_Comma &&
+               "Error: Size value/range define failed.");
+        curToken = lx.getNextToken();
+        if (curToken == Token_Number) {
+          upperBound = lx.getAPInt().getSExtValue();
+          curToken = lx.getNextToken();
+        }
+        assert(curToken == Token_ParentheseClose &&
+               "Error: Size value/range define failed.");
         curToken = lx.getNextToken();
       }
-      assert(curToken == Token_Comma && "TODO: Error handle.");
-      curToken = lx.getNextToken();
-      if (curToken == Token_Number) {
-        UB = lx.getAPInt().getSExtValue();
-        curToken = lx.getNextToken();
-      }
-      assert(curToken == Token_ParentheseClose && "TODO: Error handle.");
-      curToken = lx.getNextToken();
     }
-    CF->addSizeDefine(Name, UB, LB);
-    if (curToken == Token_Comma)
-      curToken = lx.getNextToken();
-    else
+    CF->addSizeDefine(name, upperBound, lowerBound);
+    if (curToken != Token_Comma)
       break;
+    curToken = lx.getNextToken();
   }
 }
 
@@ -229,7 +239,7 @@ void Parser::parseIndexStatement() {
       curToken = lx.getNextToken();
       assert(curToken == Token_Number && "TODO: Error handle.");
       value = lx.getAPInt().getSExtValue();
-      assert(value >= 0 && "Error: Index value should not less than 0.");
+      assert(value >= 0 && "Error: Index defined should not less than 0.");
       curToken = lx.getNextToken();
     }
     CF->addParamIndexDefine(value, name);
