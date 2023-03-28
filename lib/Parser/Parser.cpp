@@ -258,13 +258,13 @@ void Parser::parseInputStatement() {
     curToken = lx.getNextToken();
     SizesTy shape;
     if (curToken == Token_ParentheseOpen) {
-      curToken = lx.getNextToken();
-      while (true) {
+      do {
+        curToken = lx.getNextToken();
         if (curToken == Token_Identifier) {
           auto name = lx.getIdentifier();
-          if (auto Sym = CF->getSymbolOfName(name)) {
-            auto Size = cast<SizeSymbol>(Sym);
-            shape.emplace_back(Size);
+          if (auto symbol = CF->getSymbolOfName(name)) {
+            auto size = cast<SizeSymbol>(symbol);
+            shape.emplace_back(size);
           } else {
             shape.emplace_back(CF->addSizeDefine(name));
           }
@@ -273,21 +273,16 @@ void Parser::parseInputStatement() {
           shape.emplace_back(CF->addSizeDefine());
           curToken = lx.getNextToken();
         } else {
-          break;
+          llvm_unreachable("Error: Invalid token.");
         }
-        if (curToken == Token_Comma)
-          curToken = lx.getNextToken();
-        else
-          break;
-      }
-      assert(curToken == Token_ParentheseClose);
+      } while (curToken == Token_Comma);
+      assert(curToken == Token_ParentheseClose && "Error: Need token ')'.");
       curToken = lx.getNextToken();
     }
     CF->addInputTensorDefine(name, shape);
-    if (curToken == Token_Comma)
-      curToken = lx.getNextToken();
-    else
+    if (curToken != Token_Comma)
       break;
+    curToken = lx.getNextToken();
   }
 }
 
@@ -499,19 +494,18 @@ NodePtr Parser::parseIndexedTensor() {
   }
 }
 
+// Modified 23-03-28
 void Parser::parseKeepStatement() {
-  assert(curToken == Token_Keep);
+  LLVM_DEBUG(dbgs() << "Parse keep statement\n");
   curToken = lx.getNextToken();
   while (curToken == Token_Identifier) {
     auto Name = lx.getIdentifier();
-    CF->addKeep(Name);
+    CF->addTensorKeeped(Name);
     curToken = lx.getNextToken();
     if (curToken != Token_Comma)
       break;
     curToken = lx.getNextToken();
   }
-  assert(isNextLineToken());
-  curToken = lx.getNextToken();
 }
 } // namespace parser
 

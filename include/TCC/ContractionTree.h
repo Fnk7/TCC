@@ -696,7 +696,7 @@ public:
     CTreesMap[CT->getName()] = CT;
   }
   // Add Keep
-  void addKeep(StringRef Name) {
+  void addTensorKeeped(StringRef Name) {
     auto Sym = getSymbolOfName(Name);
     if (auto CT = llvm::dyn_cast_if_present<ContractionTree>(Sym)) {
       OutputCTrees.emplace_back(CT);
