@@ -113,7 +113,7 @@ class Parser {
   std::unique_ptr<ContractionForest> CF;
 
   // Indexes
-  IndexID IID;
+  IndexID indexID;
   DenseMap<StringRef, IndexPtr> IndexesMap;
 
   inline bool isNextLineToken() {
@@ -124,10 +124,10 @@ class Parser {
   void parseSizeStatement();
   void parseInputStatement();
   void parseIndexStatement();
-  void parseContractionTree();
+  void parseFormulaStatement();
   void parseKeepStatement();
   IndexUsesTy parseIndexUses();
-  IndexDefsTy parseIterIndexDefines();
+  IndexDefsTy parseIndexDefines();
   void eraseIterIndexDefines(IndexDefsTy &IndexDefs);
   NamesTy parseIndexNames();
   NodePtr parseAddition();
@@ -136,6 +136,12 @@ class Parser {
   NodePtr parseMultiplication();
   NodePtr parseIndexedTensor();
   NodePtr parseContraction();
+
+  template <typename Func> void parseCommaSplitTerms(Func parseTerm) {
+    while (parseTerm() && curToken == Token_Comma) {
+      curToken = lx.getNextToken();
+    }
+  }
 
   void inferenceIndexSizes(SizesTy &Shape, IndexUsesTy &IndexUses) {
     assert(Shape.size() == IndexUses.size() && "TODO: Error handle.");
@@ -177,7 +183,7 @@ void Parser::parseStatement() {
   else if (curToken == Token_Input)
     parseInputStatement();
   else if (curToken == Token_Identifier)
-    parseContractionTree();
+    parseFormulaStatement();
   else if (curToken == Token_Keep)
     parseKeepStatement();
   else if (!isNextLineToken())
@@ -187,9 +193,11 @@ void Parser::parseStatement() {
 
 // Modified 23-03-28
 void Parser::parseSizeStatement() {
-  LLVM_DEBUG(dbgs() << "Parse size statement\n");
+  LLVM_DEBUG(dbgs() << "Parsing size statement\n");
   curToken = lx.getNextToken();
-  while (curToken == Token_Identifier) {
+  auto parseTerm = [&]() -> bool {
+    if (curToken != Token_Identifier)
+      return false;
     auto name = lx.getIdentifier();
     curToken = lx.getNextToken();
     int64_t lowerBound = 0, upperBound = 0;
@@ -221,17 +229,18 @@ void Parser::parseSizeStatement() {
       }
     }
     CF->addSizeDefine(name, upperBound, lowerBound);
-    if (curToken != Token_Comma)
-      break;
-    curToken = lx.getNextToken();
-  }
+    return true;
+  };
+  parseCommaSplitTerms(parseTerm);
 }
 
 // Modified 23-03-28
 void Parser::parseIndexStatement() {
-  LLVM_DEBUG(dbgs() << "Parse index statement\n");
+  LLVM_DEBUG(dbgs() << "Parsing index statement\n");
   curToken = lx.getNextToken();
-  while (curToken == Token_Identifier) {
+  auto parseTerm = [&]() -> bool {
+    if (curToken != Token_Identifier)
+      return false;
     auto name = lx.getIdentifier();
     curToken = lx.getNextToken();
     auto value = ParamIndexSymbol::Undefined;
@@ -241,84 +250,87 @@ void Parser::parseIndexStatement() {
       value = lx.getAPInt().getSExtValue();
       assert(value >= 0 && "Error: Index defined should not less than 0.");
       curToken = lx.getNextToken();
+      CF->addParamIndexDefine(value, name);
     }
-    CF->addParamIndexDefine(value, name);
-    if (curToken != Token_Comma)
-      break;
-    curToken = lx.getNextToken();
-  }
+    return true;
+  };
+  parseCommaSplitTerms(parseTerm);
 }
 
 // Modified 23-03-28
 void Parser::parseInputStatement() {
-  LLVM_DEBUG(dbgs() << "Parse input statement\n");
+  LLVM_DEBUG(dbgs() << "Parsing input statement\n");
   curToken = lx.getNextToken();
-  while (curToken == Token_Identifier) {
+  SizesTy shape;
+  auto parseSize = [&]() -> bool {
+    if (curToken == Token_Identifier) {
+      auto name = lx.getIdentifier();
+      if (auto symbol = CF->getSymbolOfName(name)) {
+        auto size = cast<SizeSymbol>(symbol);
+        shape.emplace_back(size);
+      } else {
+        shape.emplace_back(CF->addSizeDefine(name));
+      }
+      curToken = lx.getNextToken();
+      return true;
+    } else if (curToken == Token_Multiplication) {
+      shape.emplace_back(CF->addSizeDefine());
+      curToken = lx.getNextToken();
+      return true;
+    }
+    return false;
+  };
+  auto parseTerm = [&]() -> bool {
+    if (curToken != Token_Identifier)
+      return false;
     auto name = lx.getIdentifier();
     curToken = lx.getNextToken();
-    SizesTy shape;
+    shape.clear();
     if (curToken == Token_ParentheseOpen) {
-      do {
-        curToken = lx.getNextToken();
-        if (curToken == Token_Identifier) {
-          auto name = lx.getIdentifier();
-          if (auto symbol = CF->getSymbolOfName(name)) {
-            auto size = cast<SizeSymbol>(symbol);
-            shape.emplace_back(size);
-          } else {
-            shape.emplace_back(CF->addSizeDefine(name));
-          }
-          curToken = lx.getNextToken();
-        } else if (curToken == Token_Multiplication) {
-          shape.emplace_back(CF->addSizeDefine());
-          curToken = lx.getNextToken();
-        } else {
-          llvm_unreachable("Error: Invalid token.");
-        }
-      } while (curToken == Token_Comma);
+      curToken = lx.getNextToken();
+      parseCommaSplitTerms(parseSize);
       assert(curToken == Token_ParentheseClose && "Error: Need token ')'.");
       curToken = lx.getNextToken();
     }
     CF->addInputTensorDefine(name, shape);
-    if (curToken != Token_Comma)
-      break;
-    curToken = lx.getNextToken();
-  }
+    return true;
+  };
+  parseCommaSplitTerms(parseTerm);
 }
 
-void Parser::parseContractionTree() {
+void Parser::parseFormulaStatement() {
   // get Name
-  auto Name = std::string(lx.getIdentifier());
+  auto name = std::string(lx.getIdentifier());
   curToken = lx.getNextToken();
   // parse Indexes
-  IID = 0;
-  IndexDefsTy IndexDefs = parseIterIndexDefines();
+  indexID = 0;
+  IndexDefsTy indexDefs = parseIndexDefines();
   // parse expressions
   assert(curToken == Token_Equal);
   curToken = lx.getNextToken();
-  auto Child = parseAddition();
-  eraseIterIndexDefines(IndexDefs);
+  auto child = parseAddition();
+  eraseIterIndexDefines(indexDefs);
   // create tree
-  auto Root = RootNode::get(IndexDefs, std::move(Child));
-  CF->addContractionTree(Name, std::move(Root));
+  auto root = RootNode::get(indexDefs, std::move(child));
+  CF->addContractionTree(name, std::move(root));
 }
 
 NamesTy Parser::parseIndexNames() {
-  NamesTy Names;
+  NamesTy names;
   if (curToken != Token_ParentheseOpen)
-    return Names;
+    return names;
   curToken = lx.getNextToken();
-  while (curToken == Token_Identifier) {
-    Names.emplace_back(lx.getIdentifier());
+  auto parseTerm = [&]() -> bool {
+    while (curToken != Token_Identifier)
+      return false;
+    names.emplace_back(lx.getIdentifier());
     curToken = lx.getNextToken();
-    if (curToken == Token_Comma)
-      curToken = lx.getNextToken();
-    else
-      break;
-  }
+    return true;
+  };
+  parseCommaSplitTerms(parseTerm);
   assert(curToken == Token_ParentheseClose && "TODO: Error handle.");
   curToken = lx.getNextToken();
-  return Names;
+  return names;
 }
 
 NodePtr Parser::parseAddition() {
@@ -388,27 +400,26 @@ NodePtr Parser::parseMultiplication() {
 }
 
 // Done 12-08
-IndexDefsTy Parser::parseIterIndexDefines() {
-  IndexDefsTy IndexDefs;
-  NamesTy Names;
+IndexDefsTy Parser::parseIndexDefines() {
+  NamesTy names;
+  IndexDefsTy indexDefs;
   if (curToken != Token_ParentheseOpen)
-    return IndexDefs;
+    return indexDefs;
   curToken = lx.getNextToken();
   while (curToken == Token_Identifier) {
-    auto Name = lx.getIdentifier();
-    assert(!IndexesMap.count(Name) && "TODO: Error handle.");
-    auto IIndex = new IterIndexSymbol(IID++, Name);
+    auto name = lx.getIdentifier();
+    assert(!IndexesMap.count(name) && "TODO: Error handle.");
+    auto IIndex = new IterIndexSymbol(indexID++, name);
     IndexesMap[IIndex->getName()] = IIndex;
-    IndexDefs.emplace_back(IIndex);
+    indexDefs.emplace_back(IIndex);
     curToken = lx.getNextToken();
-    if (curToken == Token_Comma)
-      curToken = lx.getNextToken();
-    else
+    if (curToken != Token_Comma)
       break;
+    curToken = lx.getNextToken();
   }
   assert(curToken == Token_ParentheseClose && "TODO: Error handle.");
   curToken = lx.getNextToken();
-  return IndexDefs;
+  return indexDefs;
 }
 void Parser::eraseIterIndexDefines(IndexDefsTy &IndexDefs) {
   for (auto &IndexDef : IndexDefs) {
@@ -423,7 +434,7 @@ NodePtr Parser::parseContraction() {
   assert(curToken == Token_ParentheseOpen);
   curToken = lx.getNextToken();
   // parse Indexes
-  IndexDefsTy IndexDefs = parseIterIndexDefines();
+  IndexDefsTy IndexDefs = parseIndexDefines();
   curToken = lx.getNextToken();
   // parse expression
   auto child = parseAddition();
@@ -496,16 +507,17 @@ NodePtr Parser::parseIndexedTensor() {
 
 // Modified 23-03-28
 void Parser::parseKeepStatement() {
-  LLVM_DEBUG(dbgs() << "Parse keep statement\n");
+  LLVM_DEBUG(dbgs() << "Parsing keep statement\n");
   curToken = lx.getNextToken();
-  while (curToken == Token_Identifier) {
-    auto Name = lx.getIdentifier();
-    CF->addTensorKeeped(Name);
+  auto parseTerm = [&]() -> bool {
+    if (curToken != Token_Identifier)
+      return false;
+    auto name = lx.getIdentifier();
+    CF->addTensorKeeped(name);
     curToken = lx.getNextToken();
-    if (curToken != Token_Comma)
-      break;
-    curToken = lx.getNextToken();
-  }
+    return true;
+  };
+  parseCommaSplitTerms(parseTerm);
 }
 } // namespace parser
 
