@@ -69,6 +69,14 @@ public:
   }
 
   Token getNextToken() {
+    auto t = getNextToken(true);
+    if (t > 0 && t != '\n')
+      llvm::errs() << (char)t << "\n";
+    else
+      llvm::errs() << t << "\n";
+    return t;
+  }
+  Token getNextToken(bool) {
     while (lastChar != '\n' && isspace(lastChar))
       lastChar = getNextChar();
     if (isalpha(lastChar)) {
@@ -120,22 +128,25 @@ class Parser {
     return curToken == Token_NewLine || curToken == Token_EOF;
   }
 
+  // For statements
   void parseStatement();
   void parseSizeStatement();
   void parseInputStatement();
   void parseIndexStatement();
   void parseFormulaStatement();
   void parseKeepStatement();
+  // For indices
   IndexUsesTy parseIndexUses();
   IndexDefsTy parseIndexDefines();
   void eraseIndexDefines(IndexDefsTy &indexDefs);
-  NamesTy parseIndexNames();
+  // For arith
   NodePtr parseAdditionExpression();
-  NodePtr parseExpressionFactor();
-  NodePtr parseNegativeExpression();
-  NodePtr parseMultiplicationExpression();
-  NodePtr parseIndexedTensor();
   NodePtr parseContractionExpression();
+  NodePtr parseMultiplicationExpression();
+  NodePtr parseNegativeExpression();
+  // For tensor indices
+  NodePtr parseIndexedTensor();
+  NodePtr parseExpressionFactor();
 
   template <typename Func> void parseCommaSplitTerms(Func parseTerm) {
     while (parseTerm() && curToken == Token_Comma) {
@@ -372,33 +383,26 @@ NodePtr Parser::parseExpressionFactor() {
 }
 
 // Modified 23-03-28
-NamesTy Parser::parseIndexNames() {
-  NamesTy names;
-  if (curToken != Token_ParentheseOpen)
-    return names;
-  curToken = lexer.getNextToken();
-  auto parseTerm = [&]() -> bool {
-    while (curToken != Token_Identifier)
-      return false;
-    names.emplace_back(lexer.getIdentifier());
-    curToken = lexer.getNextToken();
-    return true;
-  };
-  parseCommaSplitTerms(parseTerm);
-  assert(curToken == Token_ParentheseClose && "TODO: Error handle.");
-  curToken = lexer.getNextToken();
-  return names;
-}
 IndexDefsTy Parser::parseIndexDefines() {
-  NamesTy names = parseIndexNames();
   IndexDefsTy indexDefs;
-  for (auto name : names) {
+  if (curToken != Token_ParentheseOpen)
+    return indexDefs;
+  curToken = lexer.getNextToken();
+  auto parseIndexDef = [&]() -> bool {
+    if (curToken != Token_Identifier)
+      return false;
+    auto name = lexer.getIdentifier();
+    curToken = lexer.getNextToken();
     assert(!indicesMap.count(name) &&
            "Error: Index definition already exists.");
     auto *index = new IterIndexSymbol(indexID++, name);
     indicesMap[index->getName()] = index;
     indexDefs.emplace_back(index);
-  }
+    return true;
+  };
+  parseCommaSplitTerms(parseIndexDef);
+  assert(curToken == Token_ParentheseClose && "TODO: Error handle.");
+  curToken = lexer.getNextToken();
   return indexDefs;
 }
 void Parser::eraseIndexDefines(IndexDefsTy &indexDefs) {
@@ -435,38 +439,34 @@ NodePtr Parser::parseContractionExpression() {
 
 // Done 12-08
 IndexUsesTy Parser::parseIndexUses() {
-  IndexUsesTy IndexUses;
+  IndexUsesTy indexUses;
   if (curToken != Token_ParentheseOpen)
-    return IndexUses;
+    return indexUses;
   curToken = lexer.getNextToken();
-  while (true) {
+  auto parseIndexUse = [&]() -> bool {
     if (curToken == Token_Identifier) {
-      // Iter index
-      auto Name = lexer.getIdentifier();
-      if (indicesMap.count(Name)) {
-        IndexUses.emplace_back(indicesMap[Name]);
-      } else {
-        // Param Index
-        auto PIndex = CF->getParamIndex(Name);
-        IndexUses.emplace_back(PIndex);
-      }
-    } else if (curToken == Token_Number) {
-      // Const index
-      auto Value = lexer.getAPInt().getSExtValue();
-      assert(Value >= 0);
-      auto PIndex = CF->getParamIndex(Value);
-      IndexUses.emplace_back(PIndex);
-    } else
-      break;
-    curToken = lexer.getNextToken();
-    if (curToken == Token_Comma)
       curToken = lexer.getNextToken();
-    else
-      break;
-  }
+      // Iter or Param index
+      auto name = lexer.getIdentifier();
+      if (indicesMap.count(name))
+        indexUses.emplace_back(indicesMap[name]);
+      else
+        indexUses.emplace_back(CF->getParamIndex(name));
+      return true;
+    } else if (curToken == Token_Number) {
+      curToken = lexer.getNextToken();
+      // Implicit constant index
+      auto value = lexer.getAPInt().getSExtValue();
+      assert(value >= 0);
+      indexUses.emplace_back(CF->getParamIndex(value));
+      return true;
+    }
+    return false;
+  };
+  parseCommaSplitTerms(parseIndexUse);
   assert(curToken == Token_ParentheseClose && "TODO: Error handle.");
   curToken = lexer.getNextToken();
-  return IndexUses;
+  return indexUses;
 }
 
 // Done 12-08
@@ -484,12 +484,12 @@ NodePtr Parser::parseIndexedTensor() {
   } else {
     // Parse input tensor
     assert(!tensor || llvm::isa<InputTensor>(tensor));
-    auto IT = llvm::cast_if_present<InputTensor>(tensor);
-    if (!IT) {
-      IT = CF->addInputTensorDefine(name, indexUses.size());
+    auto inputTensor = llvm::cast_if_present<InputTensor>(tensor);
+    if (!inputTensor) {
+      inputTensor = CF->addInputTensorDefine(name, indexUses.size());
     }
-    inferenceIndexSizes(IT->getShape(), indexUses);
-    return InputTensorNode::get(indexUses, IT);
+    inferenceIndexSizes(inputTensor->getShape(), indexUses);
+    return InputTensorNode::get(indexUses, inputTensor);
   }
 }
 
