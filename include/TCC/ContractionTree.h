@@ -597,8 +597,10 @@ class ContractionForest {
   InputTensorsHoldTy inputTensors;
   // Calculated tensors
   TreeTensorsHoldTy treeTensors;
-  /// Function argument
+
   using InputTensorPtrsTy = SmallVector<InputTensorPtr>;
+  /// Function argument
+  SizePtrsTy argSizes;
   /// Function results
   using TreeTensorPtrsTy = SmallVector<ContractionTreePtr>;
   TreeTensorPtrsTy resultTensors;
@@ -608,11 +610,10 @@ class ContractionForest {
   // For resource release
 
   // Function Argument
-  SizePtrsTy ArgSizes;
-  ParamIndexPtrsTy ArgIndices;
+  ParamIndexPtrsTy argIndices;
   InputTensorPtrsTy ArgTensors;
   // Others
-  SizePtrsTy ConstSizes;
+  SizePtrsTy constantSizes;
   ParamIndexPtrsTy ConstIndices;
 
 public:
@@ -720,38 +721,25 @@ public:
       llvm_unreachable("Input or CTree Tensor not defined!");
     }
   }
-  // Sizes
-  void setSizeEqual(SizesTy &Sz1, SizesTy &Sz2) {
-    assert(Sz1.size() == Sz2.size());
-    for (size_t i = 0; i < Sz1.size(); i++) {
-      if (!Sz1[i]) {
-        assert(Sz2[i]);
-        Sz1[i] = Sz2[i];
-      } else if (!Sz2[i]) {
-        Sz2[i] = Sz1[i];
-      } else {
-        SizeSymbol::makeSizeEqual(*Sz1[i], *Sz2[i]);
-      }
-    }
-  }
+  // For function arguments
   void finishForestConstruct() {
-    for (auto &Size : sizeIDSymbolMap) {
-      if (Size->isFirstAppear()) {
-        if (!Size->isConstant()) {
-          Size->setUID(ArgSizes.size());
-          ArgSizes.emplace_back(Size.get());
+    for (auto &size : sizeIDSymbolMap) {
+      if (size->isFirstAppear()) {
+        if (!size->isConstant()) {
+          size->setUID(argSizes.size());
+          argSizes.emplace_back(size.get());
         } else {
-          ConstSizes.emplace_back(Size.get());
+          constantSizes.emplace_back(size.get());
         }
       }
     }
-    SizeID UID = ArgSizes.size();
-    for (auto Size : ConstSizes) {
-      Size->setUID(UID++);
+    SizeID sizeID = argSizes.size();
+    for (auto size : constantSizes) {
+      size->setUID(sizeID++);
     }
     for (auto &Index : paramIndices) {
       if (!Index->hasValue()) {
-        ArgIndices.emplace_back(Index.get());
+        argIndices.emplace_back(Index.get());
       } else {
         ConstIndices.emplace_back(Index.get());
       }
@@ -767,15 +755,15 @@ public:
   auto &getOutputTensors() { return resultTensors; }
   auto &getContractionTrees() { return treeTensors; }
 
-  auto &getArgSizes() { return ArgSizes; }
-  auto &getArgIndices() { return ArgIndices; }
+  auto &getArgSizes() { return argSizes; }
+  auto &getArgIndices() { return argIndices; }
   auto &getArgTensors() { return inputTensors; }
   auto &getConstIndices() { return ConstIndices; }
   auto &getRetTensors() { return resultTensors; }
 
   // TODO:
 
-  int getNumInputSizs() { return ArgSizes.size(); }
+  int getNumInputSizs() { return argSizes.size(); }
 
   int getNumInputTensors() { return inputTensors.size(); }
   int getNumOutputTensors() { return resultTensors.size(); }

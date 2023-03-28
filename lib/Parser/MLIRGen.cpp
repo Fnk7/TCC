@@ -59,15 +59,15 @@ public:
     M = ModuleOp::create(Loc);
     builder.setInsertionPointToEnd(M.getBody());
     // create mlir function
-    auto &ArgSizes = CF.getArgSizes();
-    auto &ArgIndices = CF.getArgIndices();
+    auto &argSizes = CF.getArgSizes();
+    auto &argIndices = CF.getArgIndices();
     auto &ArgTensors = CF.getArgTensors();
     auto &RetTensors = CF.getRetTensors();
     SmallVector<Type> InputTypes;
     InputTypes.append(
-        SmallVector<Type>(ArgSizes.size(), builder.getIndexType()));
+        SmallVector<Type>(argSizes.size(), builder.getIndexType()));
     InputTypes.append(
-        SmallVector<Type>(ArgIndices.size(), builder.getIndexType()));
+        SmallVector<Type>(argIndices.size(), builder.getIndexType()));
     for (auto &IT : ArgTensors) {
       auto Ty = getTensorTypeOfShape(IT->getShape());
       InputTypes.emplace_back(Ty);
@@ -83,16 +83,16 @@ public:
           break;
       }
       if (ITIdx >= 0)
-        WriteBacks.emplace_back(ITIdx + ArgSizes.size() + ArgIndices.size());
+        WriteBacks.emplace_back(ITIdx + argSizes.size() + argIndices.size());
       else
         WriteBacks.emplace_back(-1);
     }
     auto FuncType = builder.getFunctionType(InputTypes, ResultTypes);
     auto FuncAttr = SmallVector<NamedAttribute>(
         {builder.getNamedAttr("num_input_sizes",
-                              builder.getI64IntegerAttr(ArgSizes.size())),
+                              builder.getI64IntegerAttr(argSizes.size())),
          builder.getNamedAttr("num_input_indices",
-                              builder.getI64IntegerAttr(ArgIndices.size())),
+                              builder.getI64IntegerAttr(argIndices.size())),
          builder.getNamedAttr("num_input_tensors",
                               builder.getI64IntegerAttr(ArgTensors.size())),
          builder.getNamedAttr("wirtebacks",
@@ -102,7 +102,7 @@ public:
     auto EntryB = Func.addEntryBlock();
     builder.setInsertionPointToEnd(EntryB);
     // Set argument names
-    auto argIdxOffset = ArgSizes.size() + ArgIndices.size();
+    auto argIdxOffset = argSizes.size() + argIndices.size();
     for (auto [argIdx, IT] : llvm::enumerate(ArgTensors)) {
       argIdx = argIdx + argIdxOffset;
       Func.setArgAttr(argIdx, "func.name",
@@ -110,16 +110,16 @@ public:
     }
     // Map input tensor to mlir value
     size_t Offset = 0;
-    for (size_t ArgIdx = 0; ArgIdx < ArgSizes.size(); ArgIdx++) {
-      SymbolValueMap[ArgSizes[ArgIdx]->getUName()] =
+    for (size_t ArgIdx = 0; ArgIdx < argSizes.size(); ArgIdx++) {
+      SymbolValueMap[argSizes[ArgIdx]->getUName()] =
           EntryB->getArgument(ArgIdx + Offset);
     }
-    Offset += ArgSizes.size();
-    for (size_t ArgIdx = 0; ArgIdx < ArgIndices.size(); ArgIdx++) {
-      SymbolValueMap[ArgIndices[ArgIdx]->getName()] =
+    Offset += argSizes.size();
+    for (size_t ArgIdx = 0; ArgIdx < argIndices.size(); ArgIdx++) {
+      SymbolValueMap[argIndices[ArgIdx]->getName()] =
           EntryB->getArgument(ArgIdx + Offset);
     }
-    Offset += ArgIndices.size();
+    Offset += argIndices.size();
     for (size_t ArgIdx = 0; ArgIdx < ArgTensors.size(); ArgIdx++) {
       SymbolValueMap[ArgTensors[ArgIdx]->getName()] =
           EntryB->getArgument(ArgIdx + Offset);

@@ -178,28 +178,28 @@ void SizeSymbol::dumpAliases() {
 }
 
 void ContractionForest::dump() {
-  if (ArgSizes.size()) {
+  if (argSizes.size()) {
     bool Comma = false;
-    for (auto Size : ArgSizes) {
+    for (auto Size : argSizes) {
       errs() << (Comma ? ", " : "Input sizes: ");
       Size->dump();
       Comma = true;
     }
     errs() << (Comma ? "\n" : "");
   }
-  if (ConstSizes.size()) {
+  if (constantSizes.size()) {
     bool Comma = false;
-    for (auto Size : ConstSizes) {
+    for (auto Size : constantSizes) {
       errs() << (Comma ? ", " : "Constant sizes: ");
       Size->dump();
       Comma = true;
     }
     errs() << (Comma ? "\n" : "");
   }
-  if (ArgIndices.size()) {
+  if (argIndices.size()) {
     errs() << "Input indices: ";
     bool Comma = false;
-    for (auto Index : ArgIndices) {
+    for (auto Index : argIndices) {
       if (Comma)
         errs() << ", ";
       errs() << Index->getName();
@@ -229,7 +229,7 @@ void ContractionForest::dump() {
   errs() << "\n";
   {
     bool Comma = false;
-    for (auto Size : ArgSizes) {
+    for (auto Size : argSizes) {
       if (Size->isImplicit() || !Size->hasAliases())
         continue;
       errs() << (Comma ? ", " : "Sizes aliases: ");
