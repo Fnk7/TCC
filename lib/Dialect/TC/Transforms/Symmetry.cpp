@@ -5,7 +5,7 @@
 
 namespace mlir::tc::symmetry {
 template <typename T>
-void collectAbelianOpSymmInfo(ValueSymmInfoMapTy &symmInfos, T op) {
+void collectAbelianOpSymmInfo(ValueSymmetryMapTy &symmInfos, T op) {
   auto inputs = op.getInputs();
   auto axesMaps = getAxesMaps(op);
   using Factor = std::pair<Value, int64_t>;
@@ -50,19 +50,19 @@ void collectAbelianOpSymmInfo(ValueSymmInfoMapTy &symmInfos, T op) {
   for (int64_t axis1 = 0; axis1 < dim; axis1++) {
     for (int64_t axis2 = axis1 + 1; axis2 < dim; axis2++) {
       if (axisFactors[axis1] == axisFactors[axis2]) {
-        symmInfos[res].emplace_back(SymmAxisPairTy(axis1, axis2));
+        symmInfos[res].emplace_back(SymmPairTy(axis1, axis2));
       }
     }
   }
 }
-void collectContractOpSymmInfo(ValueSymmInfoMapTy &symmInfos, ContractOp op) {
+void collectContractOpSymmInfo(ValueSymmetryMapTy &symmInfos, ContractOp op) {
   auto input = op.getInput();
   if (!symmInfos.count(input))
     return;
   auto rank = getTensorRank(input);
   auto axes = op.getAxesArray();
   auto i2oAxisMap = getContractOpInput2OutputAxisMap(axes, rank);
-  SymmetryInfoTy symmInfo;
+  SymmArrayTy symmInfo;
   for (auto &pair : symmInfos[input]) {
     auto axis1 = i2oAxisMap[pair.first];
     auto axis2 = i2oAxisMap[pair.second];
@@ -74,7 +74,7 @@ void collectContractOpSymmInfo(ValueSymmInfoMapTy &symmInfos, ContractOp op) {
     symmInfos[op.getResult()] = symmInfo;
   }
 }
-void collectPermuteOpSymmInfo(ValueSymmInfoMapTy &symmInfos, PermuteOp op) {
+void collectPermuteOpSymmInfo(ValueSymmetryMapTy &symmInfos, PermuteOp op) {
   auto input = op.getInput();
   if (!symmInfos.count(input))
     return;
@@ -85,7 +85,7 @@ void collectPermuteOpSymmInfo(ValueSymmInfoMapTy &symmInfos, PermuteOp op) {
     pair.second = axesMap[pair.second];
   }
 }
-void collectSymmInfosOfValue(ValueSymmInfoMapTy &symmInfos, Value value) {
+void collectSymmInfosOfValue(ValueSymmetryMapTy &symmInfos, Value value) {
   auto op = value.getDefiningOp();
   if (!op) {
     return;
@@ -101,7 +101,7 @@ void collectSymmInfosOfValue(ValueSymmInfoMapTy &symmInfos, Value value) {
     collectContractOpSymmInfo(symmInfos, op);
   }
 }
-void cleanEmptyInfoInSymmInfos(ValueSymmInfoMapTy &symmInfos) {
+void cleanEmptyInfoInSymmInfos(ValueSymmetryMapTy &symmInfos) {
   SmallVector<Value> toErase;
   for (auto &[value, info] : symmInfos) {
     if (info.empty()) {

@@ -221,7 +221,7 @@ struct SymmAddFoldPattern : public OpRewritePattern<AddOp> {
         return failure();
       }
     }
-    ValueSymmInfoMapTy symmInfos;
+    ValueSymmetryMapTy symmInfos;
     collectSymmInfosOfValue(symmInfos, result);
     cleanEmptyInfoInSymmInfos(symmInfos);
     if (!symmInfos.count(result)) {

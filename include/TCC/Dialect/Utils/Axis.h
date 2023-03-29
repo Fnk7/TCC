@@ -15,6 +15,10 @@ using AxesMapsTy = SmallVector<AxesMapTy>;
 using AxesRefTy = ArrayRef<AxisTy>;
 using AxesMapRefTy = ArrayRef<AxisTy>;
 using AxesMapsRefTy = ArrayRef<AxesMapTy>;
+// Symmetry
+using SymmPairTy = std::pair<AxisTy, AxisTy>;
+using SymmArrayTy = SmallVector<SymmPairTy>;
+using SymmArrayRefTy = ArrayRef<SymmPairTy>;
 /// TODO: Delete it
 using AxesPairsTy = SmallVector<AxesTy>;
 } // namespace mlir::tc

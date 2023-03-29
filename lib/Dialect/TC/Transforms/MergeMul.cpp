@@ -134,7 +134,7 @@ void MergeMulOp(AddOp op) {
   }
   // for symm add end
   // Symm
-  symmetry::ValueSymmInfoMapTy symmInfos;
+  symmetry::ValueSymmetryMapTy symmInfos;
   symmetry::collectSymmInfosOfValue(symmInfos, op.getResult());
   symmetry::cleanEmptyInfoInSymmInfos(symmInfos);
   // Symm end

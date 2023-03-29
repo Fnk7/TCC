@@ -464,7 +464,7 @@ struct ContractionLoweringPass
   }
   void runOnOperation() final;
 };
-
+#if 0
 static Value materializeToTensor(OpBuilder &builder, TensorType type,
                                  ValueRange inputs, Location loc) {
   assert(inputs.size() == 1);
@@ -473,6 +473,7 @@ static Value materializeToTensor(OpBuilder &builder, TensorType type,
       loc, SmallVector<Type>(1, type), inputs);
   return UCCOp.getResult(0);
 }
+#endif
 
 void ContractionLoweringPass::runOnOperation() {
 #if 0
