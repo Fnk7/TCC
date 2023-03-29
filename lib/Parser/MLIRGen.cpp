@@ -36,21 +36,17 @@ private:
 
   using IndexedValueTy = std::pair<Value, IndexUsesTy>;
 
-  auto getTensorTypeOfShape(SizesTy &Shape) {
-    SmallVector<int64_t> TShape;
-    for (auto Size : Shape) {
-      if (Size->isConstant()) {
-        TShape.emplace_back(Size->getUpperBound());
-      } else {
-        TShape.emplace_back(-1);
-      }
-    }
-    SmallVector<int64_t> Encoding;
-    for (auto Size : Shape) {
-      Encoding.emplace_back(Size->getUID());
-    }
-    auto EncodingAttr = builder.getI64ArrayAttr(Encoding);
-    return RankedTensorType::get(TShape, builder.getF64Type(), EncodingAttr);
+  auto getTensorTypeOfShape(SizesTy &symbolShape) {
+    auto shape = llvm::to_vector(
+        llvm::map_range(symbolShape, [](SizePtr size) -> int64_t {
+          if (size->isConstant())
+            return size->getUpperBound();
+          return -1;
+        }));
+    auto sizeIDs = llvm::to_vector(llvm::map_range(
+        symbolShape, [](SizePtr size) -> int64_t { return size->getUID(); }));
+    auto encodingAttr = builder.getI64ArrayAttr(sizeIDs);
+    return RankedTensorType::get(shape, builder.getF64Type(), encodingAttr);
   }
 
 public:

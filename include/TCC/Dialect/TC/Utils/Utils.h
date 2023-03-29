@@ -58,11 +58,6 @@ template <typename T> inline AxesMapTy getAxesMap(T op) {
 }
 
 // Encoded tensor type utils
-Type getEncodedTensorType(OpBuilder &builder, TShapeTy &shape,
-                          SizeIDsTy &encoding);
-Type getEncodedTensorType(OpBuilder &builder, ArrayRef<int64_t> shape,
-                          SizeIDsTy &encoding);
-Type getZeroRankedTensorType(OpBuilder &builder);
 int64_t getTensorRank(Value V);
 int64_t getTensorRank(RankedTensorType RTT);
 SizeIDsTy getTensorSizeIDs(Value V);
@@ -129,21 +124,6 @@ inline AxesMapTy getContractOpInput2OutputAxisMap(ContractOp ctOp) {
   return getContractOpInput2OutputAxisMap(axes, inputDim);
 }
 
-inline Type getEncodedTensorType(OpBuilder &builder, TShapeTy &shape,
-                                 SizeIDsTy &encoding) {
-  auto encodingAttr = builder.getI64ArrayAttr(encoding);
-  return RankedTensorType::get(shape, builder.getF64Type(), encodingAttr);
-}
-inline Type getEncodedTensorType(OpBuilder &builder, ArrayRef<int64_t> shape,
-                                 SizeIDsTy &encoding) {
-  auto encodingAttr = builder.getI64ArrayAttr(encoding);
-  return RankedTensorType::get(shape, builder.getF64Type(), encodingAttr);
-}
-inline Type getZeroRankedTensorType(OpBuilder &builder) {
-  TShapeTy shape;
-  SizeIDsTy sizeIDs;
-  return getEncodedTensorType(builder, shape, sizeIDs);
-}
 inline int64_t getTensorRank(Value V) {
   auto RTT = V.getType().cast<RankedTensorType>();
   return getTensorRank(RTT);
