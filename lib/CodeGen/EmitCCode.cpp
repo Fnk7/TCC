@@ -137,7 +137,6 @@ private:
   SmallVector<std::string> returnNames;
   void emitResultTypes(bool &newLine) {
     // TODO: use writebacks
-    // TODO: get result name
     for (auto [idx, input] : llvm::enumerate(returnOp.getOperands())) {
       if (newLine) {
         out << ",\n";
@@ -153,6 +152,7 @@ private:
 
   void emitFunctionBody() {
     out << "{\n";
+    out << "#pragma scop\n";
     indent = 2;
     for (auto &op : block) {
       if (auto cstOp = dyn_cast_or_null<arith::ConstantFloatOp>(&op)) {
@@ -173,6 +173,7 @@ private:
                            << "\n";
       }
     }
+    out << "#pragma endscop\n";
     out << "}\n";
   }
 
