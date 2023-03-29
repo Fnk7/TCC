@@ -34,7 +34,7 @@ void AxesAttr::print(AsmPrinter &printer) const {
 
 Attribute AxesAttr::parse(AsmParser &parser, Type odsType) {
   AxesTy axes;
-  assert(axes.size() && "TODO: Custom parser for AxesAttr.");
+  assert(axes.size() && "Error: Need to custom parser for AxesAttr.");
   return AxesAttr::get(odsType.getContext(), axes);
 }
 
@@ -51,7 +51,7 @@ void AxesMapsAttr::print(AsmPrinter &printer) const {
 
 Attribute AxesMapsAttr::parse(AsmParser &parser, Type odsType) {
   AxesMapsTy axesMaps;
-  assert(axesMaps.size() && "TODO: Custom parser for AxesAttr.");
+  assert(axesMaps.size() && "Error: Need to custom parser for AxesMapsAttr.");
   return AxesMapsAttr::get(odsType.getContext(), axesMaps);
 }
 
@@ -70,6 +70,23 @@ void SignsAttr::print(AsmPrinter &printer) const {
 
 Attribute SignsAttr::parse(AsmParser &parser, Type odsType) {
   SignsTy signs;
-  assert(signs.size() && "TODO: Custom parser for AxesAttr.");
+  assert(signs.size() && "Error: Need to custom parser for SignsAttr.");
   return SignsAttr::get(odsType.getContext(), signs);
+}
+
+void SymmetryAttr::print(AsmPrinter &printer) const {
+  auto symmetryRef = getSymmetry();
+  printer << "<";
+  llvm::interleaveComma(symmetryRef, printer, [&](SymmPairTy symm) {
+    printer << symm.first;
+    printer << " @ ";
+    printer << symm.second;
+  });
+  printer << ">";
+}
+
+Attribute SymmetryAttr::parse(AsmParser &parser, Type odsType) {
+  SymmArrayTy symmetry;
+  assert(symmetry.size() && "Error: Need to custom parser for SymmetryAttr.");
+  return SymmetryAttr::get(odsType.getContext(), symmetry);
 }
