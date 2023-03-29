@@ -750,7 +750,7 @@ public:
   StringRef getName() { return name; }
   auto &getArgSizes() { return argSizes; }
   auto &getArgIndices() { return argIndices; }
-  auto &getArgTensors() { return inputTensors; }
+  auto &getArgTensors() { return argTensors; }
   auto &getResultTensors() { return resultTensors; }
   auto &getConstantSizes() { return constantSizes; }
   auto &getConstantIndices() { return constantIndices; }
