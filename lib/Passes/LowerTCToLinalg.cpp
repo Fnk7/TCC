@@ -86,14 +86,13 @@ struct AbelianOpLowering : public OpConversionPattern<TCOp> {
 using AddOpLowering = AbelianOpLowering<AddOp, arith::AddFOp>;
 using MulOpLowering = AbelianOpLowering<MulOp, arith::MulFOp>;
 
-struct ReturnOpLowering : public OpConversionPattern<func::ReturnOp> {
-  using OpConversionPattern<func::ReturnOp>::OpConversionPattern;
+struct ReturnOpLowering : public OpConversionPattern<ReturnOp> {
+  using OpConversionPattern<ReturnOp>::OpConversionPattern;
 
   LogicalResult
-  matchAndRewrite(func::ReturnOp op, func::ReturnOp::Adaptor adaptor,
+  matchAndRewrite(ReturnOp op, ReturnOp::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
-    rewriter.updateRootInPlace(op,
-                               [&] { op->setOperands(adaptor.getOperands()); });
+    rewriter.replaceOpWithNewOp<func::ReturnOp>(op, adaptor.getOperands());
     return success();
   }
 };
@@ -272,12 +271,6 @@ void ConvertTCToLinalgPass::runOnOperation() {
         return !(RTT && RTT.getEncoding());
       });
     });
-    target.addDynamicallyLegalOp<func::ReturnOp>([&](func::ReturnOp op) {
-      return llvm::all_of(op.getOperands(), [&](Value value) {
-        auto RTT = value.getType().dyn_cast_or_null<RankedTensorType>();
-        return !(RTT && RTT.getEncoding());
-      });
-    });
   }
   // Type Conversion, Tensor Encoding
   TypeConverter typeConverter;
@@ -303,7 +296,10 @@ void ConvertTCToLinalgPass::runOnOperation() {
   // Patterns
   RewritePatternSet patterns(&getContext());
   patterns.add<FuncOpLowering>(typeConverter, ctx);
-  patterns.add<ReturnOpLowering>(typeConverter, ctx);
+  if (eraseTensorEncoding)
+    patterns.add<ReturnOpLowering>(typeConverter, ctx);
+  else
+    target.addLegalOp<ReturnOp>();
   patterns.add<AddOpLowering>(typeConverter, ctx);
   patterns.add<MulOpLowering>(typeConverter, ctx);
   patterns.add<ContractOpLowering>(typeConverter, ctx);

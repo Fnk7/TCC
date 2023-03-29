@@ -21,10 +21,6 @@
 
 using namespace mlir;
 
-//===----------------------------------------------------------------------===//
-// ToyToLLVM RewritePatterns
-//===----------------------------------------------------------------------===//
-
 namespace {
 struct ContractToLLVMLoweringPass
     : public PassWrapper<ContractToLLVMLoweringPass, OperationPass<ModuleOp>> {
