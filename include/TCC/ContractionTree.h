@@ -120,7 +120,9 @@ public:
     setLowerBound(LB);
   }
   // Member Functions
-  bool isImplicit() { return name.substr(0, 3) == implicitPrefix; }
+  bool isImplicit() {
+    return name.substr(0, implicitPrefix.size()) == implicitPrefix;
+  }
   bool operator==(const SizeSymbol &Sz) {
     return EqualityInfo && EqualityInfo == Sz.EqualityInfo;
   }
@@ -158,8 +160,10 @@ public:
   bool isFirstAppear() { return ID == getInfo()->ID; }
   void setUID(SizeID UID) {
     getInfo()->UID = UID;
-    if (getInfo()->name.empty())
+    if (getUName().empty() ||
+        getUName().substr(0, implicitPrefix.size()) == implicitPrefix) {
       getInfo()->name = implicitPrefix + std::to_string(UID);
+    }
   }
   StringRef getUName() { return getInfo()->name; }
   auto getID() { return getInfo()->ID; }
@@ -221,7 +225,9 @@ public:
   // Member Functions
   /// isImplicit means the index is used as A(i,3),
   /// where the second index symbol "ci#3"
-  bool isImplicit() { return getName().substr(0, 3) == implicitPrefix; }
+  bool isImplicit() {
+    return getName().substr(0, implicitPrefix.size()) == implicitPrefix;
+  }
   void setSize(SizePtr Size) { this->Size = Size; }
   SizePtr getSize() { return Size; }
   // For LLVM RTTI

@@ -108,49 +108,63 @@ public:
       writeBacks.emplace_back(inputIdx);
     }
     auto writeBackAttr = builder.getI64ArrayAttr(writeBacks);
-    auto FuncAttr = SmallVector<NamedAttribute>(
+    auto funcAttr = SmallVector<NamedAttribute>(
         {builder.getNamedAttr("num_input_sizes", numSizesAttr),
          builder.getNamedAttr("num_input_indices", numIndicesAttr),
          builder.getNamedAttr("num_input_tensors", numInputTensorsAttr),
+         builder.getNamedAttr("sizes_lower_bound", sizeLBsAttr),
+         builder.getNamedAttr("sizes_upper_bound", sizeUBsAttr),
          builder.getNamedAttr("wirtebacks", writeBackAttr)});
-    auto Func =
-        builder.create<func::FuncOp>(loc, CF.getName(), funcType, FuncAttr);
-    auto EntryB = Func.addEntryBlock();
-    builder.setInsertionPointToEnd(EntryB);
-    // Set argument names
-    auto argIdxOffset = argSizes.size() + argIndices.size();
-    for (auto [argIdx, IT] : llvm::enumerate(argTensors)) {
-      argIdx = argIdx + argIdxOffset;
-      Func.setArgAttr(argIdx, "func.name",
-                      builder.getStringAttr(IT->getName()));
+    auto funcOp =
+        builder.create<func::FuncOp>(loc, CF.getName(), funcType, funcAttr);
+    // Set argument attributes
+    size_t offset;
+    // sizes
+    offset = 0;
+    for (auto [argIdx, size] : llvm::enumerate(argSizes)) {
+      auto argNameAttr = builder.getStringAttr(size->getUName());
+      funcOp.setArgAttr(argIdx + offset, "func.name", argNameAttr);
     }
+    offset += argSizes.size();
+    // indices
+    for (auto [argIdx, size] : llvm::enumerate(argSizes)) {
+      auto argNameAttr = builder.getStringAttr(size->getName());
+      funcOp.setArgAttr(argIdx + offset, "func.name", argNameAttr);
+    }
+    offset += argIndices.size();
+    // tensors
+    for (auto [argIdx, inputTensor] : llvm::enumerate(argTensors)) {
+      auto argNameAttr = builder.getStringAttr(inputTensor->getName());
+      funcOp.setArgAttr(argIdx + offset, "func.name", argNameAttr);
+    }
+
+    auto entryBlock = funcOp.addEntryBlock();
+    builder.setInsertionPointToEnd(entryBlock);
     // Map input tensor to mlir value
-    size_t Offset = 0;
-    for (size_t ArgIdx = 0; ArgIdx < argSizes.size(); ArgIdx++) {
-      nameValueMap[argSizes[ArgIdx]->getUName()] =
-          EntryB->getArgument(ArgIdx + Offset);
+    auto arguments = entryBlock->getArguments();
+    offset = 0;
+    for (auto [argIdx, size] : llvm::enumerate(argSizes)) {
+      nameValueMap[size->getUName()] = arguments[argIdx + offset];
     }
-    Offset += argSizes.size();
-    for (size_t ArgIdx = 0; ArgIdx < argIndices.size(); ArgIdx++) {
-      nameValueMap[argIndices[ArgIdx]->getName()] =
-          EntryB->getArgument(ArgIdx + Offset);
+    offset += argSizes.size();
+    for (auto [argIdx, index] : llvm::enumerate(argIndices)) {
+      nameValueMap[index->getName()] = arguments[argIdx + offset];
     }
-    Offset += argIndices.size();
-    for (size_t ArgIdx = 0; ArgIdx < argTensors.size(); ArgIdx++) {
-      nameValueMap[argTensors[ArgIdx]->getName()] =
-          EntryB->getArgument(ArgIdx + Offset);
+    offset += argIndices.size();
+    for (auto [argIdx, inputTensor] : llvm::enumerate(argTensors)) {
+      nameValueMap[inputTensor->getName()] = arguments[argIdx + offset];
     }
     for (auto index : constantIndices) {
-      nameValueMap[index->getName()] =
+      auto constantOp =
           builder.create<arith::ConstantIndexOp>(loc, index->getValue());
+      nameValueMap[index->getName()] = constantOp.getResult();
     }
-    // Generate Contraction Dialect of trees
-    auto &CTs = CF.getContractionTrees();
-    for (auto &CT : CTs) {
-      generateContractionTree(*CT);
+    // Create calculations
+    auto &treeTensors = CF.getContractionTrees();
+    for (auto &treeTensor : treeTensors) {
+      generateContractionTree(*treeTensor);
     }
-    // create mlir return
-    // writebacks point to the argument tensor
+    // Create mlir return
     SmallVector<Value> returnValues;
     for (auto resultTensor : resultTensors) {
       returnValues.emplace_back(nameValueMap[resultTensor->getName()]);
