@@ -42,6 +42,9 @@ static cl::opt<bool> TCNoOpt("tc-no-opt", cl::desc("TC Dialect Optimization"),
 static cl::opt<bool> LinalgFuse("linalg-fuse",
                                 cl::desc("Fuse linalg generic parallel loop."),
                                 cl::init(false));
+static cl::opt<bool> AddBatch("add-batch",
+                              cl::desc("Add batch for calculation."),
+                              cl::init(false));
 
 static cl::opt<bool> LowerLinalg("lower-linalg",
                                  cl::desc("Lower linalg dialect"),
@@ -86,6 +89,9 @@ void addTCOptimizePipeline(mlir::PassManager &PM) {
   funcPM.addPass(mlir::createCSEPass());
   PM.addPass(mlir::tc::createTCOptimizePass());
   funcPM.addPass(mlir::createCSEPass());
+  if (AddBatch) {
+    PM.addPass(mlir::tc::createAddBatchPass());
+  }
 }
 
 void addConvertToLinalgPipeline(mlir::PassManager &PM,

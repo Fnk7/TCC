@@ -12,6 +12,7 @@ std::unique_ptr<Pass> createLowerToLLVMPass();
 std::unique_ptr<Pass>
 createConvertTCToLinalgPass(bool eraseTensorEncoding = false);
 std::unique_ptr<Pass> createConvertTCToTBLASPass();
+std::unique_ptr<Pass> createAddBatchPass();
 } // namespace tc
 } // namespace mlir
 

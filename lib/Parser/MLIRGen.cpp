@@ -9,6 +9,7 @@
 #include "mlir/IR/Verifier.h"
 
 #include "TCC/Dialect/TC/IR/TCOps.h"
+#include "TCC/Dialect/Utils/FuncUtils.h"
 #include "TCC/MLIRGen.h"
 
 using llvm::cast;
@@ -106,7 +107,7 @@ public:
     }
     auto writeBackAttr = builder.getI64ArrayAttr(writeBacks);
     auto funcAttr = SmallVector<NamedAttribute>(
-        {builder.getNamedAttr("num_input_sizes", numSizesAttr),
+        {// builder.getNamedAttr("num_input_sizes", numSizesAttr),
          builder.getNamedAttr("num_input_indices", numIndicesAttr),
          builder.getNamedAttr("num_input_tensors", numInputTensorsAttr),
          builder.getNamedAttr("sizes_lower_bound", sizeLBsAttr),
@@ -114,6 +115,7 @@ public:
          builder.getNamedAttr("wirtebacks", writeBackAttr)});
     auto funcOp =
         builder.create<func::FuncOp>(loc, CF.getName(), funcType, funcAttr);
+    utils::setNumInputSizes(funcOp, numSizesAttr);
     // Set argument attributes
     size_t offset;
     // sizes

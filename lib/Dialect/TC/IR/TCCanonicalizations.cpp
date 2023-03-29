@@ -10,6 +10,26 @@ using namespace mlir::tc;
 
 #define TC_CANONICALIZE
 
+// AddOp: Rebuild
+// Because of CSE directly replace input, not do analysis
+struct AddOpSymmetryRebuildPattern : public OpRewritePattern<AddOp> {
+  using OpRewritePattern<AddOp>::OpRewritePattern;
+  LogicalResult matchAndRewrite(AddOp op,
+                                PatternRewriter &rewriter) const override {
+    auto inputs = op.getInputs();
+    auto axesMaps = op.getAxesMapsArray();
+    auto symmetry1 = symmetry::getResultSymmetryByAxesMaps(inputs, axesMaps);
+    if (symmetry1.empty())
+      return failure();
+    auto symmetry2 = getTensorSymmetry(op.getResult());
+    if (symmetry1 == symmetry2)
+      return failure();
+    auto signs = op.getSignsArray();
+    rewriter.replaceOpWithNewOp<AddOp>(op, inputs, axesMaps, signs);
+    return success();
+  }
+};
+
 // AddOp: Self AddReorderPattern
 // Reorder input tensors
 struct AddReorderPattern : public OpRewritePattern<AddOp> {
@@ -691,4 +711,5 @@ void mlir::tc::getCanonicalizeForCSEPatterns(RewritePatternSet &patterns,
 void mlir::tc::populateSimpilfyCodeGenPatterns(RewritePatternSet &patterns,
                                                MLIRContext *context) {
   patterns.add<ContractAddSwapPattern>(context);
+  patterns.add<AddOpSymmetryRebuildPattern>(context);
 }

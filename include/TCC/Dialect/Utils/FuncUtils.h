@@ -9,6 +9,9 @@ inline int getNumInputSizes(func::FuncOp funcOp) {
   auto attr = attrDict.get("num_input_sizes").cast<IntegerAttr>();
   return attr.getValue().getSExtValue();
 }
+inline void setNumInputSizes(func::FuncOp funcOp, Attribute attr) {
+  funcOp->setAttr("num_input_sizes", attr);
+}
 inline StringRef getFuncOpArgName(func::FuncOp funcOp, int64_t argIdx) {
   auto nameAttr = funcOp.getArgAttr(argIdx, "func.name");
   if (!nameAttr)
