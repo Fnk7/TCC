@@ -85,7 +85,7 @@ private:
         emitTCPermuteOp(pmOp);
       } else if (auto cstOp = dyn_cast_or_null<ConstantOp>(&op)) {
         emitTCConstantOp(cstOp);
-      } else if (auto returnOp = dyn_cast_or_null<func::ReturnOp>(&op)) {
+      } else if (auto returnOp = dyn_cast_or_null<ReturnOp>(&op)) {
         emitFuncReturnOp(returnOp);
       } else {
         out.indent(indent) << "# TODO: " << op.getName() << "\n";
@@ -206,7 +206,7 @@ private:
     valueNameMap[op.getResult()] = name;
   }
 
-  void emitFuncReturnOp(func::ReturnOp op) {
+  void emitFuncReturnOp(ReturnOp op) {
     out.indent(indent) << "return [";
     llvm::interleaveComma(inputTensorNames, out);
     auto inputs = op.getOperands();

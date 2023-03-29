@@ -20,12 +20,12 @@ namespace {
 class EmitCImpl : public codegen::CodeGenBase {
   func::FuncOp funcOp;
   Block &block;
-  func::ReturnOp returnOp;
+  ReturnOp returnOp;
 
 public:
   EmitCImpl(func::FuncOp funcOp, llvm::raw_ostream &out)
       : CodeGenBase(out), funcOp(funcOp), block(funcOp.front()) {
-    returnOp = dyn_cast<func::ReturnOp>(block.getTerminator());
+    returnOp = dyn_cast<ReturnOp>(block.getTerminator());
   }
 
   void emit() {
@@ -166,7 +166,7 @@ private:
                            << "\n";
       } else if (auto emptyOp = dyn_cast_or_null<tensor::EmptyOp>(&op)) {
         emitTensorEmptyOp(emptyOp);
-      } else if (auto returnOp = dyn_cast_or_null<func::ReturnOp>(&op)) {
+      } else if (auto returnOp = dyn_cast_or_null<ReturnOp>(&op)) {
         emitFuncReturnOp(returnOp);
       } else {
         out.indent(indent) << "// Failed: Emit C for op: " << op.getName()
@@ -194,8 +194,8 @@ private:
   }
 
   // emit func return op
-  void emitFuncReturnOp(func::ReturnOp op) {
-    out.indent(indent) << "// From Func ReturnOp\n";
+  void emitFuncReturnOp(ReturnOp op) {
+    out.indent(indent) << "// From ReturnOp\n";
     auto outputs = op.getOperands();
     for (auto [idx, output] : llvm::enumerate(outputs)) {
       auto [shape, sizeIDs] = getTensorSizeInfos(output);
