@@ -16,6 +16,8 @@ using llvm::isa;
 
 using llvm::errs;
 
+#define DEBUG_TYPE "tcc-mlirgen"
+
 using namespace tc;
 
 namespace mlir {
@@ -166,10 +168,9 @@ public:
     }
     // Create mlir return
     SmallVector<Value> returnValues;
-    for (auto resultTensor : resultTensors) {
+    for (auto resultTensor : resultTensors)
       returnValues.emplace_back(nameValueMap[resultTensor->getName()]);
-    }
-    builder.create<func::ReturnOp>(loc, TypeRange(), returnValues);
+    builder.create<ReturnOp>(loc, returnValues);
     return moduleOp;
   }
 
@@ -229,9 +230,8 @@ private:
     for (auto &index : indexDefs) {
       shape.emplace_back(index->getSize());
     }
-    auto outputType = getTensorTypeOfShape(shape);
     auto value = builder.create<PermuteOp>(loc, input, axesMap);
-    assert(outputType == value.getType());
+    assert(checkResultType(getTensorTypeOfShape(shape), value.getType()));
     return {value, {}};
   }
 
@@ -252,9 +252,8 @@ private:
         axes.emplace_back(axis);
       }
     }
-    auto outputType = getTensorTypeOfShape(outputShape);
     Value value = builder.create<ContractOp>(loc, input, axes);
-    assert(outputType == value.getType());
+    assert(checkResultType(getTensorTypeOfShape(outputShape), value.getType()));
     return {value, outputIndexUses};
   }
 
@@ -290,10 +289,9 @@ private:
         axesMap.emplace_back(axis);
       }
     }
-    auto outputType = getTensorTypeOfShape(outputShape);
     Value value =
         builder.create<AddOp>(loc, operands, axesMaps, node.getAddOrSub());
-    assert(outputType == value.getType());
+    assert(checkResultType(getTensorTypeOfShape(outputShape), value.getType()));
     return {value, outputIndexUses};
   }
 
@@ -319,9 +317,8 @@ private:
         axesMap.emplace_back(axis);
       }
     }
-    auto outputType = getTensorTypeOfShape(outputShape);
     Value value = builder.create<MulOp>(loc, operands, axesMaps);
-    assert(outputType == value.getType());
+    assert(checkResultType(getTensorTypeOfShape(outputShape), value.getType()));
     return {value, outputIndexUses};
   }
 
@@ -395,6 +392,17 @@ private:
     auto [input, indexUses] = generateNode(node.getChild());
     Value value = builder.create<NegOp>(loc, input);
     return {value, indexUses};
+  }
+
+  static bool checkResultType(Type type1, Type type2) {
+    if (type1 != type2) {
+      auto RTT1 = type1.cast<RankedTensorType>();
+      auto RTT2 = type2.cast<RankedTensorType>();
+      if (RTT1.getShape() != RTT2.getShape() ||
+          mlir::tc::getTensorSizeIDs(RTT1) != mlir::tc::getTensorSizeIDs(RTT2))
+        return false;
+    }
+    return true;
   }
 };
 

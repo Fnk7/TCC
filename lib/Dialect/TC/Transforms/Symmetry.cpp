@@ -4,6 +4,68 @@
 #include "TCC/Dialect/TC/Transforms/Symmetry.h"
 
 namespace mlir::tc::symmetry {
+// Make SymmArray unique
+void makeSymmetryArrayValid(SymmArrayTy &symmetry) {
+  for (auto &pair : symmetry) {
+    if (pair.first > pair.second) {
+      std::swap(pair.first, pair.second);
+    }
+  }
+  llvm::sort(symmetry, [](SymmPairTy &pair1, SymmPairTy &pair2) -> bool {
+    return pair1.first < pair2.first;
+  });
+}
+
+SymmArrayTy getResultSymmetryByAxesMaps(ValueRange inputs,
+                                        AxesMapsRefTy axesMaps) {
+  ValueSymmetryMapTy valueSymmetry;
+  for (auto input : inputs) {
+    valueSymmetry[input] = getTensorSymmetry(input);
+  }
+  using FactorTy = std::pair<Value, int64_t>;
+  using FactorsTy = SmallVector<FactorTy>;
+  using AxisFactorsMapTy = DenseMap<int64_t, FactorsTy>;
+  // Map result axis to factors
+  AxisFactorsMapTy axisFactorsMap;
+  for (auto [input, axesMap] : llvm::zip(inputs, axesMaps)) {
+    for (auto [idx, oAxis] : llvm::enumerate(axesMap)) {
+      bool isSymm = false;
+      AxisTy iAxis = idx;
+      for (auto pair : valueSymmetry[input]) {
+        if (pair.first == iAxis || pair.second == iAxis) {
+          isSymm = true;
+          axisFactorsMap[oAxis].push_back(FactorTy(input, pair.first));
+          axisFactorsMap[oAxis].push_back(FactorTy(input, pair.second));
+        }
+      }
+      if (!isSymm)
+        axisFactorsMap[oAxis].emplace_back(FactorTy(input, iAxis));
+    }
+  }
+  // Sort factors for later compare
+  for (auto &[_, factors] : axisFactorsMap) {
+    std::sort(factors.begin(), factors.end(), [](FactorTy &f1, FactorTy &f2) {
+      auto t1 = f1.first;
+      auto t2 = f2.first;
+      if (t1 != t2) {
+        return compareTensorOrder(t1, t2);
+      } else {
+        return f1.second < f2.second;
+      }
+    });
+  }
+  SymmArrayTy resultSymmetry;
+  int64_t rank = axisFactorsMap.size();
+  for (int64_t axis1 = 0; axis1 < rank; axis1++) {
+    for (int64_t axis2 = axis1 + 1; axis2 < rank; axis2++) {
+      if (axisFactorsMap[axis1] == axisFactorsMap[axis2]) {
+        resultSymmetry.push_back(SymmPairTy(axis1, axis2));
+      }
+    }
+  }
+  makeSymmetryArrayValid(resultSymmetry);
+  return resultSymmetry;
+}
 template <typename T>
 void collectAbelianOpSymmInfo(ValueSymmetryMapTy &symmInfos, T op) {
   auto inputs = op.getInputs();
@@ -55,6 +117,22 @@ void collectAbelianOpSymmInfo(ValueSymmetryMapTy &symmInfos, T op) {
     }
   }
 }
+SymmArrayTy getResultSymmetryByAxes(Value input, AxesRefTy axes) {
+  auto inputSymmetry = getTensorSymmetry(input);
+  if (inputSymmetry.empty())
+    return {};
+  auto rank = getTensorRank(input);
+  auto i2oAxesMap = getContractOpInput2OutputAxisMap(axes, rank);
+  SymmArrayTy resultSymmetry;
+  for (auto pair : inputSymmetry) {
+    auto axis1 = i2oAxesMap[pair.first];
+    auto axis2 = i2oAxesMap[pair.second];
+    if (axis1 >= 0 && axis2 >= 0)
+      resultSymmetry.emplace_back(axis1, axis2);
+  }
+  makeSymmetryArrayValid(resultSymmetry);
+  return resultSymmetry;
+}
 void collectContractOpSymmInfo(ValueSymmetryMapTy &symmInfos, ContractOp op) {
   auto input = op.getInput();
   if (!symmInfos.count(input))
@@ -73,6 +151,15 @@ void collectContractOpSymmInfo(ValueSymmetryMapTy &symmInfos, ContractOp op) {
   if (symmInfo.size()) {
     symmInfos[op.getResult()] = symmInfo;
   }
+}
+SymmArrayTy getResultSymmetryByAxesMap(Value input, AxesMapRefTy axesMap) {
+  auto symmetry = getTensorSymmetry(input);
+  for (auto &pair : symmetry) {
+    pair.first = axesMap[pair.first];
+    pair.second = axesMap[pair.second];
+  }
+  makeSymmetryArrayValid(symmetry);
+  return symmetry;
 }
 void collectPermuteOpSymmInfo(ValueSymmetryMapTy &symmInfos, PermuteOp op) {
   auto input = op.getInput();

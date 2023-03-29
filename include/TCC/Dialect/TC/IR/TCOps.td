@@ -5,6 +5,8 @@ include "./TCBase.td"
 include "./TCAttributes.td"
 // For NoMemoryEffect
 include "mlir/Interfaces/SideEffectInterfaces.td"
+// For ReturnLike
+include "mlir/Interfaces/ControlFlowInterfaces.td"
 
 class TC_Op<string mnemonic, list<Trait> traits = []>
     : Op<TC_Dialect, mnemonic, traits # [NoMemoryEffect]>;
@@ -148,6 +150,14 @@ def DiagonalOp : TC_Op<"diagonal", [NoMemoryEffect]> {
     OpBuilder<(ins "Value" : $input,
                    "AxesPairsTy&" : $axesPairs)>
   ];
+}
+
+def ReturnOp : Op<TC_Dialect, "return", [Pure, HasParent<"::mlir::func::FuncOp">,
+                                         ReturnLike, Terminator]> {
+  let summary = "Function return operation allow implicit type cast.";
+  let description = [{}];
+  let arguments = (ins Variadic<AnyType>:$operands);
+  let assemblyFormat = "attr-dict ($operands^ `:` type($operands))?";
 }
 
 #endif

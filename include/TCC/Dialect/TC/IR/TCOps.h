@@ -1,13 +1,14 @@
 #ifndef TCC_DIALECT_TC_IR_TCOPS_H
 #define TCC_DIALECT_TC_IR_TCOPS_H
 
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
 #include "TCC/Dialect/TC/IR/TCOpsDialect.h.inc"
-#include "TCC/Dialect/Utils/Axis.h"
 #include "TCC/Dialect/TC/Utils/Tensor.h"
+#include "TCC/Dialect/Utils/Axis.h"
 
 namespace mlir::tc {
 using SignsTy = SmallVector<bool>;

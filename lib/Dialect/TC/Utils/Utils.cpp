@@ -35,7 +35,8 @@ Type getResultTypeByAxesMaps(OpBuilder &builder, ValueRange inputs,
   for (auto sizeID : sizeIDs) {
     assert(sizeID != -1);
   }
-  return getEncodedTensorType(builder, shape, sizeIDs);
+  auto symmetry = symmetry::getResultSymmetryByAxesMaps(inputs, axesMaps);
+  return getEncodedTensorType(builder, shape, sizeIDs, symmetry);
 }
 Type getResultTypeWithoutAxes(OpBuilder &builder, Value input, AxesTy &axes) {
   auto [inputShape, inputSizeIDs] = getTensorSizeInfos(input);
@@ -53,7 +54,8 @@ Type getResultTypeWithoutAxes(OpBuilder &builder, Value input, AxesTy &axes) {
       sizeIDs.emplace_back(sizeID);
     }
   }
-  return getEncodedTensorType(builder, shape, sizeIDs);
+  auto symmetry = symmetry::getResultSymmetryByAxes(input, axes);
+  return getEncodedTensorType(builder, shape, sizeIDs, symmetry);
 }
 Type getResultTypeByAxesMap(OpBuilder &builder, Value input,
                             AxesMapTy &axesMap) {
@@ -77,7 +79,8 @@ Type getResultTypeByAxesMap(OpBuilder &builder, Value input,
       assert(sizeID != -1);
     }
   }
-  return getEncodedTensorType(builder, shape, sizeIDs);
+  auto symmetry = symmetry::getResultSymmetryByAxesMap(input, axesMap);
+  return getEncodedTensorType(builder, shape, sizeIDs, symmetry);
 }
 
 // compare inputs order
@@ -178,11 +181,22 @@ AxesMapTy canonicalizeAxesMaps(AxesMapsTy &axesMaps, int64_t dim) {
 /// Create RankedTensorType with shape, sizeIDs and symmetry
 Type getEncodedTensorType(OpBuilder &builder, ShapeRefTy shape,
                           SizeIDsRefTy sizeIDs, SymmArrayRefTy symmetry) {
-  auto symmetryAttr = SymmetryAttr::get(builder.getContext(), symmetry);
-  auto encoding = SmallVector<NamedAttribute>(
-      {builder.getNamedAttr("size_id", builder.getDenseI64ArrayAttr(sizeIDs)),
-       builder.getNamedAttr("symmetry", symmetryAttr)});
+  auto encoding = SmallVector<NamedAttribute>({
+      builder.getNamedAttr("size_id", builder.getDenseI64ArrayAttr(sizeIDs)),
+  });
+  if (symmetry.size()) {
+    auto symmetryAttr = SymmetryAttr::get(builder.getContext(), symmetry);
+    encoding.push_back(builder.getNamedAttr("symmetry", symmetryAttr));
+  }
   auto encodingAttr = builder.getDictionaryAttr(encoding);
   return RankedTensorType::get(shape, builder.getF64Type(), encodingAttr);
+}
+/// Get symmetry from RankedTensorType
+SymmArrayTy getTensorSymmetry(RankedTensorType RTT) {
+  auto dictAttr = RTT.getEncoding().cast<DictionaryAttr>();
+  auto symmetryAttr = dictAttr.getAs<SymmetryAttr>("symmetry");
+  if (!symmetryAttr)
+    return {};
+  return SymmArrayTy(symmetryAttr.getSymmetry());
 }
 } // namespace mlir::tc

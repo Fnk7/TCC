@@ -100,7 +100,7 @@ inline auto inverseAxesMap(AxesMapTy &axesMap, int64_t rank) {
   }
   return inverseMap;
 }
-inline AxesMapTy getContractOpInput2OutputAxisMap(AxesTy &axes,
+inline AxesMapTy getContractOpInput2OutputAxisMap(AxesRefTy axes,
                                                   int64_t inputDim) {
   AxesMapTy axesMap(inputDim, 0);
   for (auto [idx, axis] : llvm::enumerate(axes)) {
@@ -131,6 +131,14 @@ inline bool isElementWiseAddOp(AddOp op) {
   }
   return true;
 }
+
+/// TODO: Move to somewhere else
+namespace symmetry {
+SymmArrayTy getResultSymmetryByAxesMaps(ValueRange inputs,
+                                        AxesMapsRefTy axesMaps);
+SymmArrayTy getResultSymmetryByAxes(Value input, AxesRefTy axes);
+SymmArrayTy getResultSymmetryByAxesMap(Value input, AxesMapRefTy axesMap);
+} // namespace symmetry
 } // namespace mlir::tc
 
 #endif

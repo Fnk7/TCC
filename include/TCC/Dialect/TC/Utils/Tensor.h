@@ -57,6 +57,11 @@ inline ShapeRefTy getTensorShape(Value value) {
 inline auto getTensorSizeInfos(Value value) {
   return std::pair(getTensorShape(value), getTensorSizeIDs(value));
 }
+SymmArrayTy getTensorSymmetry(RankedTensorType RTT);
+inline SymmArrayTy getTensorSymmetry(Value value) {
+  auto RTT = value.getType().cast<RankedTensorType>();
+  return getTensorSymmetry(RTT);
+}
 } // namespace mlir::tc
 
 #endif
