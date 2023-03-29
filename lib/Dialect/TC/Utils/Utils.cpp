@@ -174,4 +174,15 @@ AxesMapTy canonicalizeAxesMaps(AxesMapsTy &axesMaps, int64_t dim) {
   }
   return inverseMap;
 }
+
+/// Create RankedTensorType with shape, sizeIDs and symmetry
+Type getEncodedTensorType(OpBuilder &builder, ShapeRefTy shape,
+                          SizeIDsRefTy sizeIDs, SymmArrayRefTy symmetry) {
+  auto symmetryAttr = SymmetryAttr::get(builder.getContext(), symmetry);
+  auto encoding = SmallVector<NamedAttribute>(
+      {builder.getNamedAttr("size_id", builder.getDenseI64ArrayAttr(sizeIDs)),
+       builder.getNamedAttr("symmetry", symmetryAttr)});
+  auto encodingAttr = builder.getDictionaryAttr(encoding);
+  return RankedTensorType::get(shape, builder.getF64Type(), encodingAttr);
+}
 } // namespace mlir::tc

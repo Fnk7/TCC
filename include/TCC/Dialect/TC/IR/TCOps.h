@@ -7,7 +7,7 @@
 
 #include "TCC/Dialect/TC/IR/TCOpsDialect.h.inc"
 #include "TCC/Dialect/Utils/Axis.h"
-#include "TCC/Dialect/Utils/Tensor.h"
+#include "TCC/Dialect/TC/Utils/Tensor.h"
 
 namespace mlir::tc {
 using SignsTy = SmallVector<bool>;

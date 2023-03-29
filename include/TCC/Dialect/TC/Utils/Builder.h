@@ -4,7 +4,7 @@
 #include "mlir/IR/Builders.h"
 
 #include "TCC/Dialect/Utils/Axis.h"
-#include "TCC/Dialect/Utils/Tensor.h"
+#include "TCC/Dialect/TC/Utils/Tensor.h"
 
 namespace mlir::tc::utils {
 using MappedInputTy = std::pair<Value, AxesMapTy>;

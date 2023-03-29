@@ -38,7 +38,7 @@ def SignsAttr : TC_Attr<"Signs", "signs"> {
 
 def SymmetryParameter : ArrayRefParameter<"::mlir::tc::SymmPairTy", "tensor symmetry axis pair">;
 
-def SymmetryAttr : TC_Attr<"Symmetry", "tensor symmetry attribute"> {
+def SymmetryAttr : TC_Attr<"Symmetry", "symm"> {
   let parameters = (ins SymmetryParameter:$symmetry);
   let hasCustomAssemblyFormat = 1;
   let returnType = "::mlir::tc::SymmArrayRefTy";

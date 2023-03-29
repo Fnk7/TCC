@@ -2,7 +2,7 @@
 #define TCC_DIALECT_TC_UTILS_AXESMAP_H
 
 #include "TCC/Dialect/Utils/Axis.h"
-#include "TCC/Dialect/Utils/Tensor.h"
+#include "TCC/Dialect/TC/Utils/Tensor.h"
 
 namespace mlir::tc::utils {
 // Apply axesMap1 on axesMap2, axesMap2 changed

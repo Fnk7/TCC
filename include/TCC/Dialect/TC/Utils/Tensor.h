@@ -1,5 +1,5 @@
-#ifndef TCC_DIALECT_UTILS_TENSOR_H
-#define TCC_DIALECT_UTILS_TENSOR_H
+#ifndef TCC_DIALECT_TC_UTILS_TENSOR_H
+#define TCC_DIALECT_TC_UTILS_TENSOR_H
 
 #include "llvm/ADT/SmallVector.h"
 
@@ -8,6 +8,8 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Support/LLVM.h"
 
+#include "TCC/Dialect/Utils/Axis.h"
+
 namespace mlir::tc {
 using TShapeTy = SmallVector<int64_t>;
 using ShapeRefTy = ArrayRef<int64_t>;
@@ -15,6 +17,8 @@ using SizeIDsTy = SmallVector<int64_t>;
 using SizeIDsRefTy = ArrayRef<int64_t>;
 
 /// Create tensor with sizeID and symmetry encoding
+Type getEncodedTensorType(OpBuilder &builder, ShapeRefTy shape,
+                          SizeIDsRefTy sizeIDs, SymmArrayRefTy symmetry);
 inline Type getEncodedTensorType(OpBuilder &builder, ShapeRefTy shape,
                                  SizeIDsRefTy sizeIDs) {
   auto encoding = SmallVector<NamedAttribute>({

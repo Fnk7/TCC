@@ -76,13 +76,15 @@ Attribute SignsAttr::parse(AsmParser &parser, Type odsType) {
 
 void SymmetryAttr::print(AsmPrinter &printer) const {
   auto symmetryRef = getSymmetry();
-  printer << "<";
-  llvm::interleaveComma(symmetryRef, printer, [&](SymmPairTy symm) {
-    printer << symm.first;
-    printer << " @ ";
-    printer << symm.second;
-  });
-  printer << ">";
+  if (symmetryRef.size()) {
+    printer << "<";
+    llvm::interleaveComma(symmetryRef, printer, [&](SymmPairTy symm) {
+      printer << symm.first;
+      printer << "~";
+      printer << symm.second;
+    });
+    printer << ">";
+  }
 }
 
 Attribute SymmetryAttr::parse(AsmParser &parser, Type odsType) {
