@@ -133,10 +133,6 @@ inline SizeIDsTy getTensorSizeIDs(Value V) {
   auto RTT = V.getType().cast<RankedTensorType>();
   return getTensorSizeIDs(RTT);
 }
-inline SizeIDsTy getTensorSizeIDs(RankedTensorType RTT) {
-  auto Attr = RTT.getEncoding().cast<ArrayAttr>();
-  return getI64ArrayFromAttr(Attr);
-}
 inline auto getTensorSizeInfos(Value V) {
   auto RTT = V.getType().cast<RankedTensorType>();
   auto &&shape = RTT.getShape();

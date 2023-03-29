@@ -45,8 +45,7 @@ private:
         }));
     auto sizeIDs = llvm::to_vector(llvm::map_range(
         symbolShape, [](SizePtr size) -> int64_t { return size->getUID(); }));
-    auto encodingAttr = builder.getI64ArrayAttr(sizeIDs);
-    return RankedTensorType::get(shape, builder.getF64Type(), encodingAttr);
+    return mlir::tc::getEncodedTensorType(builder, shape, sizeIDs);
   }
 
 public:
