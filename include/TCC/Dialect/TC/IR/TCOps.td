@@ -9,7 +9,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 
 class TC_Op<string mnemonic, list<Trait> traits = []>
-    : Op<TC_Dialect, mnemonic, traits # [NoMemoryEffect]>;
+    : Op<TC_Dialect, mnemonic, traits #[NoMemoryEffect]>;
 
 def MulOp : TC_Op<"mul", []> {
   let summary = "Tensor expanded elementwise multiplication.";
@@ -27,14 +27,14 @@ def MulOp : TC_Op<"mul", []> {
   }];
   let hasCanonicalizer = 1;
   let assemblyFormat = "(`(` $inputs^ `)`)? "
-                       "`{` `axesmap` $axes_maps `}` `:` attr-dict ` ` "
+                       "`{` `axesmap` `=` $axes_maps `}` `:` attr-dict ` ` "
                        "`(`type($inputs)`)` `->` type($result)";
 }
 
 def AddOp : TC_Op<"add", [NoMemoryEffect]> {
   let summary = "Tensor elementwise addition, with signs.";
   let description = [{
-    // TODO  
+      // TODO
   }];
 
   let arguments = (ins Variadic<F64Tensor> : $inputs,
@@ -60,7 +60,8 @@ def AddOp : TC_Op<"add", [NoMemoryEffect]> {
   }];
   let hasCanonicalizer = 1;
   let assemblyFormat = "(`(` $inputs^ `)`)? "
-                       "`{` `axesmap` $axes_maps `,` `signs` $signs `}` `:` attr-dict ` ` "
+                       "`{` `axesmap` `=` $axes_maps `,`"
+                       " `signs` `=` $signs `}` `:` attr-dict ` ` "
                        "`(`type($inputs)`)` `->` type($result)";
 }
 
@@ -78,7 +79,7 @@ def ContractOp : TC_Op<"contract", [NoMemoryEffect]> {
   }];
   let hasCanonicalizer = 1;
   let assemblyFormat = "`(` $input `)` "
-                       "`{` `axes` $axes `}` `:` attr-dict ` ` "
+                       "`{` `axes` `=` $axes `}` `:` attr-dict ` ` "
                        "type($input) `->` type($result)";
 }
 
@@ -96,7 +97,7 @@ def PermuteOp : TC_Op<"permute", [NoMemoryEffect]> {
   }];
   let hasCanonicalizer = 1;
   let assemblyFormat = "`(` $input `)` "
-                       "`{` `axesmap` $axes_map `}` `:` attr-dict ` ` "
+                       "`{` `axesmap` `=` $axes_map `}` `:` attr-dict ` ` "
                        "type($input) `->` type($result)";
 }
 
@@ -152,11 +153,12 @@ def DiagonalOp : TC_Op<"diagonal", [NoMemoryEffect]> {
   ];
 }
 
-def ReturnOp : Op<TC_Dialect, "return", [Pure, HasParent<"::mlir::func::FuncOp">,
-                                         ReturnLike, Terminator]> {
+def ReturnOp
+    : Op<TC_Dialect, "return",
+         [Pure, HasParent<"::mlir::func::FuncOp">, ReturnLike, Terminator]> {
   let summary = "Function return operation allow implicit type cast.";
   let description = [{}];
-  let arguments = (ins Variadic<AnyType>:$operands);
+  let arguments = (ins Variadic<AnyType> : $operands);
   let assemblyFormat = "attr-dict ($operands^ `:` type($operands))?";
 }
 
