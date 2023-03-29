@@ -29,11 +29,29 @@ inline Type getZeroRankedTensorType(OpBuilder &builder) {
   SizeIDsTy sizeIDs;
   return getEncodedTensorType(builder, shape, sizeIDs);
 }
-// Get tensor sizeID from
+/// Tensor informations
+// Get rank
+inline int64_t getTensorRank(RankedTensorType RTT) { return RTT.getRank(); }
+inline int64_t getTensorRank(Value value) {
+  auto RTT = value.getType().cast<RankedTensorType>();
+  return getTensorRank(RTT);
+}
+// Get tensor size information from shape and encoding
 inline SizeIDsTy getTensorSizeIDs(RankedTensorType RTT) {
   auto dictAttr = RTT.getEncoding().cast<DictionaryAttr>();
   auto sizeIDsAttr = dictAttr.get("size_id").cast<DenseI64ArrayAttr>();
   return llvm::to_vector(sizeIDsAttr.asArrayRef());
+}
+inline SizeIDsTy getTensorSizeIDs(Value value) {
+  auto RTT = value.getType().cast<RankedTensorType>();
+  return getTensorSizeIDs(RTT);
+}
+inline ShapeRefTy getTensorShape(Value value) {
+  auto RTT = value.getType().cast<RankedTensorType>();
+  return RTT.getShape();
+}
+inline auto getTensorSizeInfos(Value value) {
+  return std::pair(getTensorShape(value), getTensorSizeIDs(value));
 }
 } // namespace mlir::tc
 

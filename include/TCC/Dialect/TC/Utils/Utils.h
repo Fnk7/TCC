@@ -58,10 +58,6 @@ template <typename T> inline AxesMapTy getAxesMap(T op) {
 }
 
 // Encoded tensor type utils
-int64_t getTensorRank(Value V);
-int64_t getTensorRank(RankedTensorType RTT);
-SizeIDsTy getTensorSizeIDs(Value V);
-SizeIDsTy getTensorSizeIDs(RankedTensorType RTT);
 Type getResultTypeByAxesMaps(OpBuilder &builder, ValueRange inputs,
                              AxesMapsTy &axesMaps);
 Type getResultTypeWithoutAxes(OpBuilder &builder, Value input, AxesTy &axes);
@@ -122,23 +118,6 @@ inline AxesMapTy getContractOpInput2OutputAxisMap(ContractOp ctOp) {
   auto axes = ctOp.getAxesArray();
   auto inputDim = getTensorRank(ctOp.getInput());
   return getContractOpInput2OutputAxisMap(axes, inputDim);
-}
-
-inline int64_t getTensorRank(Value V) {
-  auto RTT = V.getType().cast<RankedTensorType>();
-  return getTensorRank(RTT);
-}
-inline int64_t getTensorRank(RankedTensorType RTT) { return RTT.getRank(); }
-inline SizeIDsTy getTensorSizeIDs(Value V) {
-  auto RTT = V.getType().cast<RankedTensorType>();
-  return getTensorSizeIDs(RTT);
-}
-inline auto getTensorSizeInfos(Value V) {
-  auto RTT = V.getType().cast<RankedTensorType>();
-  auto &&shape = RTT.getShape();
-  auto &&sizeIDs = getTensorSizeIDs(RTT);
-  assert(shape.size() == sizeIDs.size());
-  return std::pair(shape, sizeIDs);
 }
 
 // Fall back to only support elementwise add
