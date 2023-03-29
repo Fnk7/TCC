@@ -5,6 +5,7 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
 
 #include "TCC/Dialect/TC/Utils/Utils.h"
+#include "TCC/Dialect/Utils/FuncUtils.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -13,6 +14,7 @@
 
 using namespace mlir;
 using namespace mlir::tc;
+using namespace mlir::tc::utils;
 
 namespace {
 class EmitCImpl : public codegen::CodeGenBase {
@@ -66,6 +68,25 @@ private:
   }
 
 private:
+  bool isValidName(StringRef name) {
+    for (auto c : name)
+      if (!isalnum(c) && !(c == '_'))
+        return false;
+    return true;
+  }
+  std::string getArgName(int64_t argIdx) {
+    auto name = getFuncOpArgName(funcOp, argIdx);
+    if (isValidName(name))
+      return std::string(name);
+    return "arg" + std::to_string(argIdx);
+  }
+  std::string getResultName(int64_t resultIdx) {
+    auto name = getFuncOpResultName(funcOp, resultIdx);
+    if (isValidName(name))
+      return std::string(name);
+    return "ret" + std::to_string(resultIdx);
+  }
+
   void emitFunctionType() {
     std::string funcDeclare = "void ";
     out << "void ";
@@ -88,13 +109,7 @@ private:
         out.indent(indent);
       }
       newLine = true;
-      std::string name;
-      auto nameAttr = funcOp.getArgAttr(idx, "func.name");
-      if (nameAttr) {
-        name = nameAttr.cast<StringAttr>().getValue();
-      } else {
-        name = "arg" + std::to_string(idx);
-      }
+      auto name = getArgName(idx);
       if (input.getType().isIndex()) {
         emitIndexArgument(input, idx, name);
       } else {
@@ -129,7 +144,7 @@ private:
         out.indent(indent);
       }
       newLine = true;
-      std::string name = "result_" + std::to_string(idx);
+      auto name = getResultName(idx);
       emitTensorArgument(input, name);
       valueNameMap[input] = name;
       returnNames.emplace_back(name);

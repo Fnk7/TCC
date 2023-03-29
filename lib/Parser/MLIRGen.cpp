@@ -137,6 +137,11 @@ public:
       auto argNameAttr = builder.getStringAttr(inputTensor->getName());
       funcOp.setArgAttr(argIdx + offset, "func.name", argNameAttr);
     }
+    // Set result attributes
+    for (auto [resultIdx, resultTensor] : llvm::enumerate(resultTensors)) {
+      auto resultNameAttr = builder.getStringAttr(resultTensor->getName());
+      funcOp.setResultAttr(resultIdx, "func.name", resultNameAttr);
+    }
 
     auto entryBlock = funcOp.addEntryBlock();
     builder.setInsertionPointToEnd(entryBlock);
