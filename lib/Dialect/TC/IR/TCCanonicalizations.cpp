@@ -1,5 +1,6 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/IR/TCPatterns.h"
+#include "TCC/Dialect/TC/Utils/AxesMap.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 
 #include "mlir/IR/Builders.h"
@@ -30,9 +31,9 @@ struct AddOpSymmetryRebuildPattern : public OpRewritePattern<AddOp> {
   }
 };
 
-// AddOp: Self AddReorderPattern
+// AddOp: Self AddInputsReorderPattern
 // Reorder input tensors
-struct AddReorderPattern : public OpRewritePattern<AddOp> {
+struct AddInputsReorderPattern : public OpRewritePattern<AddOp> {
   using OpRewritePattern<AddOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(AddOp op,
                                 PatternRewriter &rewriter) const override {
@@ -55,9 +56,9 @@ struct AddReorderPattern : public OpRewritePattern<AddOp> {
   }
 };
 
-// AddOp: Self AddAttrCanonicalizePattern
+// AddOp: Self AddAxesMapsCanonicalPattern
 // Canonicalize axes maps
-struct AddAttrCanonicalizePattern : public OpRewritePattern<AddOp> {
+struct AddAxesMapsCanonicalPattern : public OpRewritePattern<AddOp> {
   using OpRewritePattern<AddOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(AddOp op,
                                 PatternRewriter &rewriter) const override {
@@ -75,18 +76,20 @@ struct AddAttrCanonicalizePattern : public OpRewritePattern<AddOp> {
   }
 };
 
-struct AddNegFlodPattern : public OpRewritePattern<AddOp> {
+struct AddNegFoldPattern : public OpRewritePattern<AddOp> {
   using OpRewritePattern<AddOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(AddOp op,
                                 PatternRewriter &rewriter) const override {
-    bool change = false;
     auto inputs = op.getInputs();
+    if (llvm::none_of(inputs, [](Value input) -> bool {
+          return input.getDefiningOp<NegOp>();
+        }))
+      return failure();
     auto signsRef = op.getSigns();
     SmallVector<Value> newInputs;
     SmallVector<bool> newSigns;
     for (auto [input, sign] : llvm::zip(inputs, signsRef)) {
       if (auto negOp = input.getDefiningOp<NegOp>()) {
-        change = true;
         newInputs.emplace_back(negOp.getInput());
         newSigns.emplace_back(!sign);
       } else {
@@ -94,41 +97,38 @@ struct AddNegFlodPattern : public OpRewritePattern<AddOp> {
         newSigns.emplace_back(sign);
       }
     }
-    if (!change) {
-      return failure();
-    }
-    auto axesMaps = getAxesMaps(op);
+    auto axesMaps = op.getAxesMapsArray();
     rewriter.replaceOpWithNewOp<AddOp>(op, newInputs, axesMaps, newSigns);
     return success();
   }
 };
 
 // AddOp: AddOp AddAddFoldPattern
-// Fold AddOp into AddOp
+// tc.add(tc.add(%1, %2), %3) -> tc.add(%1, %2, %3)
 struct AddAddFoldPattern : public OpRewritePattern<AddOp> {
   using OpRewritePattern<AddOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(AddOp op,
                                 PatternRewriter &rewriter) const override {
     auto inputs = op.getInputs();
-    auto axesMaps = getAxesMaps(op);
-    auto signs = op.getSignsArray();
+    if (llvm::none_of(inputs, [](Value input) -> bool {
+          return input.getDefiningOp<AddOp>();
+        }))
+      return failure();
+    auto axesMaps = op.getAxesMaps();
+    auto signs = op.getSigns();
     SmallVector<Value> newInputs;
     AxesMapsTy newAxesMaps;
     SignsTy newSigns;
-    bool changed = false;
     for (auto [input, axesMap, sign] : llvm::zip(inputs, axesMaps, signs)) {
       if (auto op2 = input.getDefiningOp<AddOp>()) {
-        changed = true;
         auto inputs2 = op2.getInputs();
-        auto axesMaps2 = getAxesMaps(op2);
+        auto axesMaps2 = op2.getAxesMaps();
         auto signs2 = op2.getSignsArray();
-        for (auto [input2, axesMap2, sign2] :
-             llvm::zip(inputs2, axesMaps2, signs2)) {
-          for (auto &axis : axesMap2) {
-            axis = axesMap[axis];
-          }
-          newInputs.emplace_back(input2);
+        newInputs.append(inputs2.begin(), inputs2.end());
+        for (auto [axesMap2, sign2] : llvm::zip(axesMaps2, signs2)) {
           newAxesMaps.emplace_back(axesMap2);
+          for (auto &axis : newAxesMaps.back())
+            axis = axesMap[axis];
           newSigns.emplace_back(!(sign ^ sign2));
         }
       } else {
@@ -136,9 +136,6 @@ struct AddAddFoldPattern : public OpRewritePattern<AddOp> {
         newAxesMaps.emplace_back(axesMap);
         newSigns.emplace_back(sign);
       }
-    }
-    if (!changed) {
-      return failure();
     }
     rewriter.replaceOpWithNewOp<AddOp>(op, newInputs, newAxesMaps, newSigns);
     return success();
@@ -151,35 +148,37 @@ struct AddPermuteFoldPattern : public OpRewritePattern<AddOp> {
   using OpRewritePattern<AddOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(AddOp op,
                                 PatternRewriter &rewriter) const override {
-    bool changed = false;
     auto inputs = op.getInputs();
-    auto axesMaps = getAxesMaps(op);
+    if (llvm::none_of(inputs, [](Value input) -> bool {
+          return input.getDefiningOp<PermuteOp>();
+        }))
+      return failure();
+    auto axesMaps = op.getAxesMapsArray();
     SmallVector<Value> newInputs;
     AxesMapsTy newAxesMaps;
     for (auto [input, axesMap] : llvm::zip(inputs, axesMaps)) {
       if (auto permuteOp = input.getDefiningOp<PermuteOp>()) {
-        changed = true;
+        auto input = permuteOp.getInput();
         auto permuteMap = permuteOp.getAxesMapArray();
         assert(axesMap.size() == permuteMap.size());
-        // Permute Input  [s0,s1,s2,s3], b0~b3
-        // Permute Result [s3,s0,s2,s1], a0~a3
-        // Permute Map [1,3,2,0]; a = amap[b]; sizeIDa[amap[b]] = sizeIDb[b]
-        // AxesMap     [i0,i1,i2,i3], i1 -> s0
-        // new AxesMap [i1,i3,i2,i0], i1 -> s0
-        AxesMapTy newAxesMap;
-        newAxesMap.reserve(permuteMap.size());
-        for (auto axis : permuteMap) {
-          newAxesMap.emplace_back(axesMap[axis]);
-        }
-        newInputs.emplace_back(permuteOp.getInput());
+        // Permute Output Axes [i0,i1,i2,i3]
+        // Permute    Map [1,3,2,0]
+        // Permute Input  Axes [i1,i3,i2,i0]
+        // AddOp   Output Axes [a0,a1,a2,a3]
+        // AddOp Axes Map [2,1,0,3]
+        // AddOp   Input  Axes [a2,a1,a0,a3]
+        // i0 = a2, i1 = a1, i2 = a0, i3 = a3
+        // Permute Input  Axes [a1,a3,a0,a2]
+        // New   Axes Map [1,3,0,2]
+        // Apply AddOp axes_map on permute map -> new axes map
+        AxesMapTy newAxesMap(permuteMap);
+        utils::applyAxesMap(axesMap, newAxesMap);
+        newInputs.emplace_back(input);
         newAxesMaps.emplace_back(newAxesMap);
       } else {
         newInputs.emplace_back(input);
         newAxesMaps.emplace_back(axesMap);
       }
-    }
-    if (!changed) {
-      return failure();
     }
     rewriter.replaceOpWithNewOp<AddOp>(op, newInputs, newAxesMaps,
                                        op.getSignsAttr());
@@ -188,28 +187,20 @@ struct AddPermuteFoldPattern : public OpRewritePattern<AddOp> {
 };
 
 // AddOp
-// Self: AddReorderPattern, AddAttrCanonicalizePattern
+// Self: AddInputsReorderPattern, AddAxesMapsCanonicalPattern
 // Mul:
 // Add: AddAddFoldPattern
 // Contract: Deleted
 // Permute: AddPermuteFoldPattern
 // Others
-// AddConstantFoldPattern
 // AddNegFoldPattern
 void AddOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
                                         MLIRContext *context) {
-#ifdef TC_CANONICALIZE_V0
-  patterns.add<AddNegFlodPattern>(context);
-  // patterns.add<AddPermuteFoldPattern>(context);
-  patterns.add<AddAddFoldPattern>(context);
-  patterns.add<AddReorderPattern>(context);
-  patterns.add<AddAttrCanonicalizePattern>(context);
-#elif defined(TC_CANONICALIZE)
-  patterns.add<AddReorderPattern>(context);
-  patterns.add<AddAttrCanonicalizePattern>(context);
+  patterns.add<AddInputsReorderPattern>(context);
+  patterns.add<AddAxesMapsCanonicalPattern>(context);
   patterns.add<AddAddFoldPattern>(context);
   patterns.add<AddPermuteFoldPattern>(context);
-#endif
+  patterns.add<AddNegFoldPattern>(context);
 }
 
 struct MulNegSwapPattern : public OpRewritePattern<MulOp> {
@@ -692,8 +683,8 @@ void ContractOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
 void mlir::tc::getCanonicalizeForCSEPatterns(RewritePatternSet &patterns,
                                              MLIRContext *context) {
   // AddOp
-  patterns.add<AddReorderPattern>(context);
-  patterns.add<AddAttrCanonicalizePattern>(context);
+  patterns.add<AddInputsReorderPattern>(context);
+  patterns.add<AddAxesMapsCanonicalPattern>(context);
   patterns.add<AddAddFoldPattern>(context);
   patterns.add<AddPermuteFoldPattern>(context);
   // MulOp

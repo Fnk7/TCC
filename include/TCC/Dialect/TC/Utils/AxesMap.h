@@ -1,12 +1,12 @@
 #ifndef TCC_DIALECT_TC_UTILS_AXESMAP_H
 #define TCC_DIALECT_TC_UTILS_AXESMAP_H
 
-#include "TCC/Dialect/Utils/Axis.h"
 #include "TCC/Dialect/TC/Utils/Tensor.h"
+#include "TCC/Dialect/Utils/Axis.h"
 
 namespace mlir::tc::utils {
 // Apply axesMap1 on axesMap2, axesMap2 changed
-inline void applyAxesMap(AxesMapTy &axesMap1, AxesMapTy &axesMap2) {
+inline void applyAxesMap(AxesMapRefTy axesMap1, AxesMapTy &axesMap2) {
   for (auto &axis : axesMap2) {
     axis = axesMap1[axis];
   }
