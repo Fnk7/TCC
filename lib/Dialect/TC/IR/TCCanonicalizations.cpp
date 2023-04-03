@@ -232,9 +232,9 @@ struct MulNegSwapPattern : public OpRewritePattern<MulOp> {
   }
 };
 
-// MulOp: Self MulReorderPattern
+// MulOp: Self MulInputReorderPattern
 // Reorder input tensors
-struct MulReorderPattern : public OpRewritePattern<MulOp> {
+struct MulInputReorderPattern : public OpRewritePattern<MulOp> {
   using OpRewritePattern<MulOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(MulOp op,
                                 PatternRewriter &rewriter) const override {
@@ -254,9 +254,9 @@ struct MulReorderPattern : public OpRewritePattern<MulOp> {
   }
 };
 
-// MulOp: Self MulAttrCanonicalizePattern
+// MulOp: Self MulAxesMapsCanonicalPattern
 // Canonicalize axes maps
-struct MulAttrCanonicalizePattern : public OpRewritePattern<MulOp> {
+struct MulAxesMapsCanonicalPattern : public OpRewritePattern<MulOp> {
   using OpRewritePattern<MulOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(MulOp op,
                                 PatternRewriter &rewriter) const override {
@@ -459,7 +459,7 @@ struct MulPermuteFoldPattern : public OpRewritePattern<MulOp> {
 };
 
 // MulOp
-// Self: MulReorderPattern, MulAttrCanonicalizePattern
+// Self: MulInputReorderPattern, MulAxesMapsCanonicalPattern
 // Mul: MulMulFoldPattern
 // Add: MulAddSwapPattern
 // Contract: MulContractSwapPattern
@@ -469,14 +469,12 @@ struct MulPermuteFoldPattern : public OpRewritePattern<MulOp> {
 // MulNegSwapPattern
 void MulOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
                                         MLIRContext *context) {
-#ifdef TC_CANONICALIZE
-  patterns.add<MulReorderPattern>(context);
-  patterns.add<MulAttrCanonicalizePattern>(context);
+  patterns.add<MulInputReorderPattern>(context);
+  patterns.add<MulAxesMapsCanonicalPattern>(context);
   patterns.add<MulMulFoldPattern>(context);
   patterns.add<MulAddSwapPattern>(context);
   patterns.add<MulContractSwapPattern>(context);
   patterns.add<MulPermuteFoldPattern>(context);
-#endif
 }
 
 // PermuteOp: Self PermuteFoldPattern
@@ -673,11 +671,9 @@ struct ContractPermuteSwapPattern : public OpRewritePattern<ContractOp> {
 // ContractNegSwapPattern
 void ContractOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
                                              MLIRContext *context) {
-#ifdef TC_CANONICALIZE
   patterns.add<ContractAddSwapPattern>(context);
   patterns.add<ContractContractFoldPattern>(context);
   patterns.add<ContractPermuteSwapPattern>(context);
-#endif
 }
 
 void mlir::tc::getCanonicalizeForCSEPatterns(RewritePatternSet &patterns,
@@ -688,8 +684,8 @@ void mlir::tc::getCanonicalizeForCSEPatterns(RewritePatternSet &patterns,
   patterns.add<AddAddFoldPattern>(context);
   patterns.add<AddPermuteFoldPattern>(context);
   // MulOp
-  patterns.add<MulReorderPattern>(context);
-  patterns.add<MulAttrCanonicalizePattern>(context);
+  patterns.add<MulInputReorderPattern>(context);
+  patterns.add<MulAxesMapsCanonicalPattern>(context);
   patterns.add<MulMulFoldPattern>(context);
   patterns.add<MulPermuteFoldPattern>(context);
   // ContractOp
