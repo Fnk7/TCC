@@ -9,8 +9,6 @@
 using namespace mlir;
 using namespace mlir::tc;
 
-#define TC_CANONICALIZE
-
 // AddOp: Rebuild
 // Because of CSE directly replace input, not do analysis
 struct AddOpSymmetryRebuildPattern : public OpRewritePattern<AddOp> {
@@ -196,11 +194,11 @@ struct AddPermuteFoldPattern : public OpRewritePattern<AddOp> {
 // AddNegFoldPattern
 void AddOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
                                         MLIRContext *context) {
-  patterns.add<AddInputsReorderPattern>(context);
-  patterns.add<AddAxesMapsCanonicalPattern>(context);
   patterns.add<AddAddFoldPattern>(context);
   patterns.add<AddPermuteFoldPattern>(context);
   patterns.add<AddNegFoldPattern>(context);
+  patterns.add<AddInputsReorderPattern>(context);
+  patterns.add<AddAxesMapsCanonicalPattern>(context);
 }
 
 struct MulNegSwapPattern : public OpRewritePattern<MulOp> {
@@ -469,12 +467,12 @@ struct MulPermuteFoldPattern : public OpRewritePattern<MulOp> {
 // MulNegSwapPattern
 void MulOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
                                         MLIRContext *context) {
-  patterns.add<MulInputReorderPattern>(context);
-  patterns.add<MulAxesMapsCanonicalPattern>(context);
   patterns.add<MulMulFoldPattern>(context);
   patterns.add<MulAddSwapPattern>(context);
   patterns.add<MulContractSwapPattern>(context);
   patterns.add<MulPermuteFoldPattern>(context);
+  patterns.add<MulInputReorderPattern>(context);
+  patterns.add<MulAxesMapsCanonicalPattern>(context);
 }
 
 // PermuteOp: Self PermuteFoldPattern
@@ -502,10 +500,14 @@ struct PermutePermuteFoldPattern : public OpRewritePattern<PermuteOp> {
     if (auto op2 = input.getDefiningOp<PermuteOp>()) {
       auto input2 = op2.getInput();
       auto axesMap1 = op.getAxesMapArray();
-      auto axesMap2 = op.getAxesMapArray();
-      for (auto &axis : axesMap2) {
-        axis = axesMap1[axis];
-      }
+      // BUG: 04-04
+      // forget '2' in op2.getAxesMapArray
+      // 5 hour for debug......
+      auto axesMap2 = op2.getAxesMapArray();
+      // for (auto &axis : axesMap2) {
+      //   axis = axesMap1[axis];
+      // }
+      utils::applyAxesMap(axesMap1, axesMap2);
       rewriter.replaceOpWithNewOp<PermuteOp>(op, input2, axesMap2);
       return success();
     }
@@ -520,10 +522,8 @@ struct PermutePermuteFoldPattern : public OpRewritePattern<PermuteOp> {
 // Others
 void PermuteOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
                                             MLIRContext *context) {
-#ifdef TC_CANONICALIZE
   patterns.add<PermuteFoldPattern>(context);
   patterns.add<PermutePermuteFoldPattern>(context);
-#endif
 }
 
 struct NegNegFoldPattern : public OpRewritePattern<NegOp> {

@@ -4,6 +4,10 @@
 
 namespace mlir::tc::utils {
 MappedInputTy createMulOp(OpBuilder &builder, MappedInputsTy &mappedInputs) {
+  assert(mappedInputs.size());
+  if (mappedInputs.size() == 1) {
+    return mappedInputs[0];
+  }
   SmallVector<Value> inputs;
   AxesMapsTy axesMaps;
   for (auto [input, axesMap] : mappedInputs) {
