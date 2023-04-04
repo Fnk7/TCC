@@ -103,41 +103,44 @@ public:
         auto axis2 = axes[pos2];
         AxisPairTy pair1(axis1, axis2);
         if (intersectRel[pair1]) {
-          auto &intersect1 = groupInfos[pos1].first;
-          auto &intersect2 = groupInfos[pos2].first;
-          auto &equality1 = groupInfos[pos1].second;
-          auto &equality2 = groupInfos[pos2].second;
-          auto minIntersect = std::min(intersect1, intersect2);
-          intersect1 = minIntersect;
-          intersect2 = minIntersect;
+          auto iGroup1 = groupInfos[pos1].first;
+          auto iGroup2 = groupInfos[pos2].first;
+          auto minGroup = std::min(iGroup1, iGroup2);
+          groupInfos[iGroup1].first = minGroup;
+          groupInfos[iGroup2].first = minGroup;
           AxisPairTy pair2(axis2, axis1);
           auto sub1 = subsetRel[pair1];
           auto sub2 = subsetRel[pair2];
+          auto eGroup1 = groupInfos[pos1].second;
+          auto eGroup2 = groupInfos[pos2].second;
           if (sub1 && sub2) {
-            auto minEquality = std::min(equality1, equality2);
-            equality1 = minEquality;
-            equality2 = minEquality;
+            auto minGroup = std::min(eGroup1, eGroup2);
+            if (eGroup1 >= 0)
+              groupInfos[eGroup1].second = minGroup;
+            if (eGroup2 >= 0)
+              groupInfos[eGroup2].second = minGroup;
           } else if (sub1) {
-            equality1 = -1;
+            if (eGroup1 >= 0)
+              groupInfos[eGroup1].second = -1;
           } else if (sub2) {
-            equality2 = -1;
+            if (eGroup2 >= 0)
+              groupInfos[eGroup2].second = -1;
           }
         }
       }
     }
-    llvm::MapVector<int64_t, llvm::SetVector<int64_t>> groupMap;
-    for (auto [pos, info] : llvm::enumerate(groupInfos)) {
+    for (auto &info : groupInfos) {
       auto &iGroup = info.first;
-      while (iGroup != groupInfos[iGroup].first) {
+      while (iGroup != groupInfos[iGroup].first)
         iGroup = groupInfos[iGroup].first;
-      }
       auto &eGroup = info.second;
-      while (eGroup >= 0 && eGroup != groupInfos[eGroup].second) {
+      while (eGroup >= 0 && eGroup != groupInfos[eGroup].second)
         eGroup = groupInfos[eGroup].second;
-      }
-      if (eGroup >= 0) {
+    }
+    llvm::MapVector<int64_t, llvm::SetVector<int64_t>> groupMap;
+    for (auto [iGroup, eGroup] : groupInfos) {
+      if (eGroup >= 0)
         groupMap[iGroup].insert(eGroup);
-      }
     }
     for (auto &[iGroup, eGroups] : groupMap) {
       SelectionGroupTy group;
@@ -263,8 +266,8 @@ public:
   }
 };
 
-Axis2InputSetMapTy getAxis2InputSetMap(AxesTy &axes,
-                                       AxesMapsTy &inputAxesMaps) {
+Axis2InputSetMapTy getAxis2InputSetMap(AxesRefTy axes,
+                                       AxesMapsRefTy inputAxesMaps) {
   Axis2InputSetMapTy map;
   for (auto [pos, axesMap] : llvm::enumerate(inputAxesMaps)) {
     for (auto axis : axes) {
@@ -461,6 +464,8 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       ctPlans.insert(std::pair(ctOp, ctplan::CtOpPlan(ctOp)));
       planNums *= ctPlans[ctOp].getNumOfPlans();
     }
+    LLVM_DEBUG(llvm::errs() << "Number of ctPlans: ";
+               llvm::errs() << planNums << "\n";);
     double minCost = 0;
     func::FuncOp resultFunc;
     for (auto planID = 0; planID < planNums; planID++) {
