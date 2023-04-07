@@ -27,7 +27,7 @@ def MulOp : TC_Op<"mul", []> {
   }];
   let hasCanonicalizer = 1;
   let assemblyFormat = "(`(` $inputs^ `)`)? "
-                       "`{` `axesmap` `=` $axes_maps `}` `:` attr-dict ` ` "
+                       "`{` `axesmaps` `=` $axes_maps `}` `:` attr-dict ` ` "
                        "`(`type($inputs)`)` `->` type($result)";
 }
 
@@ -60,7 +60,7 @@ def AddOp : TC_Op<"add", [NoMemoryEffect]> {
   }];
   let hasCanonicalizer = 1;
   let assemblyFormat = "(`(` $inputs^ `)`)? "
-                       "`{` `axesmap` `=` $axes_maps `,`"
+                       "`{` `axesmaps` `=` $axes_maps `,`"
                        " `signs` `=` $signs `}` `:` attr-dict ` ` "
                        "`(`type($inputs)`)` `->` type($result)";
 }
