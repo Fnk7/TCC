@@ -398,6 +398,8 @@ public:
     inputSetMap = getAxis2InputSetMap(axes, axesMaps);
     selectionMap = createCtOpSelectionMap(axes, inputSetMap);
     rootNode = selectionMap[axes].get();
+    LLVM_DEBUG(ctOp.dump());
+    LLVM_DEBUG(rootNode->dump());
   }
 
   int64_t getNumOfPlans() {

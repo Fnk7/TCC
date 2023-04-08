@@ -15,8 +15,10 @@ using AxesMapsTy = SmallVector<AxesMapTy>;
 using AxesRefTy = ArrayRef<AxisTy>;
 using AxesMapRefTy = ArrayRef<AxisTy>;
 using AxesMapsRefTy = ArrayRef<AxesMapTy>;
+// AxisPair
+using AxisPairTy = std::pair<AxisTy, AxisTy>;
 // Symmetry
-using SymmPairTy = std::pair<AxisTy, AxisTy>;
+using SymmPairTy = AxisPairTy;
 using SymmArrayTy = SmallVector<SymmPairTy>;
 using SymmArrayRefTy = ArrayRef<SymmPairTy>;
 /// TODO: Delete it

@@ -14,6 +14,7 @@ add_mlir_dialect_library(MLIRTCTransforms
   GroupElementwiseMulPass.cpp
   BeforeCodeGenPass.cpp
   Symmetry.cpp
+  ContractOrder.cpp
 
   DEPENDS
   MLIRTCTransformsIncGen
