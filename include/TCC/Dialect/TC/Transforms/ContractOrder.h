@@ -12,7 +12,8 @@ public:
   ContractOrders(AxesRefTy axes, AxesMapsRefTy axesMaps);
   ContractOrders(const ContractOrders &) = delete;
   ContractOrders &operator=(const ContractOrders &) = delete;
-  ContractOrders(ContractOrders&& other) : impl(std::exchange(other.impl, nullptr)) {}
+  ContractOrders(ContractOrders &&other)
+      : impl(std::exchange(other.impl, nullptr)) {}
   ContractOrders &operator=(ContractOrders &&other) {
     if (this != &other)
       impl = std::exchange(other.impl, nullptr);
@@ -22,6 +23,11 @@ public:
 
   int64_t size() { return getNumberOfOrders(); }
   int64_t getNumberOfOrders();
+  ContractOrder getOrderByID(int64_t orderID) {
+    ContractOrder axesOrder;
+    getOrderByID(orderID, axesOrder);
+    return axesOrder;
+  }
   void getOrderByID(int64_t orderID, ContractOrder &axesOrder);
 
   void dump();

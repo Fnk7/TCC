@@ -447,6 +447,32 @@ double getNaiveCost(func::FuncOp funcOp) {
   return cost;
 }
 
+namespace {
+void splitContractOp(ContractOp ctOp, ContractOrder &axesOrder) {
+  OpBuilder builder(ctOp);
+  auto loc = ctOp.getLoc();
+  auto input = ctOp.getInput();
+  auto axesMap = getOrderedAxesMap(getTensorRank(input));
+  for (auto axesRef : llvm::reverse(axesOrder)) {
+    AxesTy axes(axesRef);
+    llvm::sort(axes);
+    for (auto &axis : axes) {
+      auto axis2 = axis;
+      axis = axesMap[axis];
+      axesMap[axis2] = -1;
+    }
+    auto newCtOp = builder.create<ContractOp>(loc, input, axes);
+    input = newCtOp.getResult();
+    auto axis = 0;
+    for (auto &axis2 : axesMap) {
+      if (axis2 >= 0)
+        axis2 = axis++;
+    }
+  }
+  ctOp.replaceAllUsesWith(input);
+}
+} // namespace
+
 struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
   void runOnOperation() override {
     ModuleOp modOp = getOperation();
@@ -454,62 +480,45 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
     func::FuncOp funcOp = symTable.lookup<func::FuncOp>("CT");
     // 1.1 collect all ContractOp
     SmallVector<ContractOp> ctOpWorklist;
-    for (auto &op : funcOp.front()) {
-      if (auto contractOp = dyn_cast_or_null<ContractOp>(&op)) {
+    for (auto &op : funcOp.front())
+      if (auto contractOp = dyn_cast_or_null<ContractOp>(&op))
         ctOpWorklist.emplace_back(contractOp);
-      }
-    }
     LLVM_DEBUG(llvm::errs() << "Number of ContractOp: ";
                llvm::errs() << ctOpWorklist.size() << "\n";);
-    // 1.2 Analysis each ContractOp, and create its plan
-    DenseMap<ContractOp, ctplan::CtOpPlan> ctPlans;
+    // 1.2 Create ContractOrders for each ContractOp
     DenseMap<ContractOp, ContractOrders> ctOpAxesOrders;
-    int64_t planNums = 1;
+    int64_t totalOrders = 1;
     for (auto ctOp : ctOpWorklist) {
-      ctPlans.insert(std::pair(ctOp, ctplan::CtOpPlan(ctOp)));
-      planNums *= ctPlans[ctOp].getNumOfPlans();
-      LLVM_DEBUG(if (auto mulOp = ctOp.getInput().getDefiningOp<MulOp>()) {
+      if (auto mulOp = ctOp.getInput().getDefiningOp<MulOp>()) {
         auto axes = ctOp.getAxes();
-        auto axesMaps = mulOp.getAxesMaps();
         if (axes.size() > 1) {
+          auto axesMaps = mulOp.getAxesMaps();
           ContractOrders orders(axes, axesMaps);
-          orders.dump();
-          orders.dumpOrders();
-          for (int64_t orderID = 0; orderID < orders.size(); orderID++) {
-            ContractOrder axesOrder;
-            orders.getOrderByID(orderID, axesOrder);
-            llvm::interleaveComma(axesOrder, llvm::errs(),
-                                  [](const AxesRefTy &axes) {
-                                    if (axes.size() == 1)
-                                      llvm::errs() << axes[0];
-                                    else {
-                                      llvm::errs() << "(";
-                                      llvm::interleaveComma(axes, llvm::errs());
-                                      llvm::errs() << ")";
-                                    }
-                                  });
-            llvm::errs() << "\n";
-          }
+          totalOrders *= orders.getNumberOfOrders();
           ctOpAxesOrders[ctOp] = std::move(orders);
         }
-      });
+      }
     }
-    LLVM_DEBUG(llvm::errs() << "Number of ctPlans: ";
-               llvm::errs() << planNums << "\n";);
+    LLVM_DEBUG(llvm::errs() << "Total number of ContractOp axes orders: ";
+               llvm::errs() << totalOrders << "\n";);
     double minCost = 0;
     func::FuncOp resultFunc;
-    for (auto planID = 0; planID < planNums; planID++) {
+    for (auto globalOrderID : llvm::seq<int64_t>(0, totalOrders)) {
       OpBuilder builder(funcOp);
       BlockAndValueMapping map;
       auto newFuncOp = cast<func::FuncOp>(builder.clone(*funcOp, map));
-      auto id = planID;
       for (auto ctOp : ctOpWorklist) {
-        auto subID = id % ctPlans[ctOp].getNumOfPlans();
-        id = id / ctPlans[ctOp].getNumOfPlans();
-        auto mappedOp = map.lookup(ctOp).getDefiningOp<ContractOp>();
-        ctPlans[ctOp].applyPlan(newFuncOp, mappedOp, subID);
+        if (ctOpAxesOrders.count(ctOp)) {
+          auto &orders = ctOpAxesOrders[ctOp];
+          auto orderID = globalOrderID % orders.size();
+          globalOrderID = globalOrderID / orders.size();
+          auto axesOrder = orders.getOrderByID(orderID);
+          auto clonedCtOp = map.lookup(ctOp).getDefiningOp<ContractOp>();
+          splitContractOp(clonedCtOp, axesOrder);
+        }
       }
-      newFuncOp.setName(std::string(funcOp.getName()) + std::to_string(planID));
+      newFuncOp.setName(std::string(funcOp.getName()) +
+                        std::to_string(globalOrderID));
       OpPassManager dynamicPM;
       dynamicPM.addPass(createTCCSEPass());
 
