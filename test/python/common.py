@@ -16,7 +16,7 @@ def print_compute_dag(task):
 
 def tune_task(task, log_file):
     tune_option = auto_scheduler.TuningOptions(
-        num_measure_trials=5,
+        num_measure_trials=2000,
         builder=auto_scheduler.LocalBuilder(timeout=100),
         runner=auto_scheduler.LocalRunner(timeout=100),
         measure_callbacks=[auto_scheduler.RecordToFile(log_file)],

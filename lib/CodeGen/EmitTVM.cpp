@@ -38,7 +38,11 @@ private:
 
   void emitImports() {
     out << "#!python\n";
-    out << "from ..python.common import *\n";
+    out << "import os\n";
+    out << "import sys\n";
+    out << "root_dir = os.path.abspath('..')\n";
+    out << "sys.path.insert(0, root_dir)\n";
+    out << "from python.common import *\n";
     out << "from tvm import te, topi, auto_scheduler\n";
   }
 

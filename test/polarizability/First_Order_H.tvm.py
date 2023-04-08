@@ -1,5 +1,9 @@
 #!python
-from ..python.common import *
+import os
+import sys
+root_dir = os.path.abspath('..')
+sys.path.insert(0, root_dir)
+from python.common import *
 from tvm import te, topi, auto_scheduler
 
 
