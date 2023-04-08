@@ -1,5 +1,8 @@
-import tvm
+#!python
+from ..python.common import *
 from tvm import te, topi, auto_scheduler
+
+
 @auto_scheduler.register_workload
 def first_order_h(s0, s1, s2):
     # gradient_basis_wave
@@ -52,3 +55,19 @@ def first_order_h(s0, s1, s2):
     var22 = topi.sum(var21, axis=[1])
     var23 = te.compute((s0, s2, s2, 3,), lambda *ls: var22[ls[0]][ls[1]][ls[2]][ls[3]] + var22[ls[0]][ls[2]][ls[1]][ls[3]], name="var23")
     return [t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, var23]
+
+
+def getTask(target):
+    s0 = 768
+    s1 = 200
+    s2 = 256
+    log_file = 'first_order_h' + '_' + target + '.json'
+    task = auto_scheduler.SearchTask(func=first_order_h, args=(s0, s1, s2, ), target=target)
+    return task, log_file
+
+
+for target in targets:
+    task, log_file = getTask(target)
+    print_compute_dag(task)
+    tune_task(task, log_file)
+    time_task(task, log_file, target)

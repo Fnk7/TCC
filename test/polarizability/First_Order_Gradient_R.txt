@@ -1,4 +1,4 @@
-size C = (3,3)
-input DM(*,*,C), gradient_basis_wave(*,C,*)
+size P = (150,250), N=(200,300), C = (3,3)
+input DM(*,*,C), gradient_basis_wave(P,C,N)
 R(p,c2,c1) = sum((i,j), wave(p,i) * DM(i,j,c1) * gradient_basis_wave(p,c2,j)  + gradient_basis_wave(p,c2,i) * DM(i,j,c1) * wave(p,j))
 keep R
