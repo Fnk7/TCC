@@ -110,7 +110,7 @@ void addLinalgFusePass(mlir::PassManager &PM) {
 } // namespace
 
 int main(int argc, char **argv) {
-  cl::ParseCommandLineOptions(argc, argv, "TCC compiler\n");
+  cl::ParseCommandLineOptions(argc, argv, "Tensor Contraction MLIR Compiler\n");
   auto CF = tc::parseInputFile(inputFileName);
   if (!CF)
     return 1;
@@ -118,15 +118,12 @@ int main(int argc, char **argv) {
     CF->dump();
     return 0;
   }
-  mlir::MLIRContext Ctx;
-  Ctx.getOrLoadDialect<mlir::scf::SCFDialect>();
-  Ctx.getOrLoadDialect<mlir::func::FuncDialect>();
-  Ctx.getOrLoadDialect<mlir::memref::MemRefDialect>();
-  Ctx.getOrLoadDialect<mlir::tc::TCDialect>();
-  Ctx.getOrLoadDialect<mlir::bufferization::BufferizationDialect>();
-  Ctx.getOrLoadDialect<mlir::tblas::TBLASDialect>();
-  mlir::PassManager PM(&Ctx);
-  auto M = mlir::tc::MLIRGen(Ctx, *CF);
+  mlir::MLIRContext context;
+  context.getOrLoadDialect<mlir::func::FuncDialect>();
+  context.getOrLoadDialect<mlir::tc::TCDialect>();
+  context.getOrLoadDialect<mlir::tblas::TBLASDialect>();
+  mlir::PassManager PM(&context);
+  auto M = mlir::tc::MLIRGen(context, *CF);
   if (Emit == DumpMLIR) {
     if (!TCNoOpt) {
       addTCOptimizePipeline(PM);

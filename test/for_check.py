@@ -1,5 +1,5 @@
 @auto_scheduler.register_workload
-def tc_generated(s0, s1):
+def first_order_r(s0, s1):
     t2 = te.placeholder((s0, s1,), dtype="float64", name="t2")
     t3 = te.placeholder((s1, s1,), dtype="float64", name="t3")
     var0 = te.compute((s0, s1, s1,), lambda *ls: t2[ls[0]][ls[1]] * t3[ls[2]][ls[1]], name="var0")
@@ -10,7 +10,7 @@ def tc_generated(s0, s1):
     var3 = te.compute((s0,), lambda *ls: te.sum(var2[ls[0]][a1], axis=a1), name="var3")
     return [t2, t3, var3]
 @auto_scheduler.register_workload
-def tc_generated(s0, s1):
+def first_order_gradient_r(s0, s1):
     t2 = te.placeholder((s0, 3, s1,), dtype="float64", name="t2")
     t3 = te.placeholder((s1, s1,), dtype="float64", name="t3")
     t4 = te.placeholder((s0, s1,), dtype="float64", name="t4")
@@ -23,7 +23,7 @@ def tc_generated(s0, s1):
     var4 = te.compute((s0, 3,), lambda *ls: te.sum(var3[ls[0]][a1][ls[1]], axis=a1), name="var4")
     return [t2, t3, t4, var4]
 @auto_scheduler.register_workload
-def tc_generated(s0, s1):
+def first_order_h(s0, s1):
     t2 = te.placeholder((s0, 3,), dtype="float64", name="t2")
     t3 = te.placeholder((s0, 3,), dtype="float64", name="t3")
     t4 = te.placeholder((s0,), dtype="float64", name="t4")
@@ -65,7 +65,7 @@ def tc_generated(s0, s1):
     var23 = te.compute((s1, s1,), lambda *ls: var22[ls[0]][ls[1]] + var22[ls[1]][ls[0]], name="var23")
     return [t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, var23]
 @auto_scheduler.register_workload
-def tc_generated(s0, s1):
+def first_order_gradient_r(s0, s1):
     t2 = te.placeholder((s0, s0, 3,), dtype="float64", name="t2")
     t3 = te.placeholder((s1, 3, s0,), dtype="float64", name="t3")
     t4 = te.placeholder((s1, s0,), dtype="float64", name="t4")
@@ -79,7 +79,7 @@ def tc_generated(s0, s1):
     var5 = te.compute((s1, 3, 3,), lambda *ls: var4[ls[2]][ls[0]][ls[1]], name="var5")
     return [t2, t3, t4, var5]
 @auto_scheduler.register_workload
-def tc_generated(s0, s1):
+def first_order_h(s0, s1):
     t2 = te.placeholder((s0, 3, s1,), dtype="float64", name="t2")
     t3 = te.placeholder((s0, 3, 3,), dtype="float64", name="t3")
     t4 = te.placeholder((s0, 3,), dtype="float64", name="t4")

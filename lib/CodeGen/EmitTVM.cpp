@@ -24,7 +24,7 @@ public:
   void emit() {
     /// TVM auto_scheduler
     out << "@auto_scheduler.register_workload\n";
-    out << "def tc_generated(";
+    out << "def " << funcOp.getName() << "(";
     emitInputSizes();
     out << "):\n";
     indent += 4;
