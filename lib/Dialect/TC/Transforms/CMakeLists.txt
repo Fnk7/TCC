@@ -8,7 +8,7 @@ add_mlir_dialect_library(MLIRTCTransforms
   TCOptimizePass.cpp
   TCCSEPass.cpp
   SinkMul.cpp
-  LiftMul.cpp
+  LiftMulFromContract.cpp
   SinkMul2.cpp
   Patterns.cpp
   GroupElementwiseMulPass.cpp

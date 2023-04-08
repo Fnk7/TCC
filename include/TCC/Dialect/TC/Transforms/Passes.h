@@ -13,7 +13,7 @@ std::unique_ptr<Pass> createMergeMulPass();
 std::unique_ptr<Pass> createTCOptimizePass();
 std::unique_ptr<Pass> createTCCSEPass();
 std::unique_ptr<Pass> createSinkMulPass();
-std::unique_ptr<Pass> createLiftMulPass();
+std::unique_ptr<Pass> createLiftMulFromContractPass();
 std::unique_ptr<Pass> createSinkMul2Pass();
 std::unique_ptr<Pass> createGroupElementwiseMulPass();
 std::unique_ptr<Pass> createBeforeCodeGenPass();

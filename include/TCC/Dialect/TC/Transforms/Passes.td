@@ -48,8 +48,8 @@ def SinkMul : Pass<"tc-sink-mul", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
-def LiftMul : Pass<"tc-litf-mul", "func::FuncOp"> {
-  let constructor = "mlir::tc::createLiftMulPass()";
+def LiftMulFromContract : Pass<"tc-litf-mul", "func::FuncOp"> {
+  let constructor = "mlir::tc::createLiftMulFromContractPass()";
   let dependentDialects = ["func::FuncDialect"];
 }
 

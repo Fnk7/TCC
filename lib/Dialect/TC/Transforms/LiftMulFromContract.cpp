@@ -13,7 +13,7 @@
 #include "llvm/Support/Debug.h"
 
 namespace mlir::tc {
-#define GEN_PASS_DEF_LIFTMUL
+#define GEN_PASS_DEF_LIFTMULFROMCONTRACT
 #include "TCC/Dialect/TC/Transforms/Passes.h.inc"
 } // namespace mlir::tc
 
@@ -84,7 +84,8 @@ bool liftMulFromContract(ContractOp ctOp, OpBuilder &&builder) {
   return true;
 }
 
-struct LiftMulPass : public tc::impl::LiftMulBase<LiftMulPass> {
+struct LiftMulFromContractPass
+    : public tc::impl::LiftMulFromContractBase<LiftMulFromContractPass> {
   void runOnOperation() override {
     bool changed = true;
     while (changed) {
@@ -109,7 +110,7 @@ struct LiftMulPass : public tc::impl::LiftMulBase<LiftMulPass> {
 } // namespace
 
 namespace mlir::tc {
-std::unique_ptr<Pass> createLiftMulPass() {
-  return std::make_unique<LiftMulPass>();
+std::unique_ptr<Pass> createLiftMulFromContractPass() {
+  return std::make_unique<LiftMulFromContractPass>();
 }
 } // namespace mlir::tc

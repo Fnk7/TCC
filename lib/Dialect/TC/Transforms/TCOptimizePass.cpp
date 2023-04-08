@@ -122,7 +122,7 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       OpPassManager dynamicPM;
       dynamicPM.addPass(createTCCSEPass());
 
-      dynamicPM.addPass(createLiftMulPass());
+      dynamicPM.addPass(createLiftMulFromContractPass());
 
       dynamicPM.addPass(createSinkMulPass());
       dynamicPM.addPass(createTCCSEPass());
@@ -130,18 +130,7 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       dynamicPM.addPass(createTCCSEPass());
       dynamicPM.addPass(createMergeMulPass());
       dynamicPM.addPass(createTCCSEPass());
-      dynamicPM.addPass(createLiftMulPass());
-      dynamicPM.addPass(createTCCSEPass());
-      dynamicPM.addPass(createMergeMulPass());
-      dynamicPM.addPass(createTCCSEPass());
-
-      dynamicPM.addPass(createSinkMulPass());
-      dynamicPM.addPass(createTCCSEPass());
-      dynamicPM.addPass(createMergeContractPass());
-      dynamicPM.addPass(createTCCSEPass());
-      dynamicPM.addPass(createMergeMulPass());
-      dynamicPM.addPass(createTCCSEPass());
-      dynamicPM.addPass(createLiftMulPass());
+      dynamicPM.addPass(createLiftMulFromContractPass());
       dynamicPM.addPass(createTCCSEPass());
       dynamicPM.addPass(createMergeMulPass());
       dynamicPM.addPass(createTCCSEPass());
@@ -152,7 +141,18 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       dynamicPM.addPass(createTCCSEPass());
       dynamicPM.addPass(createMergeMulPass());
       dynamicPM.addPass(createTCCSEPass());
-      dynamicPM.addPass(createLiftMulPass());
+      dynamicPM.addPass(createLiftMulFromContractPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeMulPass());
+      dynamicPM.addPass(createTCCSEPass());
+
+      dynamicPM.addPass(createSinkMulPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeContractPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createMergeMulPass());
+      dynamicPM.addPass(createTCCSEPass());
+      dynamicPM.addPass(createLiftMulFromContractPass());
       dynamicPM.addPass(createTCCSEPass());
       dynamicPM.addPass(createMergeMulPass());
       dynamicPM.addPass(createTCCSEPass());
