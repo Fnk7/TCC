@@ -3,6 +3,8 @@
 #include "TCC/Dialect/TC/Utils/AxesMap.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 
+#include "TCC/Dialect/TC/Transforms/ContractOrder.h"
+
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -398,6 +400,9 @@ public:
     inputSetMap = getAxis2InputSetMap(axes, axesMaps);
     selectionMap = createCtOpSelectionMap(axes, inputSetMap);
     rootNode = selectionMap[axes].get();
+    ContractOrder order(axes, axesMaps);
+    LLVM_DEBUG(llvm::errs() << "New order cal: " << order.getNumberOfOrders() << "\n";);
+    LLVM_DEBUG(order.dump());
     LLVM_DEBUG(ctOp.dump());
     LLVM_DEBUG(rootNode->dump());
   }

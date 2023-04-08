@@ -121,8 +121,8 @@ public:
       for (auto pos2 : llvm::seq<int64_t>(pos1 + 1, axes.size())) {
         AxisPairTy pair1(axes[pos1], axes[pos2]);
         AxisPairTy pair2(axes[pos2], axes[pos1]);
-        auto sub1 = axesIntersectRel[pair1];
-        auto sub2 = axesIntersectRel[pair2];
+        auto sub1 = axesSubsetRel[pair1];
+        auto sub2 = axesSubsetRel[pair2];
         if (sub1 && sub2)
           equalUnion.Union(pos1, pos2);
         else if (sub1 && !sub2)
@@ -170,6 +170,43 @@ public:
     }
     return numberOfChains;
   }
+
+  void dump(int indent) {
+    if (childs.empty()) {
+      llvm::errs() << "\n";
+      return;
+    }
+    if (axesSelections.empty()) {
+      for (auto [idx, child] : llvm::enumerate(childs)) {
+        if (idx)
+          llvm::errs().indent(indent);
+        llvm::errs() << "*";
+        child->dump(indent + 1);
+      }
+    } else {
+      for (auto [idx, child] : llvm::enumerate(childs)) {
+        if (idx)
+          llvm::errs().indent(indent);
+        auto &selection = axesSelections[idx];
+        std::string toPrint = "-> ";
+        if (selection.size() != 1) {
+          toPrint += "(";
+        }
+        for (auto [idx2, axis] : llvm::enumerate(selection)) {
+          if (idx2 != 0) {
+            toPrint += ", ";
+          }
+          toPrint += std::to_string(axis);
+        }
+        if (selection.size() != 1) {
+          toPrint += ")";
+        }
+        toPrint += " ";
+        llvm::errs() << toPrint;
+        child->dump(indent + toPrint.size());
+      }
+    }
+  }
 };
 } // namespace
 
@@ -188,7 +225,14 @@ public:
   }
 };
 
+// Constructor and destructor
+ContractOrder::ContractOrder(AxesRefTy axes, AxesMapsRefTy axesMaps)
+    : impl(new ContractOrder::Impl(axes, axesMaps)) {}
+ContractOrder::~ContractOrder() { delete impl; }
+
 int64_t ContractOrder::getNumberOfOrders() {
   return impl->rootNode->getNumberOfChains();
 }
+
+void ContractOrder::dump() { return impl->rootNode->dump(0); }
 } // namespace mlir::tc

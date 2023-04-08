@@ -1,0 +1,3 @@
+A(i) = sum((j,k,l,m), B(i,j) * C(j,k) * D(k,l) * E(l,m) * F(m,i))
+keep A
+
