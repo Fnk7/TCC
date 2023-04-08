@@ -20,7 +20,7 @@ def MulOp : TC_Op<"mul", []> {
   let results = (outs F64Tensor : $result);
 
   let builders = [OpBuilder<(ins "ValueRange" : $inputs,
-                                 "AxesMapsTy&" : $axesMaps)>];
+                                 "AxesMapsRefTy" : $axesMaps)>];
   let extraClassDeclaration = [{
     /// Helper function to get axes_maps as SmallVector<SmallVector<AxisTy>>.
     AxesMapsTy getAxesMapsArray();

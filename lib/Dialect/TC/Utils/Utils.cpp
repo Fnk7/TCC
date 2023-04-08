@@ -10,7 +10,7 @@ auto &operator<<(raw_ostream &OS, ArrayRef<int64_t> i64Array) {
 }
 // Encoded tensor type utils
 Type getResultTypeByAxesMaps(OpBuilder &builder, ValueRange inputs,
-                             AxesMapsTy &axesMaps) {
+                             AxesMapsRefTy axesMaps) {
   int64_t maxAxis = -1;
   for (auto &axesMap : axesMaps) {
     for (auto axis : axesMap) {

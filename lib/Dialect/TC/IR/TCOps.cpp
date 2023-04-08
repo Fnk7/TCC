@@ -21,9 +21,8 @@ template <typename T> inline AxesMapsTy getAxesMapsArray(T op) {
 } // namespace
 
 void MulOp::build(OpBuilder &builder, OperationState &state, ValueRange inputs,
-                  AxesMapsTy &axesMaps) {
-  assert(inputs.size() >= 2);
-  assert(inputs.size() == axesMaps.size());
+                  AxesMapsRefTy axesMaps) {
+  assert(inputs.size() >= 2 && inputs.size() == axesMaps.size());
   auto resultType = getResultTypeByAxesMaps(builder, inputs, axesMaps);
   auto axesMapsAttr = AxesMapsAttr::get(builder.getContext(), axesMaps);
   MulOp::build(builder, state, resultType, inputs, axesMapsAttr);

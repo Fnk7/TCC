@@ -59,7 +59,7 @@ template <typename T> inline AxesMapTy getAxesMap(T op) {
 
 // Encoded tensor type utils
 Type getResultTypeByAxesMaps(OpBuilder &builder, ValueRange inputs,
-                             AxesMapsTy &axesMaps);
+                             AxesMapsRefTy axesMaps);
 Type getResultTypeWithoutAxes(OpBuilder &builder, Value input, AxesTy &axes);
 Type getResultTypeByAxesMap(OpBuilder &builder, Value input,
                             AxesMapTy &axesMap);

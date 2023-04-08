@@ -368,6 +368,9 @@ private:
   IndexDefsTy IndexDefs;
   ContractionNode(IndexDefsTy &IndexDefs, NodePtr Child)
       : Node(NK_Contraction, std::move(Child)) {
+    for (auto &indexDef : IndexDefs) {
+      Sizes.emplace_back(indexDef->getSize());
+    }
     std::move(IndexDefs.begin(), IndexDefs.end(),
               std::back_inserter(this->IndexDefs));
   }
@@ -583,10 +586,8 @@ class ContractionForest {
   std::string name;
 
   using SymbolMapTy = DenseMap<StringRef, SymbolPtr>;
-  using InputTensorsMapTy = DenseMap<StringRef, InputTensorPtr>;
   /// Symbol Map
   SymbolMapTy symbolMap;
-  InputTensorsMapTy inputTensorMap;
 
   using ParamIndicesHoldTy = SmallVector<std::unique_ptr<ParamIndexSymbol>>;
   using SizesHoldTy = SmallVector<std::unique_ptr<SizeSymbol>>;
@@ -692,10 +693,8 @@ public:
   // For input tensors
   void addInputTensorDefine(StringRef name, SizesTy shape) {
     assert(!symbolMap.count(name));
-    assert(!inputTensorMap.count(name));
     auto inputTensor = new InputTensor(name, shape);
     inputTensors.emplace_back(inputTensor);
-    inputTensorMap[inputTensor->getName()] = inputTensor;
     insertSymbol(inputTensor);
   }
   InputTensorPtr getOrAddInputTensorDefine(StringRef name, int rank) {
