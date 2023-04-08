@@ -22,6 +22,8 @@ public:
   }
 
   void emit() {
+    out << "import tvm\n";
+    out << "from tvm import te, topi, auto_scheduler\n";
     /// TVM auto_scheduler
     out << "@auto_scheduler.register_workload\n";
     out << "def " << funcOp.getName() << "(";
@@ -50,6 +52,9 @@ private:
   void emitInputTensors() {
     for (auto argValue : funcOp.getArguments()) {
       if (argValue.getType().isa<RankedTensorType>()) {
+        out.indent(indent) << "# ";
+        out << utils::getFuncOpArgName(funcOp, argValue.getArgNumber());
+        out << "\n";
         std::string name = "t" + std::to_string(argValue.getArgNumber());
         out.indent(indent) << name << " = te.placeholder(";
         emitTensorSizes(argValue);
@@ -109,6 +114,11 @@ private:
     out << ", lambda *ls: ";
     valueNameMap[value] = name;
   }
+  void emitTOPISumForValue(Value value) {
+    std::string name = "var" + std::to_string(varIdx++);
+    out.indent(indent) << name << " = topi.sum(";
+    valueNameMap[value] = name;
+  }
 
   void emitTEDtypeArgument() { out << ", dtype=\"float64\""; }
   void emitTENameArgument(Value value) {
@@ -166,22 +176,11 @@ private:
     auto input = op.getInput();
     auto result = op.getResult();
     auto axes = op.getAxes();
-    assert(axes.size() == 1 && "Only support 1 contract axes");
-    auto axis = axes[0];
-    auto [shape, sizeIDs] = getTensorSizeInfos(input);
-    auto reduceAxis = emitTEReductAxis(shape[axis], sizeIDs[axis]);
-    emitTEComputeForValue(result);
-    out << "te.sum(" << valueNameMap[input];
-    for (auto inAxis : llvm::seq<int>(0, shape.size())) {
-      if (inAxis == axis) {
-        out << "[" << reduceAxis << "]";
-      } else {
-        if (inAxis > axis)
-          inAxis -= 1;
-        out << "[ls[" << inAxis << "]]";
-      }
-    }
-    out << ", axis=" << reduceAxis << ")";
+    emitTOPISumForValue(result);
+    out << valueNameMap[input];
+    out << ", axis=[";
+    llvm::interleaveComma(axes, out);
+    out << "]";
     emitTENameArgument(result);
   }
 

@@ -1,7 +1,7 @@
 #!python
 import os
 import tvm
-from tvm import te, auto_scheduler, topi
+from tvm import te, topi, auto_scheduler
 import numpy as np
 
 os.environ["TVM_NUM_THREADS"] = "72"
