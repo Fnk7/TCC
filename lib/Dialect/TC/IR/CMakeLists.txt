@@ -3,6 +3,7 @@ add_mlir_dialect_library(
   TCDialect.cpp
   TCOps.cpp
   TCCanonicalizations.cpp
+  PermuteOp.cpp
   DEPENDS
   MLIRTCOpsIncGen
   MLIRTCAttributesIncGen

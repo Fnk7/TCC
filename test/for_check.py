@@ -63,8 +63,7 @@ def tc_generated(s0, s1):
     a2 = te.reduce_axis((0, s0), name="a2")
     var22 = te.compute((s1, s1,), lambda *ls: te.sum(var21[a2][ls[0]][ls[1]], axis=a2), name="var22")
     var23 = te.compute((s1, s1,), lambda *ls: var22[ls[0]][ls[1]] + var22[ls[1]][ls[0]], name="var23")
-    var24 = te.compute((s1, s1,), lambda *ls: var23[ls[1]][ls[0]], name="var24")
-    return [t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, var24]
+    return [t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, var23]
 @auto_scheduler.register_workload
 def tc_generated(s0, s1):
     t2 = te.placeholder((s0, s0, 3,), dtype="float64", name="t2")

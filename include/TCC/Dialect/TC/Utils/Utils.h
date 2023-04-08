@@ -78,7 +78,7 @@ inline auto getOrderedAxesMap(int64_t rank) {
   auto r = llvm::seq<int64_t>(0, rank);
   return AxesMapTy(r.begin(), r.end());
 }
-inline auto isOrderedAxesMap(AxesMapTy &axesMap) {
+inline auto isOrderedAxesMap(AxesMapRefTy axesMap) {
   for (auto e : llvm::enumerate(axesMap)) {
     if (e.value() != (int64_t)(e.index())) {
       return false;

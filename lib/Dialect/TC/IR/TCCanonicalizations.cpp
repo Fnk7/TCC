@@ -475,57 +475,6 @@ void MulOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
   patterns.add<MulAxesMapsCanonicalPattern>(context);
 }
 
-// PermuteOp: Self PermuteFoldPattern
-// Remove PermuteOp without order change
-struct PermuteFoldPattern : public OpRewritePattern<PermuteOp> {
-  using OpRewritePattern<PermuteOp>::OpRewritePattern;
-  LogicalResult matchAndRewrite(PermuteOp op,
-                                PatternRewriter &rewriter) const override {
-    auto axesMap = op.getAxesMapArray();
-    if (isOrderedAxesMap(axesMap)) {
-      rewriter.replaceOp(op, op.getInput());
-      return success();
-    }
-    return failure();
-  }
-};
-
-// PermuteOp: PermuteOp PermuteFoldPattern
-// Fold two PermuteOp
-struct PermutePermuteFoldPattern : public OpRewritePattern<PermuteOp> {
-  using OpRewritePattern<PermuteOp>::OpRewritePattern;
-  LogicalResult matchAndRewrite(PermuteOp op,
-                                PatternRewriter &rewriter) const override {
-    auto input = op.getInput();
-    if (auto op2 = input.getDefiningOp<PermuteOp>()) {
-      auto input2 = op2.getInput();
-      auto axesMap1 = op.getAxesMapArray();
-      // BUG: 04-04
-      // forget '2' in op2.getAxesMapArray
-      // 5 hour for debug......
-      auto axesMap2 = op2.getAxesMapArray();
-      // for (auto &axis : axesMap2) {
-      //   axis = axesMap1[axis];
-      // }
-      utils::applyAxesMap(axesMap1, axesMap2);
-      rewriter.replaceOpWithNewOp<PermuteOp>(op, input2, axesMap2);
-      return success();
-    }
-    return failure();
-  }
-};
-
-// PermuteOp
-// Self: PermuteFoldPattern
-// Mul, Add, Contract:
-// Permute: PermutePermuteFoldPattern
-// Others
-void PermuteOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
-                                            MLIRContext *context) {
-  patterns.add<PermuteFoldPattern>(context);
-  patterns.add<PermutePermuteFoldPattern>(context);
-}
-
 struct NegNegFoldPattern : public OpRewritePattern<NegOp> {
   using OpRewritePattern<NegOp>::OpRewritePattern;
   LogicalResult matchAndRewrite(NegOp op,
@@ -691,8 +640,7 @@ void mlir::tc::getCanonicalizeForCSEPatterns(RewritePatternSet &patterns,
   // ContractOp
   patterns.add<ContractPermuteSwapPattern>(context);
   // PermuteOp
-  patterns.add<PermuteFoldPattern>(context);
-  patterns.add<PermutePermuteFoldPattern>(context);
+  populatePermuteSimplifyPatterns(patterns, context);
 }
 
 void mlir::tc::populateSimpilfyCodeGenPatterns(RewritePatternSet &patterns,
