@@ -1,5 +1,5 @@
-#ifndef TCC_UTILS_H
-#define TCC_UTILS_H
+#ifndef TCC_UTILS_UNIONFIND_H
+#define TCC_UTILS_UNIONFIND_H
 
 #include "llvm/ADT/SmallVector.h"
 

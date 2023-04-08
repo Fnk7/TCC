@@ -1,8 +1,8 @@
 #include "TCC/Dialect/TC/Transforms/ContractOrder.h"
 #include "TCC/Dialect/TC/Utils/AxesMap.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
-
-#include "TCC/Utils.h"
+#include "TCC/Utils/SetRelation.h"
+#include "TCC/Utils/UnionFind.h"
 
 #include "llvm/ADT/SetVector.h"
 
@@ -38,26 +38,14 @@ AxesRelationTy getAxesRelation(AxesRefTy axes, Func func) {
   }
   return relation;
 }
-bool isIntersecting(InputPositionSetTy &set1, InputPositionSetTy &set2) {
-  for (auto pos1 : set1)
-    if (llvm::find(set2, pos1) != set2.end())
-      return true;
-  return false;
-}
 auto getAxesIntersectRelation(AxesRefTy axes, Axis2InputSetMapTy &map) {
   return getAxesRelation(axes, [&](AxisTy axis1, AxisTy axis2) -> bool {
-    return isIntersecting(map[axis1], map[axis2]);
+    return utils::isIntersect(map[axis1], map[axis2]);
   });
-}
-bool isSubsetOf(InputPositionSetTy &set1, InputPositionSetTy &set2) {
-  for (auto pos1 : set1)
-    if (llvm::find(set2, pos1) == set2.end())
-      return false;
-  return true;
 }
 AxesRelationTy getAxesSubsetRelation(AxesRefTy axes, Axis2InputSetMapTy &map) {
   return getAxesRelation(axes, [&](AxisTy axis1, AxisTy axis2) -> bool {
-    return isSubsetOf(map[axis1], map[axis2]);
+    return utils::isSubsetOf(map[axis1], map[axis2]);
   });
 }
 
