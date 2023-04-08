@@ -77,7 +77,11 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
   void runOnOperation() override {
     ModuleOp modOp = getOperation();
     SymbolTable symTable(modOp);
-    func::FuncOp funcOp = symTable.lookup<func::FuncOp>("CT");
+    func::FuncOp funcOp;
+    for (auto funcOp2 : modOp.getOps<func::FuncOp>()) {
+      assert(!funcOp);
+      funcOp = funcOp2;
+    }
     // 1.1 collect all ContractOp
     SmallVector<ContractOp> ctOpWorklist;
     for (auto &op : funcOp.front())

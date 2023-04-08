@@ -31,7 +31,7 @@
 
 using namespace llvm;
 
-static cl::opt<std::string> InputFileName(cl::Positional,
+static cl::opt<std::string> inputFileName(cl::Positional,
                                           cl::desc("<Input contraction file>"),
                                           cl::init("-"),
                                           cl::value_desc("filename"));
@@ -111,7 +111,7 @@ void addLinalgFusePass(mlir::PassManager &PM) {
 
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv, "TCC compiler\n");
-  auto CF = tc::parseInputFile(InputFileName);
+  auto CF = tc::parseInputFile(inputFileName);
   if (!CF)
     return 1;
   if (Emit == DumpAST) {

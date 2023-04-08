@@ -621,7 +621,7 @@ class ContractionForest {
   ParamIndexPtrsTy constantIndices;
 
 public:
-  ContractionForest() { name = "CT"; }
+  ContractionForest(StringRef name) : name(name.begin(), name.end()) {}
   void dump();
 
   // Modified 23-03-28

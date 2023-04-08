@@ -4,6 +4,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "TCC/ContractionTree.h"
@@ -162,11 +163,11 @@ class Parser {
 
 public:
   Parser(Lexer &lexer) : lexer(lexer) {}
-  std::unique_ptr<ContractionForest> parse();
+  std::unique_ptr<ContractionForest> parse(StringRef funcName);
 };
 
-std::unique_ptr<ContractionForest> Parser::parse() {
-  CF = std::make_unique<ContractionForest>();
+std::unique_ptr<ContractionForest> Parser::parse(StringRef funcName) {
+  CF = std::make_unique<ContractionForest>(funcName);
   curToken = lexer.getNextToken();
   while (curToken != Token_EOF) {
     parseStatement();
@@ -497,16 +498,35 @@ void Parser::parseKeepStatement() {
 }
 } // namespace parser
 
-std::unique_ptr<ContractionForest> parseInputFile(StringRef filename) {
+namespace {
+std::string getFunctionNameFromFileName(StringRef fileName) {
+  auto stem = llvm::sys::path::stem(fileName);
+  std::string funcName;
+  for (char c : stem) {
+    if (std::isalnum(c)) {
+      funcName += std::tolower(c);
+    } else {
+      funcName += '_';
+    }
+  }
+  if (funcName.empty() ||
+      llvm::all_of(funcName, [](char c) { return c == '_'; }))
+    return "tcc_function";
+  return funcName;
+}
+} // namespace
+
+std::unique_ptr<ContractionForest> parseInputFile(StringRef fileName) {
   ErrorOr<std::unique_ptr<MemoryBuffer>> fileOrErr =
-      MemoryBuffer::getFileOrSTDIN(filename);
+      MemoryBuffer::getFileOrSTDIN(fileName);
   if (std::error_code EC = fileOrErr.getError()) {
     errs() << "Open input file failed: " << EC.message() << "\n";
     return nullptr;
   }
   parser::Lexer lexer{std::move(fileOrErr.get())};
   parser::Parser parser{lexer};
-  auto CF = parser.parse();
+  auto funcName = getFunctionNameFromFileName(fileName);
+  auto CF = parser.parse(funcName);
   return CF;
 }
 } // namespace tc
