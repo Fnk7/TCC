@@ -126,8 +126,8 @@ public:
     }
     offset += argSizes.size();
     // indices
-    for (auto [argIdx, size] : llvm::enumerate(argSizes)) {
-      auto argNameAttr = builder.getStringAttr(size->getName());
+    for (auto [argIdx, index] : llvm::enumerate(argIndices)) {
+      auto argNameAttr = builder.getStringAttr(index->getName());
       funcOp.setArgAttr(argIdx + offset, "func.name", argNameAttr);
     }
     offset += argIndices.size();
