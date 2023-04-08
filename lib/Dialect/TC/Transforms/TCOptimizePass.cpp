@@ -400,10 +400,6 @@ public:
     inputSetMap = getAxis2InputSetMap(axes, axesMaps);
     selectionMap = createCtOpSelectionMap(axes, inputSetMap);
     rootNode = selectionMap[axes].get();
-    ContractOrders order(axes, axesMaps);
-    LLVM_DEBUG(llvm::errs()
-                   << "New order cal: " << order.getNumberOfOrders() << "\n";);
-    LLVM_DEBUG(order.dump());
     LLVM_DEBUG(ctOp.dump());
     LLVM_DEBUG(rootNode->dump());
   }
@@ -467,10 +463,36 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
                llvm::errs() << ctOpWorklist.size() << "\n";);
     // 1.2 Analysis each ContractOp, and create its plan
     DenseMap<ContractOp, ctplan::CtOpPlan> ctPlans;
+    DenseMap<ContractOp, ContractOrders> ctOpAxesOrders;
     int64_t planNums = 1;
     for (auto ctOp : ctOpWorklist) {
       ctPlans.insert(std::pair(ctOp, ctplan::CtOpPlan(ctOp)));
       planNums *= ctPlans[ctOp].getNumOfPlans();
+      LLVM_DEBUG(if (auto mulOp = ctOp.getInput().getDefiningOp<MulOp>()) {
+        auto axes = ctOp.getAxes();
+        auto axesMaps = mulOp.getAxesMaps();
+        if (axes.size() > 1) {
+          ContractOrders orders(axes, axesMaps);
+          orders.dump();
+          orders.dumpOrders();
+          for (int64_t orderID = 0; orderID < orders.size(); orderID++) {
+            ContractOrder axesOrder;
+            orders.getOrderByID(orderID, axesOrder);
+            llvm::interleaveComma(axesOrder, llvm::errs(),
+                                  [](const AxesRefTy &axes) {
+                                    if (axes.size() == 1)
+                                      llvm::errs() << axes[0];
+                                    else {
+                                      llvm::errs() << "(";
+                                      llvm::interleaveComma(axes, llvm::errs());
+                                      llvm::errs() << ")";
+                                    }
+                                  });
+            llvm::errs() << "\n";
+          }
+          ctOpAxesOrders[ctOp] = std::move(orders);
+        }
+      });
     }
     LLVM_DEBUG(llvm::errs() << "Number of ctPlans: ";
                llvm::errs() << planNums << "\n";);
@@ -490,6 +512,8 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       newFuncOp.setName(std::string(funcOp.getName()) + std::to_string(planID));
       OpPassManager dynamicPM;
       dynamicPM.addPass(createTCCSEPass());
+
+      dynamicPM.addPass(createLiftMulPass());
 
       dynamicPM.addPass(createSinkMulPass());
       dynamicPM.addPass(createTCCSEPass());

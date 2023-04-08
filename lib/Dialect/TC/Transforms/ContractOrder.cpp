@@ -171,6 +171,30 @@ public:
     return numberOfChains;
   }
 
+  void addSelection(int64_t orderID, ContractOrder &axesOrder) {
+    if (childs.empty())
+      return;
+    if (axesSelections.empty()) {
+      for (auto child : childs) {
+        auto numChains = child->getNumberOfChains();
+        auto childID = orderID % numChains;
+        orderID = orderID / numChains;
+        child->addSelection(childID, axesOrder);
+      }
+    } else {
+      for (auto [idx, child] : llvm::enumerate(childs)) {
+        auto numChains = child->getNumberOfChains();
+        if (orderID < numChains) {
+          auto &selection = axesSelections[idx];
+          axesOrder.emplace_back(selection);
+          child->addSelection(orderID, axesOrder);
+          break;
+        }
+        orderID -= numChains;
+      }
+    }
+  }
+
   void dump(int indent = 0);
   void dumpOrder(int64_t orderID);
 };
@@ -198,6 +222,9 @@ ContractOrders::~ContractOrders() { delete impl; }
 
 int64_t ContractOrders::getNumberOfOrders() {
   return impl->rootNode->getNumberOfChains();
+}
+void ContractOrders::getOrderByID(int64_t orderID, ContractOrder &axesOrder) {
+  impl->rootNode->addSelection(orderID, axesOrder);
 }
 
 void ContractOrders::dump() { impl->rootNode->dump(); }
