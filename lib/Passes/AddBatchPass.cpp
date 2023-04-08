@@ -157,6 +157,13 @@ void addBatchSizeAsArgument(func::FuncOp funcOp) {
   auto numSizes = utils::getNumInputSizes(funcOp);
   auto numSizesAttr = builder.getI64IntegerAttr(numSizes + 1);
   utils::setNumInputSizes(funcOp, numSizesAttr);
+  auto [lbs, ubs] = utils::getSizesRanges(funcOp);
+  SmallVector<int64_t> newlbs(1, 768), newubs(1, 768);
+  newlbs.append(lbs.begin(), lbs.end());
+  newubs.append(ubs.begin(), ubs.end());
+  auto lbsAttr = builder.getDenseI64ArrayAttr(newlbs);
+  auto ubsAttr = builder.getDenseI64ArrayAttr(newubs);
+  utils::setSizesRanges(funcOp, lbsAttr, ubsAttr);
 }
 
 struct AddBatchPass

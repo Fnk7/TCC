@@ -24,6 +24,16 @@ inline StringRef getFuncOpResultName(func::FuncOp funcOp, int64_t resultIdx) {
     return "";
   return nameAttr.cast<StringAttr>().getValue();
 }
+inline auto getSizesRanges(func::FuncOp funcOp) {
+  auto attrDict = funcOp->getAttrDictionary();
+  auto lbsAttr = attrDict.get("sizes_lower_bound").cast<DenseI64ArrayAttr>();
+  auto ubsAttr = attrDict.get("sizes_upper_bound").cast<DenseI64ArrayAttr>();
+  return std::pair(lbsAttr.asArrayRef(), ubsAttr.asArrayRef());
+}
+inline void setSizesRanges(func::FuncOp funcOp, Attribute lbsAttr, Attribute ubsAttr) {
+  funcOp->setAttr("sizes_lower_bound", lbsAttr);
+  funcOp->setAttr("sizes_upper_bound", ubsAttr);
+}
 }; // namespace mlir::tc::utils
 
 #endif

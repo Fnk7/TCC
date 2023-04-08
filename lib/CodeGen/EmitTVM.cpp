@@ -22,9 +22,66 @@ public:
   }
 
   void emit() {
-    out << "import tvm\n";
+    emitImports();
+    out << "\n\n";
+    emitFunction();
+    out << "\n\n";
+    emitCreateTask();
+    out << "\n\n";
+    emitTesting();
+  }
+
+private:
+  int indent = 0;
+  using ValueNameMapTy = DenseMap<Value, std::string>;
+  ValueNameMapTy valueNameMap;
+
+  void emitImports() {
+    out << "#!python\n";
+    out << "from ..python.common import *\n";
     out << "from tvm import te, topi, auto_scheduler\n";
-    /// TVM auto_scheduler
+  }
+
+  void emitCreateTask() {
+    out << "def getTask(target):\n";
+    indent += 4;
+    auto [lbs, ubs] = utils::getSizesRanges(funcOp);
+    for (auto idx : llvm::seq<int>(0, numInputSizes)) {
+      out.indent(indent) << "s" << idx << " = ";
+      if (ubs[idx] == 0)
+        out << 256;
+      else if (lbs[idx] == ubs[idx])
+        out << lbs[idx];
+      else {
+        auto temp = lbs[idx] + ubs[idx];
+        if (temp > 256)
+          temp = (temp + 15LL) & (-16LL);
+        out << temp / 2;
+      }
+      out << "\n";
+    }
+    out.indent(indent) << "log_file = '" << funcOp.getName()
+                       << "' + '_' + target + '.json'\n";
+    out.indent(indent) << "task = auto_scheduler.SearchTask(func=";
+    out << funcOp.getName() << ", args=(";
+    for (auto idx : llvm::seq<int>(0, numInputSizes))
+      out << "s" << idx << ", ";
+    out << "), target=target)\n";
+    out.indent(indent) << "return task, log_file\n";
+    indent -= 4;
+  }
+
+  void emitTesting() {
+    out << "for target in targets:\n";
+    indent += 4;
+    out.indent(indent) << "task, log_file = getTask(target)\n";
+    out.indent(indent) << "print_compute_dag(task)\n";
+    out.indent(indent) << "tune_task(task, log_file)\n";
+    out.indent(indent) << "time_task(task, log_file, target)\n";
+    indent -= 4;
+  }
+
+  void emitFunction() {
     out << "@auto_scheduler.register_workload\n";
     out << "def " << funcOp.getName() << "(";
     emitInputSizes();
@@ -32,12 +89,8 @@ public:
     indent += 4;
     emitInputTensors();
     emitFuncionBody();
+    indent -= 4;
   }
-
-private:
-  int indent = 0;
-  using ValueNameMapTy = DenseMap<Value, std::string>;
-  ValueNameMapTy valueNameMap;
 
   void emitInputSizes() {
     for (auto idx : llvm::seq<int>(0, numInputSizes)) {
