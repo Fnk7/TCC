@@ -1,3 +1,6 @@
+#ifndef TCC_UTILS_H
+#define TCC_UTILS_H
+
 #include "llvm/ADT/SmallVector.h"
 
 namespace {
@@ -23,3 +26,5 @@ private:
   llvm::SmallVector<int> parent;
 };
 } // namespace
+
+#endif
