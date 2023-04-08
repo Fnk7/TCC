@@ -4,13 +4,15 @@
 #include "TCC/Dialect/TC/Utils/AxesMap.h"
 
 namespace mlir::tc {
-class ContractOrder {
+class ContractOrders {
 public:
-  ContractOrder(AxesRefTy axes, AxesMapsRefTy axesMaps);
-  ~ContractOrder();
+  ContractOrders(AxesRefTy axes, AxesMapsRefTy axesMaps);
+  ~ContractOrders();
+
+  int64_t getNumberOfOrders();
 
   void dump();
-  int64_t getNumberOfOrders();
+  void dumpOrders();
 
 private:
   class Impl;

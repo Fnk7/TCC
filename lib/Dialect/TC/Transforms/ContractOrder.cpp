@@ -171,47 +171,13 @@ public:
     return numberOfChains;
   }
 
-  void dump(int indent) {
-    if (childs.empty()) {
-      llvm::errs() << "\n";
-      return;
-    }
-    if (axesSelections.empty()) {
-      for (auto [idx, child] : llvm::enumerate(childs)) {
-        if (idx)
-          llvm::errs().indent(indent);
-        llvm::errs() << "*";
-        child->dump(indent + 1);
-      }
-    } else {
-      for (auto [idx, child] : llvm::enumerate(childs)) {
-        if (idx)
-          llvm::errs().indent(indent);
-        auto &selection = axesSelections[idx];
-        std::string toPrint = "-> ";
-        if (selection.size() != 1) {
-          toPrint += "(";
-        }
-        for (auto [idx2, axis] : llvm::enumerate(selection)) {
-          if (idx2 != 0) {
-            toPrint += ", ";
-          }
-          toPrint += std::to_string(axis);
-        }
-        if (selection.size() != 1) {
-          toPrint += ")";
-        }
-        toPrint += " ";
-        llvm::errs() << toPrint;
-        child->dump(indent + toPrint.size());
-      }
-    }
-  }
+  void dump(int indent = 0);
+  void dumpOrder(int64_t orderID);
 };
 } // namespace
 
 namespace mlir::tc {
-class ContractOrder::Impl {
+class ContractOrders::Impl {
 public:
   Axes2SelectionNodeMapTy axes2NodeMap;
   SelectionNode *rootNode;
@@ -226,13 +192,94 @@ public:
 };
 
 // Constructor and destructor
-ContractOrder::ContractOrder(AxesRefTy axes, AxesMapsRefTy axesMaps)
-    : impl(new ContractOrder::Impl(axes, axesMaps)) {}
-ContractOrder::~ContractOrder() { delete impl; }
+ContractOrders::ContractOrders(AxesRefTy axes, AxesMapsRefTy axesMaps)
+    : impl(new ContractOrders::Impl(axes, axesMaps)) {}
+ContractOrders::~ContractOrders() { delete impl; }
 
-int64_t ContractOrder::getNumberOfOrders() {
+int64_t ContractOrders::getNumberOfOrders() {
   return impl->rootNode->getNumberOfChains();
 }
 
-void ContractOrder::dump() { return impl->rootNode->dump(0); }
+void ContractOrders::dump() { impl->rootNode->dump(); }
+void ContractOrders::dumpOrders() {
+  for (int64_t orderID = 0; orderID < getNumberOfOrders(); orderID++) {
+    impl->rootNode->dumpOrder(orderID);
+    llvm::errs() << "\n";
+  }
+}
 } // namespace mlir::tc
+
+namespace {
+void SelectionNode::dump(int indent) {
+  if (childs.empty()) {
+    llvm::errs() << "\n";
+    return;
+  }
+  if (axesSelections.empty()) {
+    for (auto [idx, child] : llvm::enumerate(childs)) {
+      if (idx)
+        llvm::errs().indent(indent);
+      llvm::errs() << "*";
+      child->dump(indent + 1);
+    }
+  } else {
+    for (auto [idx, child] : llvm::enumerate(childs)) {
+      if (idx)
+        llvm::errs().indent(indent);
+      auto &selection = axesSelections[idx];
+      std::string toPrint = "-> ";
+      if (selection.size() != 1) {
+        toPrint += "(";
+      }
+      for (auto [idx2, axis] : llvm::enumerate(selection)) {
+        if (idx2 != 0) {
+          toPrint += ", ";
+        }
+        toPrint += std::to_string(axis);
+      }
+      if (selection.size() != 1) {
+        toPrint += ")";
+      }
+      toPrint += " ";
+      llvm::errs() << toPrint;
+      child->dump(indent + toPrint.size());
+    }
+  }
+}
+void SelectionNode::dumpOrder(int64_t orderID) {
+  if (childs.empty())
+    return;
+  if (axesSelections.empty()) {
+    llvm::errs() << "[";
+    for (auto [idx, child] : llvm::enumerate(childs)) {
+      if (idx)
+        llvm::errs() << ", ";
+      auto numChains = child->getNumberOfChains();
+      auto childID = orderID % numChains;
+      orderID = orderID / numChains;
+      llvm::errs() << "(";
+      child->dumpOrder(childID);
+      llvm::errs() << ")";
+    }
+    llvm::errs() << "]";
+  } else {
+    for (auto [idx, child] : llvm::enumerate(childs)) {
+      auto numChains = child->getNumberOfChains();
+      if (orderID < numChains) {
+        auto &selection = axesSelections[idx];
+        if (selection.size() == 1)
+          llvm::errs() << selection[0];
+        else {
+          llvm::errs() << "{";
+          llvm::interleaveComma(selection, llvm::errs());
+          llvm::errs() << "}";
+        }
+        llvm::errs() << ", ";
+        child->dumpOrder(orderID);
+        break;
+      }
+      orderID -= numChains;
+    }
+  }
+}
+} // namespace

@@ -1,0 +1,21 @@
+Input sizes: P in (150, 250), N in (200, 300)
+Constant sizes: C = 3
+Input tensors: Gwave(P, C, N), DM(N, N), wave(P, N)
+Contraction Trees:
+Tree GR
+Root (P, C) -> (i#0, i#1)
+  Contraction (N, N) -> (i#2, i#3)
+    Addition [+,+,] {
+      Multiplication {
+        Gwave [Input] (i#0, i#1, i#2)
+        DM [Input] (i#2, i#3)
+        wave [Input] (i#0, i#3)
+      }
+      Multiplication {
+        wave [Input] (i#0, i#2)
+        DM [Input] (i#2, i#3)
+        Gwave [Input] (i#0, i#1, i#3)
+      }
+    }
+Result outputs: GR(P, C)
+

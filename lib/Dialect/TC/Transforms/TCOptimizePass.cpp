@@ -400,8 +400,9 @@ public:
     inputSetMap = getAxis2InputSetMap(axes, axesMaps);
     selectionMap = createCtOpSelectionMap(axes, inputSetMap);
     rootNode = selectionMap[axes].get();
-    ContractOrder order(axes, axesMaps);
-    LLVM_DEBUG(llvm::errs() << "New order cal: " << order.getNumberOfOrders() << "\n";);
+    ContractOrders order(axes, axesMaps);
+    LLVM_DEBUG(llvm::errs()
+                   << "New order cal: " << order.getNumberOfOrders() << "\n";);
     LLVM_DEBUG(order.dump());
     LLVM_DEBUG(ctOp.dump());
     LLVM_DEBUG(rootNode->dump());

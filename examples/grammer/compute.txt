@@ -1,0 +1,7 @@
+<indices> ::= '(' <index> (',' <index>)* ')'
+<expr> ::= <term> ('+' <term>)*
+<term> ::= <factor> ('*' <factor>)*
+<sum> ::= "sum" '(' <indices> ',' <expr> ')'
+<factor> ::= <tensor><indices> | <sum> | '(' <expr> ')'
+<statement> ::=  <tensor><indices> '=' <expr>
+
