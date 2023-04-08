@@ -180,8 +180,7 @@ private:
     out << valueNameMap[input];
     out << ", axis=[";
     llvm::interleaveComma(axes, out);
-    out << "]";
-    emitTENameArgument(result);
+    out << "])\n";
   }
 
   void emitTCPermuteOp(PermuteOp op) {
