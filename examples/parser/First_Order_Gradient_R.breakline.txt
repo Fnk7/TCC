@@ -1,0 +1,6 @@
+size P = (180,200), N=(200,300), C = (3,3)
+input Gwave(P,C,N)
+GR(c,p) = sum((i,j), Gwave(p,c,i) * DM(i,j) * wave(p,j) + \\
+                     wave(p,i) * DM(i,j) * Gwave(p,c,j))
+keep GR
+

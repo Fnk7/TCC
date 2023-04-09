@@ -1,5 +1,6 @@
 module {
-func.func @CT(%arg0: index {func.name = "P"},
+func.func @first_order_gradient_r(
+              %arg0: index {func.name = "P"},
               %arg1: index {func.name = "N"},
               %arg2: tensor<?x3x?xf64, [0, 2, 1]> {func.name = "Gwave"},
               %arg3: tensor<?x?xf64, [1, 1]> {func.name = "DM"},
@@ -10,7 +11,7 @@ func.func @CT(%arg0: index {func.name = "P"},
     :(tensor<?x3x?xf64,[0, 2, 1]>,tensor<?x?xf64,[1, 1]>,tensor<?x?xf64,[0, 1]>)
       -> tensor<?x3x?x?xf64, [0, 2, 1, 1]>
   %1 = tc.mul(%arg4, %arg3, %arg2) {axesmaps = [(0, 1), (1, 2), (0, 3, 2)]}
-    :(tensor<?x?xf64, [0, 1]>,tensor<?x?xf64,[1, 1]>,tensor<?x3x?xf64, [0, 2, 1]>)
+    :(tensor<?x?xf64,[0, 1]>,tensor<?x?xf64,[1, 1]>,tensor<?x3x?xf64, [0, 2, 1]>)
       -> tensor<?x?x?x3xf64, [0, 1, 1, 2]>
   %2 = tc.add(%0, %1) {axesmaps = [(0, 1, 2, 3), (0, 2, 3, 1)], signs = [+, +]}
     :(tensor<?x3x?x?xf64, [0, 2, 1, 1]>,tensor<?x?x?x3xf64, [0, 1, 1, 2]>)

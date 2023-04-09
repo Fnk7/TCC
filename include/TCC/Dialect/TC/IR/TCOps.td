@@ -27,7 +27,7 @@ def MulOp : TC_Op<"mul", []> {
   }];
   let hasCanonicalizer = 1;
   let assemblyFormat = "(`(` $inputs^ `)`)? "
-                       "`{` `axesmaps` `=` $axes_maps `}` `:` attr-dict ` ` "
+                       "`{` `axesmaps` `=` $axes_maps `}` `:` attr-dict "
                        "`(`type($inputs)`)` `->` type($result)";
 }
 
@@ -61,7 +61,7 @@ def AddOp : TC_Op<"add", [NoMemoryEffect]> {
   let hasCanonicalizer = 1;
   let assemblyFormat = "(`(` $inputs^ `)`)? "
                        "`{` `axesmaps` `=` $axes_maps `,`"
-                       " `signs` `=` $signs `}` `:` attr-dict ` ` "
+                       " `signs` `=` $signs `}` `:` attr-dict "
                        "`(`type($inputs)`)` `->` type($result)";
 }
 
@@ -79,7 +79,7 @@ def ContractOp : TC_Op<"contract", [NoMemoryEffect]> {
   }];
   let hasCanonicalizer = 1;
   let assemblyFormat = "`(` $input `)` "
-                       "`{` `axes` `=` $axes `}` `:` attr-dict ` ` "
+                       "`{` `axes` `=` $axes `}` `:` attr-dict "
                        "type($input) `->` type($result)";
 }
 
@@ -97,7 +97,7 @@ def PermuteOp : TC_Op<"permute", [NoMemoryEffect]> {
   }];
   let hasCanonicalizer = 1;
   let assemblyFormat = "`(` $input `)` "
-                       "`{` `axesmap` `=` $axes_map `}` `:` attr-dict ` ` "
+                       "`{` `axesmap` `=` $axes_map `}` `:` attr-dict "
                        "type($input) `->` type($result)";
 }
 
