@@ -25,8 +25,8 @@ def first_order_gradient_r(s0, s1, s2):
 
 
 def getTask(target):
-    s0 = 768
-    s1 = 200
+    s0 = 1280
+    s1 = 192
     s2 = 256
     log_file = 'first_order_gradient_r' + '_' + target + '.json'
     task = auto_scheduler.SearchTask(func=first_order_gradient_r, args=(s0, s1, s2, ), target=target)

@@ -1,4 +1,4 @@
-size P = (150,250), N=(200,300), C = (3,3)
+size P = (180,200), N=(200,300), C = (3,3)
 input gradient_basis_wave(P,C,N), first_order_gradient_rho(*,C,C)
 first_order_sigama(p,c1) = sum((c2), first_order_gradient_rho(p,c2,c1) * gradient_rho(p,c2))
 pf1(p,c1) = ptab(p) * (grid_coord(p,c1) + v_hartree_gradient(p,c1) + v2rho2(p) * first_order_rho(p,c1) + v2rhosigma(p) * first_order_sigama(p,c1))

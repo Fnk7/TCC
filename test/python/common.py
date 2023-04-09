@@ -6,7 +6,7 @@ from tvm import auto_scheduler
 os.environ["TVM_NUM_THREADS"] = "72"
 
 doTune = True
-targets = ["llvm", "cuda", "opencl"]
+targets = ["llvm -mcpu=skylake-avx512", "cuda", "opencl"]
 
 
 def print_compute_dag(task):
@@ -16,11 +16,11 @@ def print_compute_dag(task):
 
 def tune_task(task, log_file):
     tune_option = auto_scheduler.TuningOptions(
-        num_measure_trials=2000,
-        builder=auto_scheduler.LocalBuilder(timeout=100),
-        runner=auto_scheduler.LocalRunner(timeout=100),
+        num_measure_trials=500,
+        builder=auto_scheduler.LocalBuilder(timeout=10),
+        runner=auto_scheduler.LocalRunner(timeout=10),
         measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
-        verbose=2,
+        verbose=0,
     )
     if doTune:
         task.tune(tune_option)
