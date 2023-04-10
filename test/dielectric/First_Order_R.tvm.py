@@ -3,7 +3,7 @@ import os
 import sys
 root_dir = os.path.abspath('..')
 sys.path.insert(0, root_dir)
-from python.common import *
+from test_tvm import test_tvm
 from tvm import te, topi, auto_scheduler
 
 
@@ -20,17 +20,7 @@ def first_order_r(s0, s1, s2):
     return [t3, t4, var3]
 
 
-def getTask(target):
-    s0 = 1280
-    s1 = 192
-    s2 = 256
-    log_file = 'first_order_r' + '_' + target + '.json'
-    task = auto_scheduler.SearchTask(func=first_order_r, args=(s0, s1, s2, ), target=target)
-    return task, log_file
-
-
-for target in targets:
-    task, log_file = getTask(target)
-    print_compute_dag(task)
-    tune_task(task, log_file)
-    time_task(task, log_file, target)
+s0 = 1280
+s1 = 192
+s2 = 256
+test_tvm('first_order_r', args=[s0, s1, s2, ])
