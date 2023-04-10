@@ -8,16 +8,23 @@ files=(
     "test/polarizability/First_Order_H.tvm.py"
 )
 
+targets=(
+    "llvm"
+    "cuda"
+    "opencl"
+)
+
 for file_path in "${files[@]}"; do
     file_name=$(basename "$file_path" .py)
     dir_name=$(dirname "$file_path")
-
     pushd "$dir_name" > /dev/null
-    log_file="${file_name}.log.txt"
-    err_file="${file_name}.err.txt"
     echo "In $dir_name"
-    echo "Running $file_name, log: $dir_name/$log_file"
-    python "$file_name.py" > "$log_file" 2>"$err_file"
+    for target in "${targets[@]}"; do
+        log_file="${file_name}.${target}.log"
+        err_file="${file_name}.${target}.err"
+        echo "Running ${file_name}.py ${target}"
+        echo "        log: ${dir_name}/${log_file}"
+        python "${file_name}.py" ${target} >"${log_file}" 2>"${err_file}"
+    done
     popd > /dev/null
 done
-

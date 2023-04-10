@@ -29,15 +29,17 @@ def create_task(func, args):
 
 def tune_task(task, log_file):
     if target.startswith("llvm"):
-        runner = auto_scheduler.LocalRunner(timeout=10, number=72, repeat=1)
+        context = auto_scheduler.LocalRPCMeasureContext(
+            n_parallel=64, timeout=5, number=8, repeat=1)
     else:
-        runner = auto_scheduler.LocalRunner(timeout=100, number=1, repeat=1)
+        context = auto_scheduler.LocalRPCMeasureContext(
+            timeout=5, number=1, repeat=1)
     tune_option = auto_scheduler.TuningOptions(
         num_measure_trials=1024,
-        early_stopping=128,
-        num_measures_per_round=32,
+        early_stopping=192,
+        num_measures_per_round=64,
         builder=auto_scheduler.LocalBuilder(timeout=45),
-        runner=runner,
+        runner=context.runner,
         measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
         verbose=2)
     task.tune(tune_option)
