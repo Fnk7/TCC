@@ -1,7 +1,17 @@
-set -e
-./build/bin/tcc -emit=tvm -add-batch ./test/dielectric/First_Order_R.txt
-./build/bin/tcc -emit=tvm -add-batch ./test/dielectric/First_Order_Gradient_R.txt
-./build/bin/tcc -emit=tvm -add-batch ./test/dielectric/First_Order_H.txt
-./build/bin/tcc -emit=tvm -add-batch ./test/polarizability/First_Order_Gradient_R.txt
-./build/bin/tcc -emit=tvm -add-batch ./test/polarizability/First_Order_H.txt
+#!/bin/bash
+
+tcc="../build/bin/tcc"
+
+files=(
+    "dielectric/First_Order_Gradient_R.txt"
+    "dielectric/First_Order_H.txt"
+    "dielectric/First_Order_R.txt"
+    "polarizability/First_Order_Gradient_R.txt"
+    "polarizability/First_Order_H.txt"
+)
+
+for file_path in "${files[@]}"; do
+    dir_name=$(dirname "$file_path")
+    ${tcc} -emit=tvm -add-batch "${file_path}"
+done
 

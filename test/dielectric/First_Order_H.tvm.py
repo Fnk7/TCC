@@ -59,7 +59,7 @@ def first_order_h(s0, s1, s2):
     return [t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, var23]
 
 
-s0 = 1280
+s0 = 777
 s1 = 192
 s2 = 256
 test_tvm('first_order_h', args=[s0, s1, s2, ])

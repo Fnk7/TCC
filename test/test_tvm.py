@@ -29,17 +29,19 @@ def create_task(func, args):
 
 def tune_task(task, log_file):
     if target.startswith("llvm"):
+        os.environ["TVM_NUM_THREADS"] = "72"
         context = auto_scheduler.LocalRPCMeasureContext(
             n_parallel=64, timeout=5, number=8, repeat=1)
+        runner = context.runner
     else:
-        context = auto_scheduler.LocalRPCMeasureContext(
-            timeout=5, number=1, repeat=1)
+        runner = auto_scheduler.LocalRunner(
+            timeout=77, number=1, repeat=1)
     tune_option = auto_scheduler.TuningOptions(
         num_measure_trials=1024,
         early_stopping=192,
         num_measures_per_round=64,
         builder=auto_scheduler.LocalBuilder(timeout=45),
-        runner=context.runner,
+        runner=runner,
         measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
         verbose=2)
     task.tune(tune_option)
@@ -71,4 +73,6 @@ def test_tvm(func, args):
     log_file = func + "." + target.split()[0] + ".json"
     task = create_task(func, tuple(args))
     tune_task(task, log_file)
+    if target.startswith("llvm"):
+        os.environ["TVM_NUM_THREADS"] = "1"
     time_task(task, log_file)

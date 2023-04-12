@@ -24,7 +24,7 @@ def first_order_gradient_r(s0, s1, s2):
     return [t3, t4, t5, var5]
 
 
-s0 = 1280
+s0 = 777
 s1 = 192
 s2 = 256
 test_tvm('first_order_gradient_r', args=[s0, s1, s2, ])
