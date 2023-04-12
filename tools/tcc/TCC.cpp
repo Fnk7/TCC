@@ -140,7 +140,15 @@ int main(int argc, char **argv) {
     addConvertToLinalgPipeline(PM);
     addLinalgFusePass(PM);
     mlir::failed(PM.run(*M));
-    mlir::tc::codegen::emitLinalgToC(M.get());
+    SmallString<32> outputFileName(inputFileName);
+    sys::path::replace_extension(outputFileName, ".scop.c");
+    std::error_code EC;
+    raw_fd_ostream dest(outputFileName, EC, sys::fs::OF_Text);
+    if (EC) {
+      errs() << "Could not open file: " << EC.message();
+      return 1;
+    }
+    mlir::tc::codegen::emitLinalgToC(M.get(), dest);
     return 0;
   }
 
