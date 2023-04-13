@@ -39,29 +39,5 @@ Position2FactorsMap mapAddOpInput2Factors(FactorsHolderTy &holder, AddOp op) {
   }
   return pos2FactorsMap;
 }
-// Factor to PositionSet (of AddOp) map
-Factor2PositionSetMapTy
-mapFactor2PositionSet(Position2FactorsMap &pos2FactorsMap) {
-  Factor2PositionSetMapTy inputPosSetMap;
-  for (auto [pos, mulFactors] : llvm::enumerate(pos2FactorsMap)) {
-    for (auto factor : mulFactors) {
-      inputPosSetMap[factor].insert(pos);
-    }
-  }
-  FactorPtrsTy toErase;
-  for (auto &[key, inputPosSet] : inputPosSetMap)
-    if (inputPosSet.size() <= 1)
-      toErase.emplace_back(key);
-  cleanFactor2PositionSetMap(inputPosSetMap, toErase);
-  return inputPosSetMap;
-}
-void cleanFactor2PositionSetMap(Factor2PositionSetMapTy &map,
-                                FactorPtrsTy &toErase) {
-  for (auto key : toErase) {
-    if (map.count(key)) {
-      map.erase(key);
-    }
-  }
-}
 } // namespace factorize
 } // namespace mlir::tc

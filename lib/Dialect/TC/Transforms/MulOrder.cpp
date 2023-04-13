@@ -2,7 +2,7 @@
 
 namespace mlir::tc {
 class MulOrders::Impl {
-  ArrayRef<int64_t> sizes;
+  SmallVector<int64_t> sizes;
   AxesMapsRefTy axesMaps;
   // axesMaps.size()
   SmallVector<unsigned> axesCodes;

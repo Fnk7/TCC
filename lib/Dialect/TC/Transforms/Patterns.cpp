@@ -19,7 +19,7 @@ using namespace mlir;
 using namespace mlir::tc;
 using namespace mlir::tc::utils;
 
-#define DEBUG_TYPE "tc-merge-addofmul"
+#define DEBUG_TYPE "tc-symmetry-pattern"
 
 namespace builder {
 Value createConstantMulOp(OpBuilder &builder, Value input, double cst) {
@@ -100,10 +100,11 @@ struct SymmAddFoldPattern : public OpRewritePattern<AddOp> {
       }
     }
     FactorsHolderTy holder;
-    auto factors = mapAddOpInput2Factors(holder, op);
-    auto inputPosSetMap = mapFactor2PositionSet(factors);
+    auto pos2FactorsMap = mapAddOpInput2Factors(holder, op);
+    auto factor2PosSetMap = mapFactor2PositionSet(pos2FactorsMap);
+    cleanFactor2PositionSetMap(factor2PosSetMap);
     SetVector<int64_t> posGroup;
-    for (auto &[input, posSet] : inputPosSetMap) {
+    for (auto &[input, posSet] : factor2PosSetMap) {
       if (posSet.size() == inputs.size() - symmNum) {
         posGroup.clear();
         for (auto pos : posSet) {
