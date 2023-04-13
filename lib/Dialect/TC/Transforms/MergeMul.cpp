@@ -399,7 +399,7 @@ struct MergeMulPass : public tc::impl::MergeMulBase<MergeMulPass> {
     {
       auto *context = &getContext();
       RewritePatternSet patterns(context);
-      populateSymmAddFoldPatterns(patterns, context);
+      populateSymmAddFoldPattern(patterns, context);
       FrozenRewritePatternSet frozenPatterns(std::move(patterns));
       if (failed(applyPatternsAndFoldGreedily(funcOp, frozenPatterns)))
         return signalPassFailure();
@@ -407,7 +407,7 @@ struct MergeMulPass : public tc::impl::MergeMulBase<MergeMulPass> {
     {
       auto *context = &getContext();
       RewritePatternSet patterns(context);
-      populateMergeAddOfMulPatterns(patterns, context);
+      populateFactorizePattern(patterns, context);
       FrozenRewritePatternSet frozenPatterns(std::move(patterns));
       if (failed(applyPatternsAndFoldGreedily(funcOp, frozenPatterns)))
         return signalPassFailure();

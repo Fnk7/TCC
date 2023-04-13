@@ -18,11 +18,11 @@ std::unique_ptr<Pass> createSinkMul2Pass();
 std::unique_ptr<Pass> createGroupElementwiseMulPass();
 std::unique_ptr<Pass> createBeforeCodeGenPass();
 
-void populateGroupElementewiseMulPatterns(RewritePatternSet &patterns,
+void populateGroupElementewiseMulPattern(RewritePatternSet &patterns,
                                           MLIRContext *context);
-void populateMergeAddOfMulPatterns(RewritePatternSet &patterns,
+void populateFactorizePattern(RewritePatternSet &patterns,
                                    MLIRContext *context);
-void populateSymmAddFoldPatterns(RewritePatternSet &patterns,
+void populateSymmAddFoldPattern(RewritePatternSet &patterns,
                                  MLIRContext *context);
 } // namespace mlir::tc
 

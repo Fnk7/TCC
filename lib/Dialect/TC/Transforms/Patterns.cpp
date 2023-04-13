@@ -341,75 +341,6 @@ struct MergeAddOfMulPattern : public OpRewritePattern<AddOp> {
             << "Benifit is " << factorizeBenifit[factor] << "\n";
       }
     });
-#if 0
-    // Erase factors that should not do factorize
-    auto [shape, sizeIDs] = getTensorSizeInfos(op.getResult());
-    {
-      FactorPtrsTy toErase;
-      for (auto &[key, inputPosSet] : inputPosSetMap) {
-        for (auto pos : inputPosSet) {
-          if (!shouldDoFactorize(shape, factors[pos], key)) {
-            toErase.emplace_back(key);
-            break;
-          }
-        }
-      }
-      cleanFactorPosSetMap(inputPosSetMap, toErase);
-    }
-    LLVM_DEBUG(llvm::dbgs() << "<Factorize> Potential factors: "
-                            << inputPosSetMap.size() << "\n";);
-    // Select one factor in most muls
-    {
-      FactorPtrsTy toErase;
-      for (auto &[key1, inputPosSet1] : inputPosSetMap) {
-        for (auto &[key2, inputPosSet2] : inputPosSetMap) {
-          if (key1 == key2) {
-            continue;
-          }
-          if (inputPosSet1.size() < inputPosSet2.size()) {
-            toErase.emplace_back(key1);
-          } else if (inputPosSet1.size() > inputPosSet2.size()) {
-            toErase.emplace_back(key2);
-          }
-        }
-      }
-      cleanFactorPosSetMap(inputPosSetMap, toErase);
-    }
-    LLVM_DEBUG(llvm::dbgs() << "<MergeMul> Potential factors: "
-                            << inputPosSetMap.size() << "\n";);
-    {
-      FactorPtrsTy toErase;
-      for (auto &[key1, inputPosSet1] : inputPosSetMap) {
-        for (auto &[key2, inputPosSet2] : inputPosSetMap) {
-          if (key1 == key2) {
-            continue;
-          }
-          if (key1->second.size() < key2->second.size()) {
-            toErase.emplace_back(key1);
-          } else if (key1->second.size() > key2->second.size()) {
-            toErase.emplace_back(key2);
-          }
-        }
-      }
-      cleanFactorPosSetMap(inputPosSetMap, toErase);
-    }
-    LLVM_DEBUG(llvm::dbgs() << "<MergeMul> Potential factors: "
-                            << inputPosSetMap.size() << "\n";);
-    FactorPtr factor0 = nullptr;
-    {
-      FactorPtrsTy toErase;
-      for (auto &[key1, inputPosSet1] : inputPosSetMap) {
-        if (factor0 == nullptr) {
-          factor0 = key1;
-        } else {
-          toErase.emplace_back(key1);
-        }
-      }
-      cleanFactorPosSetMap(inputPosSetMap, toErase);
-    }
-    LLVM_DEBUG(llvm::dbgs() << "<MergeMul> Potential factors: "
-                            << inputPosSetMap.size() << "\n";);
-#else
     FactorPtr factor0 = nullptr;
     for (auto [factor, benifit] : factorizeBenifit) {
       if (factorizeBenifit[factor] <= 0)
@@ -418,7 +349,6 @@ struct MergeAddOfMulPattern : public OpRewritePattern<AddOp> {
           factorizeBenifit[factor] > factorizeBenifit[factor0])
         factor0 = factor;
     }
-#endif
     if (factor0 == nullptr) {
       LLVM_DEBUG(llvm::dbgs() << "\n";);
       return failure();
@@ -464,11 +394,11 @@ struct MergeAddOfMulPattern : public OpRewritePattern<AddOp> {
 } // namespace
 
 namespace mlir::tc {
-void populateMergeAddOfMulPatterns(RewritePatternSet &patterns,
+void populateFactorizePattern(RewritePatternSet &patterns,
                                    MLIRContext *context) {
   patterns.add<MergeAddOfMulPattern>(context);
 }
-void populateSymmAddFoldPatterns(RewritePatternSet &patterns,
+void populateSymmAddFoldPattern(RewritePatternSet &patterns,
                                  MLIRContext *context) {
   patterns.add<SymmAddFoldPattern>(context);
 }
