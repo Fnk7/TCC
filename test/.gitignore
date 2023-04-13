@@ -1,6 +1,5 @@
 temp
 **/*.json
-**/*.mlir
 **/*.ll
 **/a.out
 

@@ -1,0 +1,27 @@
+module {
+  func.func @first_order_h(%arg0: index {func.name = "P"}, %arg1: index {func.name = "N"}, %arg2: tensor<?x3xf64, {size_id = array<i64: 0, 2>}> {func.name = "gradient_rho"}, %arg3: tensor<?x3x?xf64, {size_id = array<i64: 0, 2, 1>}> {func.name = "gradient_basis_wave"}, %arg4: tensor<?x3xf64, {size_id = array<i64: 0, 2>}> {func.name = "first_order_gradient_rho"}, %arg5: tensor<?xf64, {size_id = array<i64: 0>}> {func.name = "ptab"}, %arg6: tensor<?xf64, {size_id = array<i64: 0>}> {func.name = "first_order_potential"}, %arg7: tensor<?xf64, {size_id = array<i64: 0>}> {func.name = "v2rho2"}, %arg8: tensor<?xf64, {size_id = array<i64: 0>}> {func.name = "first_order_rho"}, %arg9: tensor<?xf64, {size_id = array<i64: 0>}> {func.name = "v2rhosigma"}, %arg10: tensor<?xf64, {size_id = array<i64: 0>}> {func.name = "v2sigma2"}, %arg11: tensor<?xf64, {size_id = array<i64: 0>}> {func.name = "vsigma"}, %arg12: tensor<?x?xf64, {size_id = array<i64: 0, 1>}> {func.name = "wave"}) -> (tensor<?x?xf64, {size_id = array<i64: 1, 1>}> {func.name = "H"}) attributes {num_input_indices = 0 : i64, num_input_sizes = 2 : i64, num_input_tensors = 11 : i64, sizes_lower_bound = array<i64: 180, 200, 3>, sizes_upper_bound = array<i64: 200, 300, 3>, wirtebacks = [-1]} {
+    %0 = "tc.constant"() {value = 5.000000e-01 : f64} : () -> tensor<f64, {size_id = array<i64>}>
+    %1 = tc.mul(%arg7, %arg8) {axesmaps = [(0), (0)]} :(tensor<?xf64, {size_id = array<i64: 0>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?xf64, {size_id = array<i64: 0>}>
+    %2 = tc.mul(%arg2, %arg4) {axesmaps = [(0, 1), (0, 1)]} :(tensor<?x3xf64, {size_id = array<i64: 0, 2>}>, tensor<?x3xf64, {size_id = array<i64: 0, 2>}>) -> tensor<?x3xf64, {size_id = array<i64: 0, 2>}>
+    %3 = tc.contract(%2) {axes = [1]} : tensor<?x3xf64, {size_id = array<i64: 0, 2>}> -> tensor<?xf64, {size_id = array<i64: 0>}>
+    %4 = tc.mul(%arg9, %3) {axesmaps = [(0), (0)]} :(tensor<?xf64, {size_id = array<i64: 0>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?xf64, {size_id = array<i64: 0>}>
+    %5 = tc.add(%arg6, %1, %4) {axesmaps = [(0), (0), (0)], signs = [+, +, +]} :(tensor<?xf64, {size_id = array<i64: 0>}>, tensor<?xf64, {size_id = array<i64: 0>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?xf64, {size_id = array<i64: 0>}>
+    %6 = tc.mul(%arg5, %5) {axesmaps = [(0), (0)]} :(tensor<?xf64, {size_id = array<i64: 0>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?xf64, {size_id = array<i64: 0>}>
+    %7 = tc.mul(%0, %arg12, %6) {axesmaps = [(), (0, 1), (0)]} :(tensor<f64, {size_id = array<i64>}>, tensor<?x?xf64, {size_id = array<i64: 0, 1>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?x?xf64, {size_id = array<i64: 0, 1>}>
+    %8 = tc.mul(%arg8, %arg9) {axesmaps = [(0), (0)]} :(tensor<?xf64, {size_id = array<i64: 0>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?xf64, {size_id = array<i64: 0>}>
+    %9 = tc.mul(%arg10, %3) {axesmaps = [(0), (0)]} :(tensor<?xf64, {size_id = array<i64: 0>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?xf64, {size_id = array<i64: 0>}>
+    %10 = tc.add(%8, %9) {axesmaps = [(0), (0)], signs = [+, +]} :(tensor<?xf64, {size_id = array<i64: 0>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?xf64, {size_id = array<i64: 0>}>
+    %11 = tc.mul(%arg5, %arg11) {axesmaps = [(0), (0)]} :(tensor<?xf64, {size_id = array<i64: 0>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?xf64, {size_id = array<i64: 0>}>
+    %12 = tc.mul(%arg4, %11) {axesmaps = [(0, 1), (0)]} :(tensor<?x3xf64, {size_id = array<i64: 0, 2>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?x3xf64, {size_id = array<i64: 0, 2>}>
+    %13 = tc.mul(%arg5, %10) {axesmaps = [(0), (0)]} :(tensor<?xf64, {size_id = array<i64: 0>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?xf64, {size_id = array<i64: 0>}>
+    %14 = tc.mul(%arg2, %13) {axesmaps = [(0, 1), (0)]} :(tensor<?x3xf64, {size_id = array<i64: 0, 2>}>, tensor<?xf64, {size_id = array<i64: 0>}>) -> tensor<?x3xf64, {size_id = array<i64: 0, 2>}>
+    %15 = tc.add(%12, %14) {axesmaps = [(0, 1), (0, 1)], signs = [+, +]} :(tensor<?x3xf64, {size_id = array<i64: 0, 2>}>, tensor<?x3xf64, {size_id = array<i64: 0, 2>}>) -> tensor<?x3xf64, {size_id = array<i64: 0, 2>}>
+    %16 = tc.mul(%15, %arg3) {axesmaps = [(0, 1), (0, 1, 2)]} :(tensor<?x3xf64, {size_id = array<i64: 0, 2>}>, tensor<?x3x?xf64, {size_id = array<i64: 0, 2, 1>}>) -> tensor<?x3x?xf64, {size_id = array<i64: 0, 2, 1>}>
+    %17 = tc.contract(%16) {axes = [1]} : tensor<?x3x?xf64, {size_id = array<i64: 0, 2, 1>}> -> tensor<?x?xf64, {size_id = array<i64: 0, 1>}>
+    %18 = tc.add(%7, %17) {axesmaps = [(0, 1), (0, 1)], signs = [+, +]} :(tensor<?x?xf64, {size_id = array<i64: 0, 1>}>, tensor<?x?xf64, {size_id = array<i64: 0, 1>}>) -> tensor<?x?xf64, {size_id = array<i64: 0, 1>}>
+    %19 = tc.mul(%arg12, %18) {axesmaps = [(0, 1), (0, 2)]} :(tensor<?x?xf64, {size_id = array<i64: 0, 1>}>, tensor<?x?xf64, {size_id = array<i64: 0, 1>}>) -> tensor<?x?x?xf64, {size_id = array<i64: 0, 1, 1>}>
+    %20 = tc.contract(%19) {axes = [0]} : tensor<?x?x?xf64, {size_id = array<i64: 0, 1, 1>}> -> tensor<?x?xf64, {size_id = array<i64: 1, 1>}>
+    %21 = tc.add(%20, %20) {axesmaps = [(0, 1), (1, 0)], signs = [+, +]} :(tensor<?x?xf64, {size_id = array<i64: 1, 1>}>, tensor<?x?xf64, {size_id = array<i64: 1, 1>}>) -> tensor<?x?xf64, {size_id = array<i64: 1, 1>, symmetry = #tc.symm<0~1>}>
+    tc.return %21 : tensor<?x?xf64, {size_id = array<i64: 1, 1>, symmetry = #tc.symm<0~1>}>
+  }
+}

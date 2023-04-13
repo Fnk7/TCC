@@ -131,7 +131,15 @@ int main(int argc, char **argv) {
       addTCOptimizePipeline(PM);
       mlir::failed(PM.run(*M));
     }
-    M->print(llvm::outs());
+    SmallString<32> outputFileName(inputFileName);
+    sys::path::replace_extension(outputFileName, ".mlir");
+    std::error_code EC;
+    raw_fd_ostream dest(outputFileName, EC, sys::fs::OF_Text);
+    if (EC) {
+      errs() << "Could not open file: " << EC.message();
+      return 1;
+    }
+    M->print(dest);
     return 0;
   }
 
