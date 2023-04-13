@@ -1,9 +1,7 @@
-#include "TCC/Dialect/Utils/Axis.h"
+#include "TCC/Dialect/TC/Transforms/MulOrder.h"
 
 namespace mlir::tc {
-using PositionTy = int64_t;
-
-class MulOrder {
+class MulOrders::Impl {
   ArrayRef<int64_t> sizes;
   AxesMapsRefTy axesMaps;
   // axesMaps.size()
@@ -15,7 +13,7 @@ class MulOrder {
   SmallVector<double> axesCosts;
 
 public:
-  MulOrder(ArrayRef<int64_t> sizes, AxesMapsRefTy axesMaps)
+  Impl(ArrayRef<int64_t> sizes, AxesMapsRefTy axesMaps)
       : sizes(sizes), axesMaps(axesMaps) {
     auto numPositions = axesMaps.size();
     assert(numPositions <= 5);
@@ -86,14 +84,14 @@ public:
     costs[posCode] = baseCost + minCost;
   }
 
-  template <typename T> unsigned encode(ArrayRef<T> bits) {
+  template <typename T> static unsigned encode(ArrayRef<T> bits) {
     unsigned code = 0;
     for (auto bit : bits)
       code |= (1 << bit);
     return code;
   }
-  template <typename T> unsigned encode(T bit) { return 1 << bit; }
-  unsigned getMaxCode(size_t size) { return (1 << size) - 1; }
+  template <typename T> static unsigned encode(T bit) { return 1 << bit; }
+  static unsigned getMaxCode(size_t size) { return (1 << size) - 1; }
 
   template <typename T> static SmallVector<T> decode(unsigned code) {
     SmallVector<T> result;
@@ -117,4 +115,14 @@ public:
     return axesCosts[axesCode];
   }
 };
+
+// Constructor and destructor
+MulOrders::MulOrders(ArrayRef<int64_t> sizes, AxesMapsRefTy axesMaps)
+    : impl(new MulOrders::Impl(sizes, axesMaps)) {}
+MulOrders::~MulOrders() { delete impl; }
+
+double MulOrders::getCost() { return impl->getCost(); }
+double MulOrders::getCost(PositionsRefTy positions) {
+  return impl->getCost(Impl::encode<PositionTy>(positions));
+}
 } // namespace mlir::tc
