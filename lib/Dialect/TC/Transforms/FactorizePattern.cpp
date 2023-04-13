@@ -26,29 +26,30 @@ struct FactorizePattern : public OpRewritePattern<AddOp> {
   LogicalResult matchAndRewrite(AddOp op,
                                 PatternRewriter &rewriter) const override {
     auto inputs = op.getInputs();
-    if (inputs.size() == 2) {
-      if (inputs[0] == inputs[1]) {
-        return failure();
-      }
-    }
     auto axesMaps = op.getAxesMapsArray();
     FactorsHolderTy holder;
-    auto factors = collectAddOfMulFactors(holder, op);
-    auto inputPosSetMap = collectFactorPosSetMap(factors);
-    if (inputPosSetMap.empty())
+    auto pos2FactorsMap = mapAddOpInput2Factors(holder, op);
+    auto numMuls = 0;
+    for (auto factors : pos2FactorsMap)
+      if (factors.size() >= 1)
+        numMuls++;
+    if (numMuls <= 1)
+      return failure();
+    auto factor2PosSetMap = mapFactor2PositionSet(pos2FactorsMap);
+    if (factor2PosSetMap.empty())
       return failure();
     LLVM_DEBUG(llvm::dbgs() << "<Factorize> Potential factors: "
-                            << inputPosSetMap.size() << "\n";);
+                            << factor2PosSetMap.size() << "\n";);
     // Erase factors like A in A + A + C * D -> 2 * A + C * D
     {
       FactorPtrsTy toErase;
-      for (auto &[factor, positions] : inputPosSetMap)
+      for (auto &[factor, positions] : factor2PosSetMap)
         for (auto position : positions)
-          if (factors[position].size() == 1) {
+          if (pos2FactorsMap[position].size() == 1) {
             toErase.emplace_back(factor);
             break;
           }
-      cleanFactorPosSetMap(inputPosSetMap, toErase);
+      cleanFactor2PositionSetMap(factor2PosSetMap, toErase);
     }
     DenseMap<FactorPtr, double> factorizeBenifit;
     DenseMap<MulOp, MulOrders> mulOp2OrdersMap;
@@ -60,7 +61,7 @@ struct FactorizePattern : public OpRewritePattern<AddOp> {
         lastCost *= ubs[sizeID];
     }
     {
-      for (auto &[factor, positions] : inputPosSetMap) {
+      for (auto &[factor, positions] : factor2PosSetMap) {
         double benifit = -lastCost;
         for (auto addPosition : positions) {
           auto input = inputs[addPosition];
@@ -75,7 +76,8 @@ struct FactorizePattern : public OpRewritePattern<AddOp> {
           }
           auto &mulOrders = mulOp2OrdersMap[mulOp];
           PositionTy factorPosition;
-          for (auto [position, factor2] : llvm::enumerate(factors[addPosition]))
+          for (auto [position, factor2] :
+               llvm::enumerate(pos2FactorsMap[addPosition]))
             if (factor == factor2) {
               factorPosition = position;
               break;
@@ -94,7 +96,7 @@ struct FactorizePattern : public OpRewritePattern<AddOp> {
       for (auto input : inputs)
         input.dump();
       llvm::dbgs() << "Benifits:\n";
-      for (auto &[factor, positions] : inputPosSetMap) {
+      for (auto &[factor, positions] : factor2PosSetMap) {
         llvm::dbgs().indent(2);
         factor->first.dump();
         llvm::dbgs().indent(4)
@@ -123,7 +125,7 @@ struct FactorizePattern : public OpRewritePattern<AddOp> {
     AxesMapsTy newAxesMaps;
     MappedInputsTy subMappedInputs;
     for (auto [input, axesMap, mulFactors] :
-         llvm::zip(inputs, axesMaps, factors)) {
+         llvm::zip(inputs, axesMaps, pos2FactorsMap)) {
       auto key = llvm::find(mulFactors, factor0);
       if (key == mulFactors.end()) {
         newInputs.emplace_back(input);

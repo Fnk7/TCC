@@ -1,8 +1,8 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/Transforms/Passes.h"
 #include "TCC/Dialect/TC/Utils/Builder.h"
-#include "TCC/Utils/InputPostion.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
+#include "TCC/Utils/InputPostion.h"
 
 #include "mlir/IR/PatternMatch.h"
 
@@ -44,7 +44,7 @@ struct GroupElementwiseMulPattern : public OpRewritePattern<MulOp> {
 };
 
 void populateGroupElementewiseMulPattern(RewritePatternSet &patterns,
-                                          MLIRContext *context) {
+                                         MLIRContext *context) {
   patterns.add<GroupElementwiseMulPattern>(context);
 }
 } // namespace mlir::tc

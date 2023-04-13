@@ -30,7 +30,8 @@ inline auto getSizesRanges(func::FuncOp funcOp) {
   auto ubsAttr = attrDict.get("sizes_upper_bound").cast<DenseI64ArrayAttr>();
   return std::pair(lbsAttr.asArrayRef(), ubsAttr.asArrayRef());
 }
-inline void setSizesRanges(func::FuncOp funcOp, Attribute lbsAttr, Attribute ubsAttr) {
+inline void setSizesRanges(func::FuncOp funcOp, Attribute lbsAttr,
+                           Attribute ubsAttr) {
   funcOp->setAttr("sizes_lower_bound", lbsAttr);
   funcOp->setAttr("sizes_upper_bound", ubsAttr);
 }
