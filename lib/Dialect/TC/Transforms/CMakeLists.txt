@@ -10,7 +10,7 @@ add_mlir_dialect_library(MLIRTCTransforms
   SinkMul.cpp
   LiftMulFromContract.cpp
   SinkMul2.cpp
-  Patterns.cpp
+  SymmetryPattern1.cpp
   GroupElementwiseMulPass.cpp
   BeforeCodeGenPass.cpp
   Symmetry.cpp
