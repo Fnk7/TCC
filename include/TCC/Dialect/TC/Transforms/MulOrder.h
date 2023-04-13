@@ -21,6 +21,7 @@ public:
 
   double getCost();
   double getCost(PositionsRefTy positions);
+  double getRestCost(PositionTy position);
 
 private:
   class Impl;

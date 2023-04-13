@@ -35,6 +35,13 @@ public:
     return getCost(posCode);
   }
 
+  double getRestCost(PositionTy position) {
+    unsigned restCode = getMaxCode(axesMaps.size());
+    unsigned posCode = encode<PositionTy>(position);
+    restCode = restCode ^ posCode;
+    return getCost(restCode);
+  }
+
   double getCost(unsigned posCode) {
     if (costs[posCode] == -1)
       setCost(posCode);
@@ -124,5 +131,8 @@ MulOrders::~MulOrders() { delete impl; }
 double MulOrders::getCost() { return impl->getCost(); }
 double MulOrders::getCost(PositionsRefTy positions) {
   return impl->getCost(Impl::encode<PositionTy>(positions));
+}
+double MulOrders::getRestCost(PositionTy position) {
+  return impl->getRestCost(position);
 }
 } // namespace mlir::tc

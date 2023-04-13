@@ -6,6 +6,7 @@
 #include "TCC/Dialect/TC/Utils/Builder.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 #include "TCC/Dialect/Utils/FuncUtils.h"
+#include "TCC/Utils/InputPostion.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
@@ -16,26 +17,6 @@
 using namespace mlir;
 using namespace mlir::tc;
 using namespace mlir::tc::utils;
-
-using InputPosSetTy = llvm::SetVector<int64_t>;
-// return true if set1 is subset of set2
-static bool isSubsetOf(InputPosSetTy &set1, InputPosSetTy &set2) {
-  for (auto pos1 : set1) {
-    if (llvm::find(set2, pos1) == set2.end()) {
-      return false;
-    }
-  }
-  return true;
-}
-// return true if set1 intersects with set2
-static bool isIntersecting(InputPosSetTy &set1, InputPosSetTy &set2) {
-  for (auto pos1 : set1) {
-    if (llvm::find(set2, pos1) != set2.end()) {
-      return true;
-    }
-  }
-  return false;
-}
 
 #define DEBUG_TYPE "tc-merge-addofmul"
 
@@ -91,17 +72,6 @@ AddOfMulFactorsTy collectAddOfMulFactors(FactorsHolderTy &holder, AddOp op) {
     if (auto mulOp = input.getDefiningOp<MulOp>()) {
       auto mulInputs = mulOp.getInputs();
       auto mulAxesMaps = getAxesMaps(mulOp);
-      if (mulInputs.size() > 2) {
-        mulOp.dump();
-        auto [lbs, ubs] =
-            utils::getSizesRanges(mulOp->getParentOfType<func::FuncOp>());
-        auto sizeIDs = getTensorSizeIDs(mulOp.getResult());
-        SmallVector<int64_t> sizes;
-        for (auto sizeID : sizeIDs)
-          sizes.emplace_back(ubs[sizeID]);
-        MulOrders mulOrders(sizes, mulAxesMaps);
-        llvm::errs() << "Cost is: " << mulOrders.getCost() << "\n";
-      }
       for (auto [mulInput, mulAxesMap] : llvm::zip(mulInputs, mulAxesMaps)) {
         applyAxesMap(axesMap, mulAxesMap);
         auto key = getUniqueFactor(holder, mulInput, mulAxesMap);
@@ -116,7 +86,7 @@ AddOfMulFactorsTy collectAddOfMulFactors(FactorsHolderTy &holder, AddOp op) {
   return factors;
 }
 // Factor to InputPosSet map
-using FactorPosSetMapTy = DenseMap<FactorPtr, InputPosSetTy>;
+using FactorPosSetMapTy = DenseMap<FactorPtr, PositionSetTy>;
 void cleanFactorPosSetMap(FactorPosSetMapTy &map, FactorPtrsTy &toErase) {
   for (auto key : toErase) {
     if (map.count(key)) {
@@ -124,7 +94,7 @@ void cleanFactorPosSetMap(FactorPosSetMapTy &map, FactorPtrsTy &toErase) {
     }
   }
 }
-FactorPosSetMapTy collectFacorPosSetMap(AddOfMulFactorsTy &factors) {
+FactorPosSetMapTy collectFactorPosSetMap(AddOfMulFactorsTy &factors) {
   FactorPosSetMapTy inputPosSetMap;
   for (auto [pos, mulFactors] : llvm::enumerate(factors)) {
     for (auto factor : mulFactors) {
@@ -132,11 +102,9 @@ FactorPosSetMapTy collectFacorPosSetMap(AddOfMulFactorsTy &factors) {
     }
   }
   FactorPtrsTy toErase;
-  for (auto &[key, inputPosSet] : inputPosSetMap) {
-    if (inputPosSet.size() <= 1) {
+  for (auto &[key, inputPosSet] : inputPosSetMap)
+    if (inputPosSet.size() <= 1)
       toErase.emplace_back(key);
-    }
-  }
   cleanFactorPosSetMap(inputPosSetMap, toErase);
   return inputPosSetMap;
 }
@@ -181,7 +149,7 @@ struct SymmAddFoldPattern : public OpRewritePattern<AddOp> {
                                 PatternRewriter &rewriter) const override {
     auto result = op.getResult();
     auto inputs = op.getInputs();
-    DenseMap<Value, InputPosSetTy> sameInputPos;
+    DenseMap<Value, PositionSetTy> sameInputPos;
     for (auto [pos, input] : llvm::enumerate(inputs)) {
       sameInputPos[input].insert(pos);
     }
@@ -227,7 +195,7 @@ struct SymmAddFoldPattern : public OpRewritePattern<AddOp> {
     }
     FactorsHolderTy holder;
     auto factors = collectAddOfMulFactors(holder, op);
-    auto inputPosSetMap = collectFacorPosSetMap(factors);
+    auto inputPosSetMap = collectFactorPosSetMap(factors);
     SetVector<int64_t> posGroup;
     for (auto &[input, posSet] : inputPosSetMap) {
       if (posSet.size() == inputs.size() - symmNum) {
@@ -304,12 +272,76 @@ struct MergeAddOfMulPattern : public OpRewritePattern<AddOp> {
     auto axesMaps = getAxesMaps(op);
     FactorsHolderTy holder;
     auto factors = collectAddOfMulFactors(holder, op);
-    auto inputPosSetMap = collectFacorPosSetMap(factors);
-    if (inputPosSetMap.empty()) {
+    auto inputPosSetMap = collectFactorPosSetMap(factors);
+    if (inputPosSetMap.empty())
       return failure();
-    }
     LLVM_DEBUG(llvm::dbgs() << "<Factorize> Potential factors: "
                             << inputPosSetMap.size() << "\n";);
+    // Erase factors like A in A + A + C * D -> 2 * A + C * D
+    {
+      FactorPtrsTy toErase;
+      for (auto &[factor, positions] : inputPosSetMap)
+        for (auto position : positions)
+          if (factors[position].size() == 1) {
+            toErase.emplace_back(factor);
+            break;
+          }
+      cleanFactorPosSetMap(inputPosSetMap, toErase);
+    }
+    DenseMap<FactorPtr, double> factorizeBenifit;
+    DenseMap<MulOp, MulOrders> mulOp2OrdersMap;
+    auto [lbs, ubs] =
+        utils::getSizesRanges(op->getParentOfType<func::FuncOp>());
+    double lastCost = 1;
+    {
+      auto sizeIDs = getTensorSizeIDs(inputs[0]);
+      for (auto sizeID : sizeIDs)
+        lastCost *= ubs[sizeID];
+    }
+    {
+      for (auto &[factor, positions] : inputPosSetMap) {
+        double benifit = -lastCost;
+        for (auto addPosition : positions) {
+          auto input = inputs[addPosition];
+          auto mulOp = input.getDefiningOp<MulOp>();
+          if (!mulOp2OrdersMap.count(mulOp)) {
+            auto sizeIDs = getTensorSizeIDs(mulOp.getResult());
+            auto axesMaps = mulOp.getAxesMaps();
+            SmallVector<int64_t> sizes;
+            for (auto sizeID : sizeIDs)
+              sizes.emplace_back(ubs[sizeID]);
+            mulOp2OrdersMap[mulOp] = MulOrders(sizes, axesMaps);
+          }
+          auto &mulOrders = mulOp2OrdersMap[mulOp];
+          PositionTy factorPosition;
+          for (auto [position, factor2] : llvm::enumerate(factors[addPosition]))
+            if (factor == factor2) {
+              factorPosition = position;
+              break;
+            }
+          auto originCost = mulOrders.getCost();
+          auto restCost = mulOrders.getRestCost(factorPosition);
+          benifit += originCost - restCost;
+        }
+        factorizeBenifit[factor] = benifit;
+      }
+    }
+    LLVM_DEBUG(
+    {
+      llvm::dbgs() << "AddOp:\n";
+      op.dump();
+      llvm::dbgs() << "Inputs:\n";
+      for (auto input : inputs)
+        input.dump();
+      llvm::dbgs() << "Benifits:\n";
+      for (auto &[factor, positions] : inputPosSetMap) {
+        llvm::dbgs().indent(2);
+        factor->first.dump();
+        llvm::dbgs().indent(4)
+            << "Benifit is " << factorizeBenifit[factor] << "\n";
+      }
+    });
+#if 0
     // Erase factors that should not do factorize
     auto [shape, sizeIDs] = getTensorSizeInfos(op.getResult());
     {
@@ -377,9 +409,25 @@ struct MergeAddOfMulPattern : public OpRewritePattern<AddOp> {
     }
     LLVM_DEBUG(llvm::dbgs() << "<MergeMul> Potential factors: "
                             << inputPosSetMap.size() << "\n";);
+#else
+    FactorPtr factor0 = nullptr;
+    for (auto [factor, benifit] : factorizeBenifit) {
+      if (factorizeBenifit[factor] <= 0)
+        continue;
+      if (factor0 == nullptr ||
+          factorizeBenifit[factor] > factorizeBenifit[factor0])
+        factor0 = factor;
+    }
+#endif
     if (factor0 == nullptr) {
+      LLVM_DEBUG(llvm::dbgs() << "\n";);
       return failure();
     }
+    LLVM_DEBUG({
+      llvm::dbgs() << "Selected:\n";
+      factor0->first.dump();
+      llvm::dbgs() << "\n";
+    });
     // Do factorize
     SmallVector<Value> newInputs;
     AxesMapsTy newAxesMaps;
