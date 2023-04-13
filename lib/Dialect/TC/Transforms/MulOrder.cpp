@@ -16,7 +16,7 @@ public:
   Impl(ArrayRef<int64_t> sizes, AxesMapsRefTy axesMaps)
       : sizes(sizes), axesMaps(axesMaps) {
     auto numPositions = axesMaps.size();
-    assert(numPositions <= 5);
+    assert(numPositions <= 8);
     costs.resize((1 << numPositions), -1);
     subPosCodePairs.resize((1 << numPositions));
     for (auto [pos, axesMap] : llvm::enumerate(axesMaps)) {
@@ -26,7 +26,7 @@ public:
       subPosCodePairs[posCode] = {0, 0};
     }
     auto numSizes = sizes.size();
-    assert(numSizes <= 5);
+    assert(numSizes <= 6);
     axesCosts.resize((1 << numSizes), 0);
   }
 

@@ -1,9 +1,11 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/IR/TCPatterns.h"
+#include "TCC/Dialect/TC/Transforms/MulOrder.h"
 #include "TCC/Dialect/TC/Transforms/Symmetry.h"
 #include "TCC/Dialect/TC/Utils/AxesMap.h"
 #include "TCC/Dialect/TC/Utils/Builder.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
+#include "TCC/Dialect/Utils/FuncUtils.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
@@ -34,45 +36,6 @@ static bool isIntersecting(InputPosSetTy &set1, InputPosSetTy &set2) {
   }
   return false;
 }
-
-struct GroupElementwiseMulPattern : public OpRewritePattern<MulOp> {
-  using OpRewritePattern<MulOp>::OpRewritePattern;
-  LogicalResult matchAndRewrite(MulOp op,
-                                PatternRewriter &rewriter) const override {
-    auto inputs = op.getInputs();
-    if (inputs.size() <= 2) {
-      return failure();
-    }
-    auto axesMaps = getAxesMaps(op);
-    DenseMap<AxesMapTy, SmallVector<int64_t>> groups;
-    for (auto [pos, axesMap] : llvm::enumerate(axesMaps)) {
-      auto key = axesMap;
-      llvm::sort(key);
-      groups[key].emplace_back(pos);
-    }
-    if (groups.size() == axesMaps.size()) {
-      return failure();
-    }
-    if (groups.size() == 1) {
-      return failure();
-    }
-    SmallVector<Value> newInputs;
-    AxesMapsTy newAxesMaps;
-    for (auto [_, group] : groups) {
-      SmallVector<Value> subInputs;
-      AxesMapsTy subAxesMaps;
-      for (auto pos : group) {
-        subInputs.emplace_back(inputs[pos]);
-        subAxesMaps.emplace_back(axesMaps[pos]);
-      }
-      auto [input, axesMap] = createMulOp(rewriter, subInputs, subAxesMaps);
-      newInputs.emplace_back(input);
-      newAxesMaps.emplace_back(axesMap);
-    }
-    rewriter.replaceOpWithNewOp<MulOp>(op, newInputs, newAxesMaps);
-    return success();
-  }
-};
 
 #define DEBUG_TYPE "tc-merge-addofmul"
 
@@ -128,6 +91,17 @@ AddOfMulFactorsTy collectAddOfMulFactors(FactorsHolderTy &holder, AddOp op) {
     if (auto mulOp = input.getDefiningOp<MulOp>()) {
       auto mulInputs = mulOp.getInputs();
       auto mulAxesMaps = getAxesMaps(mulOp);
+      if (mulInputs.size() > 2) {
+        mulOp.dump();
+        auto [lbs, ubs] =
+            utils::getSizesRanges(mulOp->getParentOfType<func::FuncOp>());
+        auto sizeIDs = getTensorSizeIDs(mulOp.getResult());
+        SmallVector<int64_t> sizes;
+        for (auto sizeID : sizeIDs)
+          sizes.emplace_back(ubs[sizeID]);
+        MulOrders mulOrders(sizes, mulAxesMaps);
+        llvm::errs() << "Cost is: " << mulOrders.getCost() << "\n";
+      }
       for (auto [mulInput, mulAxesMap] : llvm::zip(mulInputs, mulAxesMaps)) {
         applyAxesMap(axesMap, mulAxesMap);
         auto key = getUniqueFactor(holder, mulInput, mulAxesMap);
@@ -442,10 +416,6 @@ struct MergeAddOfMulPattern : public OpRewritePattern<AddOp> {
 } // namespace
 
 namespace mlir::tc {
-void populateGroupElementewiseMulPatterns(RewritePatternSet &patterns,
-                                          MLIRContext *context) {
-  patterns.add<GroupElementwiseMulPattern>(context);
-}
 void populateMergeAddOfMulPatterns(RewritePatternSet &patterns,
                                    MLIRContext *context) {
   patterns.add<MergeAddOfMulPattern>(context);
