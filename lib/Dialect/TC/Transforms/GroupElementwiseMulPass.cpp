@@ -27,7 +27,7 @@ struct GroupElementwiseMulPass
     auto funcOp = getOperation();
     auto *context = &getContext();
     RewritePatternSet patterns(context);
-    populateGroupElementewiseMulPattern(patterns, context);
+    populateGroupElementwiseMulPattern(patterns, context);
     FrozenRewritePatternSet frozenPatterns(std::move(patterns));
     if (failed(applyPatternsAndFoldGreedily(funcOp, frozenPatterns)))
       return signalPassFailure();

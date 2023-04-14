@@ -11,6 +11,8 @@ class MulOrders::Impl {
   SmallVector<std::pair<unsigned, unsigned>> subPosCodePairs;
   // 1 << (sizes.size())
   SmallVector<double> axesCosts;
+  // Mul Binary Tree
+  MulTreeTy mulTree;
 
 public:
   Impl(ArrayRef<int64_t> sizes, AxesMapsRefTy axesMaps)
@@ -28,6 +30,32 @@ public:
     auto numSizes = sizes.size();
     assert(numSizes <= 6);
     axesCosts.resize((1 << numSizes), 0);
+  }
+
+  MulTreeTy &getMulTree() {
+    if (mulTree.empty())
+      buildMulTree();
+    return mulTree;
+  }
+
+  void buildMulTree() {
+    (void)getCost();
+    unsigned posCode = getMaxCode(axesMaps.size());
+    addMulTreeNode(posCode);
+  }
+
+  void addMulTreeNode(unsigned posCode) {
+    auto [subPosCode1, subPosCode2] = subPosCodePairs[posCode];
+    if (subPosCode1 == 0 && subPosCode2 == 0) {
+      auto position = decode<PositionTy>(posCode)[0];
+      mulTree.emplace_back(position, 0);
+      return;
+    }
+    auto node = mulTree.emplace_back(0, 0);
+    node.first = mulTree.size();
+    addMulTreeNode(subPosCode1);
+    node.second = mulTree.size();
+    addMulTreeNode(subPosCode2);
   }
 
   double getCost() {
@@ -135,4 +163,5 @@ double MulOrders::getCost(PositionsRefTy positions) {
 double MulOrders::getRestCost(PositionTy position) {
   return impl->getRestCost(position);
 }
+MulTreeTy &MulOrders::getMulTree() { return impl->getMulTree(); }
 } // namespace mlir::tc

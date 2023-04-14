@@ -18,7 +18,7 @@ std::unique_ptr<Pass> createSinkMul2Pass();
 std::unique_ptr<Pass> createGroupElementwiseMulPass();
 std::unique_ptr<Pass> createBeforeCodeGenPass();
 
-void populateGroupElementewiseMulPattern(RewritePatternSet &patterns,
+void populateGroupElementwiseMulPattern(RewritePatternSet &patterns,
                                          MLIRContext *context);
 void populateFactorizePattern(RewritePatternSet &patterns,
                               MLIRContext *context);

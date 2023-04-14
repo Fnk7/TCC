@@ -17,6 +17,7 @@ add_mlir_dialect_library(MLIRTCTransforms
   ContractOrder.cpp
   MulOrder.cpp
   GroupElementwiseMulPattern.cpp
+  GroupMulByMulOrdersPattern.cpp
   Factorize.cpp
   FactorizePattern.cpp
 

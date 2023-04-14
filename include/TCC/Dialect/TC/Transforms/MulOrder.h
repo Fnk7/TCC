@@ -5,6 +5,8 @@
 #include "TCC/Utils/InputPostion.h"
 
 namespace mlir::tc {
+using MulTreeTy = SmallVector<std::pair<PositionTy, PositionTy>>;
+
 class MulOrders {
 public:
   MulOrders() : impl(nullptr) {}
@@ -22,6 +24,7 @@ public:
   double getCost();
   double getCost(PositionsRefTy positions);
   double getRestCost(PositionTy position);
+  MulTreeTy &getMulTree();
 
 private:
   class Impl;
