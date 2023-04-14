@@ -163,7 +163,7 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
 
       dynamicPM.addPass(createSinkMul2Pass());
       dynamicPM.addPass(createTCCSEPass());
-      dynamicPM.addPass(createGroupElementwiseMulPass());
+      dynamicPM.addPass(createGroupMulPass());
       dynamicPM.addPass(createBeforeCodeGenPass());
       dynamicPM.addPass(createCSEPass());
       dynamicPM.addPass(createBeforeCodeGenPass());

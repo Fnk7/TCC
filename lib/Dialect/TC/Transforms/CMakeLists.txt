@@ -11,11 +11,11 @@ add_mlir_dialect_library(MLIRTCTransforms
   LiftMulFromContract.cpp
   SinkMul2.cpp
   SymmetryPattern1.cpp
-  GroupElementwiseMulPass.cpp
   BeforeCodeGenPass.cpp
   Symmetry.cpp
   ContractOrder.cpp
   MulOrder.cpp
+  GroupMulPass.cpp
   GroupElementwiseMulPattern.cpp
   GroupMulByMulOrdersPattern.cpp
   Factorize.cpp

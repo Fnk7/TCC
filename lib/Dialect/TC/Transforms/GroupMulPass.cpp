@@ -11,7 +11,7 @@
 #include "llvm/Support/Debug.h"
 
 namespace mlir::tc {
-#define GEN_PASS_DEF_GROUPELEMENTWISEMUL
+#define GEN_PASS_DEF_GROUPMUL
 #include "TCC/Dialect/TC/Transforms/Passes.h.inc"
 } // namespace mlir::tc
 
@@ -20,8 +20,7 @@ namespace mlir::tc {
 using namespace mlir;
 using namespace mlir::tc;
 
-struct GroupElementwiseMulPass
-    : public tc::impl::GroupElementwiseMulBase<GroupElementwiseMulPass> {
+struct GroupMulPass : public tc::impl::GroupMulBase<GroupMulPass> {
   void runOnOperation() override {
 
     auto funcOp = getOperation();
@@ -43,6 +42,6 @@ struct GroupElementwiseMulPass
   }
 };
 
-std::unique_ptr<Pass> mlir::tc::createGroupElementwiseMulPass() {
-  return std::make_unique<GroupElementwiseMulPass>();
+std::unique_ptr<Pass> mlir::tc::createGroupMulPass() {
+  return std::make_unique<GroupMulPass>();
 }

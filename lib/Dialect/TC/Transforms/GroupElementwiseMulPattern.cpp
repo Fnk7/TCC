@@ -44,7 +44,7 @@ struct GroupElementwiseMulPattern : public OpRewritePattern<MulOp> {
 };
 
 void populateGroupElementwiseMulPattern(RewritePatternSet &patterns,
-                                         MLIRContext *context) {
+                                        MLIRContext *context) {
   patterns.add<GroupElementwiseMulPattern>(context);
 }
 } // namespace mlir::tc
