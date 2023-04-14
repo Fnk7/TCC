@@ -96,8 +96,8 @@ void first_order_h(int P,
         double var2 = in3 + var1;
         double var3 = var2 + var0;
         double var4 = in2 * var3;
-        double var5 = in1 * cst1;
-        double var6 = var5 * var4;
+        double var5 = var4 * cst1;
+        double var6 = in1 * var5;
         double var7 = var6 + in8;
         double var8 = in0 * var7;
         double var9 = var8 + in9;

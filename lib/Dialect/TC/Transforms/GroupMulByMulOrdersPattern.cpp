@@ -1,9 +1,15 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/Transforms/MulOrder.h"
 #include "TCC/Dialect/TC/Transforms/Passes.h"
+#include "TCC/Dialect/TC/Utils/Builder.h"
+#include "TCC/Dialect/TC/Utils/Utils.h"
 #include "TCC/Dialect/Utils/FuncUtils.h"
 
 #include "mlir/IR/PatternMatch.h"
+
+#include "llvm/Support/Debug.h"
+
+#define DEBUG_TYPE "tc-mul-order"
 
 namespace mlir::tc {
 using namespace utils;
@@ -18,8 +24,9 @@ static MulOrders getMulOrdersOfMulOp(MulOp mulOp) {
   return MulOrders(sizes, axesMaps);
 }
 
-struct GroupSubsetMulPattern : public OpRewritePattern<MulOp> {
+struct GroupMulByMulOrdersPattern : public OpRewritePattern<MulOp> {
   using OpRewritePattern<MulOp>::OpRewritePattern;
+
   LogicalResult matchAndRewrite(MulOp op,
                                 PatternRewriter &rewriter) const override {
     auto axesMaps = op.getAxesMaps();
@@ -33,13 +40,36 @@ struct GroupSubsetMulPattern : public OpRewritePattern<MulOp> {
       }
     if (isElementwise)
       return failure();
+    auto inputs = op.getInputs();
     MulOrders mulOrders = getMulOrdersOfMulOp(op);
+    auto &mulTree = mulOrders.getMulTree();
+    std::function<MappedInputTy(MulNodeTy)> buildMulTree =
+        [&](MulNodeTy node) -> MappedInputTy {
+      if (node.second == 0) {
+        auto position = node.first;
+        LLVM_DEBUG(llvm::dbgs() << "a" << node.first;);
+        return {inputs[position], axesMaps[position]};
+      }
+      MappedInputsTy mappedInputs;
+      auto node1 = mulTree[node.first];
+      LLVM_DEBUG(llvm::dbgs() << "(";);
+      mappedInputs.emplace_back(buildMulTree(node1));
+      auto node2 = mulTree[node.second];
+      LLVM_DEBUG(llvm::dbgs() << " * ";);
+      mappedInputs.emplace_back(buildMulTree(node2));
+      LLVM_DEBUG(llvm::dbgs() << ")";);
+      return createMulOp(rewriter, mappedInputs);
+    };
+    auto [result, axesMap] = buildMulTree(mulTree[0]);
+    LLVM_DEBUG(llvm::dbgs() << "\n";);
+    assert(isOrderedAxesMap(axesMap));
+    rewriter.replaceOp(op, result);
     return success();
   }
 };
 
-void populateGroupSubsetMulPattern(RewritePatternSet &patterns,
-                                   MLIRContext *context) {
-  patterns.add<GroupSubsetMulPattern>(context);
+void populateGroupMulByMulOrdersPattern(RewritePatternSet &patterns,
+                                        MLIRContext *context) {
+  patterns.add<GroupMulByMulOrdersPattern>(context);
 }
 } // namespace mlir::tc

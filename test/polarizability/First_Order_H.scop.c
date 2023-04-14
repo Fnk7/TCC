@@ -95,8 +95,8 @@ void first_order_h(int P,
       for (int c3 = 0; c3 < 3; c3++) {
         for (int c0 = 0; c0 < P; c0++) {
           double in0 = wave[c0][c1];
-          double in1 = ptab[c0];
-          double in2 = wave[c0][c2];
+          double in1 = wave[c0][c2];
+          double in2 = ptab[c0];
           double in3 = grid_coord[c0][c3];
           double in4 = v_hartree_gradient[c0][c3];
           double in5 = v2rho2[c0];
@@ -110,9 +110,9 @@ void first_order_h(int P,
           double var2 = in3 + in4;
           double var3 = var2 + var1;
           double var4 = var3 + var0;
-          double var5 = in1 * cst1;
-          double var6 = var5 * in2;
-          double var7 = var6 * var4;
+          double var5 = in2 * cst1;
+          double var6 = var5 * var4;
+          double var7 = in1 * var6;
           double var8 = var7 + in9;
           double var9 = in0 * var8;
           double var10 = var9 + in10;

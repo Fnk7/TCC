@@ -19,7 +19,9 @@ std::unique_ptr<Pass> createGroupElementwiseMulPass();
 std::unique_ptr<Pass> createBeforeCodeGenPass();
 
 void populateGroupElementwiseMulPattern(RewritePatternSet &patterns,
-                                         MLIRContext *context);
+                                        MLIRContext *context);
+void populateGroupMulByMulOrdersPattern(RewritePatternSet &patterns,
+                                        MLIRContext *context);
 void populateFactorizePattern(RewritePatternSet &patterns,
                               MLIRContext *context);
 void populateSymmAddFoldPattern(RewritePatternSet &patterns,

@@ -1,5 +1,10 @@
 #include "TCC/Dialect/TC/Transforms/MulOrder.h"
 
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
+
+#define DEBUG_TYPE "tc-mul-order"
+
 namespace mlir::tc {
 class MulOrders::Impl {
   SmallVector<int64_t> sizes;
@@ -51,10 +56,11 @@ public:
       mulTree.emplace_back(position, 0);
       return;
     }
-    auto node = mulTree.emplace_back(0, 0);
-    node.first = mulTree.size();
+    PositionTy position = mulTree.size();
+    mulTree.emplace_back(0, 0);
+    mulTree[position].first = mulTree.size();
     addMulTreeNode(subPosCode1);
-    node.second = mulTree.size();
+    mulTree[position].second = mulTree.size();
     addMulTreeNode(subPosCode2);
   }
 

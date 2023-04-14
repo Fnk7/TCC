@@ -5,7 +5,8 @@
 #include "TCC/Utils/InputPostion.h"
 
 namespace mlir::tc {
-using MulTreeTy = SmallVector<std::pair<PositionTy, PositionTy>>;
+using MulNodeTy = std::pair<PositionTy, PositionTy>;
+using MulTreeTy = SmallVector<MulNodeTy>;
 
 class MulOrders {
 public:

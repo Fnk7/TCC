@@ -15,7 +15,7 @@ namespace mlir::tc {
 #include "TCC/Dialect/TC/Transforms/Passes.h.inc"
 } // namespace mlir::tc
 
-#define DEBUG_TYPE "tc-group-elementwise-mul"
+#define DEBUG_TYPE "tc-group-mul"
 
 using namespace mlir;
 using namespace mlir::tc;
@@ -26,11 +26,20 @@ struct GroupElementwiseMulPass
 
     auto funcOp = getOperation();
     auto *context = &getContext();
-    RewritePatternSet patterns(context);
-    populateGroupElementwiseMulPattern(patterns, context);
-    FrozenRewritePatternSet frozenPatterns(std::move(patterns));
-    if (failed(applyPatternsAndFoldGreedily(funcOp, frozenPatterns)))
-      return signalPassFailure();
+    {
+      RewritePatternSet patterns(context);
+      populateGroupElementwiseMulPattern(patterns, context);
+      FrozenRewritePatternSet frozenPatterns(std::move(patterns));
+      if (failed(applyPatternsAndFoldGreedily(funcOp, frozenPatterns)))
+        return signalPassFailure();
+    }
+    {
+      RewritePatternSet patterns(context);
+      populateGroupMulByMulOrdersPattern(patterns, context);
+      FrozenRewritePatternSet frozenPatterns(std::move(patterns));
+      if (failed(applyPatternsAndFoldGreedily(funcOp, frozenPatterns)))
+        return signalPassFailure();
+    }
   }
 };
 
