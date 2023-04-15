@@ -241,13 +241,11 @@ private:
       out << ")\n";
     }
     std::string name = "var" + std::to_string(varIdx++);
-    out.indent(indent) << name << " = relay.add(";
-    for (auto position : llvm::seq<int64_t>(0, inputs.size())) {
-      if (position != 0)
-        out << ", ";
-      out << "term" << position;
+    out.indent(indent) << name << " = relay.add(term0, term1)\n";
+    for (auto position : llvm::seq<int64_t>(2, inputs.size())) {
+      out.indent(indent) << name << " = relay.add(" << name << ", term"
+                         << position << ")\n";
     }
-    out << ")\n";
     valueNameMap[result] = name;
   }
 
