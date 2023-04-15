@@ -216,9 +216,12 @@ private:
       out << ")\n";
     }
     std::string name = "var" + std::to_string(varIdx++);
-    out.indent(indent) << name << " = relay.multiply(";
-    llvm::interleaveComma(inputNames, out);
-    out << ")\n";
+    out.indent(indent) << name << " = relay.multiply(" << inputNames[0] << ", "
+                       << inputNames[1] << ")\n";
+    for (auto position : llvm::seq<int64_t>(2, inputs.size())) {
+      out.indent(indent) << name << " = relay.multiply(" << name << ", "
+                         << inputNames[position] << ")\n";
+    }
     valueNameMap[result] = name;
   }
 
