@@ -44,7 +44,7 @@ def get_calculation(s0, s1, s2):
     shape = (s0, s1, s2,)
     shapes["wave"] = shape
     t13 = relay.var("wave", shape=shape, dtype=dtype)
-    cst0 = 0.5
+    cst0 = relay.const(0.5, dtype="float64")
     term0 = relay.transpose(t8, axes=(0, 1,))
     term1 = relay.transpose(t9, axes=(0, 1,))
     var0 = relay.multiply(term0, term1)

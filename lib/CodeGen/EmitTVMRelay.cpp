@@ -281,7 +281,9 @@ private:
     std::string name = "cst" + std::to_string(cstIdx++);
     SmallVector<char> value;
     op.getValue().toString(value);
-    out.indent(indent) << name << " = " << value << "\n";
+    out.indent(indent) << name << " = relay.const(" << value << ", dtype=";
+    emitPythonString("float64");
+    out << ")\n";
     valueNameMap[op.getResult()] = name;
   }
 
