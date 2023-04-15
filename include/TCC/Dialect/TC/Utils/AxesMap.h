@@ -61,6 +61,20 @@ inline AxesMapTy getNew2OriginAxesMap(AxesMapTy &origin2NewMap) {
   }
   return new2OriginMap;
 }
+inline auto inverseAxesMap(AxesMapRefTy axesMap) {
+  AxesMapTy inverseMap(axesMap.size());
+  for (auto e : llvm::enumerate(axesMap)) {
+    inverseMap[e.value()] = e.index();
+  }
+  return inverseMap;
+}
+inline auto inverseAxesMap(AxesMapRefTy axesMap, int64_t rank) {
+  AxesMapTy inverseMap(rank, -1);
+  for (auto e : llvm::enumerate(axesMap)) {
+    inverseMap[e.value()] = e.index();
+  }
+  return inverseMap;
+}
 } // namespace mlir::tc::utils
 
 #endif

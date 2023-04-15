@@ -12,4 +12,5 @@ protected:
 
 void emitLinalgToC(ModuleOp op, llvm::raw_ostream &out = llvm::errs());
 void emitTCToTVM(ModuleOp op, llvm::raw_ostream &out = llvm::errs());
+void emitTCToTVMRelay(ModuleOp op, llvm::raw_ostream &out = llvm::errs());
 } // namespace mlir::tc::codegen

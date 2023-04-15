@@ -167,14 +167,17 @@ int main(int argc, char **argv) {
     mlir::failed(PM.run(*M));
     SmallString<32> outputFileName(inputFileName);
     sys::path::replace_extension(outputFileName,
-                                 Emit == EmitTVM ? ".tvm.py" : "relay.py");
+                                 Emit == EmitTVM ? ".tvm.py" : ".tvm.relay.py");
     std::error_code EC;
     raw_fd_ostream dest(outputFileName, EC, sys::fs::OF_Text);
     if (EC) {
       errs() << "Could not open file: " << EC.message();
       return 1;
     }
-    mlir::tc::codegen::emitTCToTVM(M.get(), dest);
+    if (Emit == EmitTVM)
+      mlir::tc::codegen::emitTCToTVM(M.get(), dest);
+    else
+      mlir::tc::codegen::emitTCToTVMRelay(M.get(), dest);
     return 0;
   }
 

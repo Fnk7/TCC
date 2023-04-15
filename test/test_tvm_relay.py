@@ -34,11 +34,14 @@ def create_task(mod):
 
 def tune_tasks(tasks, task_weights):
     print("Begin tuning...")
+    number = 1
+    if target.startswith("llvm"):
+        number = 64
     measure_ctx = auto_scheduler.LocalRPCMeasureContext(
-        repeat=1, min_repeat_ms=300, timeout=10)
+        number=number, repeat=1, min_repeat_ms=100, timeout=10)
     tuner = auto_scheduler.TaskScheduler(tasks, task_weights)
     tune_option = auto_scheduler.TuningOptions(
-        num_measure_trials=1024,
+        num_measure_trials=5,
         num_measures_per_round=64,
         early_stopping=192,
         runner=measure_ctx.runner,
@@ -62,7 +65,11 @@ def time_task(mod, shapes):
     print(flush=True)
 
 
-def test_tvm_relay(mod, shapes):
+def test_tvm_relay(func, *args):
+    args = list(args)
+    if target.startswith("llvm"):
+        args[0] = 1
+    mod, shapes = func(*tuple(args))
     tasks, task_weights = create_task(mod)
     tune_tasks(tasks, task_weights)
     time_task(mod, shapes)
