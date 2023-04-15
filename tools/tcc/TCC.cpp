@@ -63,6 +63,7 @@ enum Action {
   DumpMLIRBLAS,
   EmitScopC,
   EmitTVM,
+  EmitRELAY,
 };
 } // namespace
 static cl::opt<enum Action>
@@ -70,6 +71,7 @@ static cl::opt<enum Action>
          cl::values(clEnumValN(DumpAST, "ast", "output the AST dump")),
          cl::values(clEnumValN(EmitScopC, "scop-c", "emit scop c")),
          cl::values(clEnumValN(EmitTVM, "tvm", "emit tvm tensor expressions")),
+         cl::values(clEnumValN(EmitRELAY, "relay", "emit tvm relay")),
          cl::values(clEnumValN(DumpMLIR, "mlir", "output the MLIR dump")),
          cl::values(clEnumValN(DumpMLIRLINALG, "mlir-linalg",
                                "output the MLIR dump after linalg lowering")),
@@ -160,11 +162,12 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  if (Emit == EmitTVM) {
+  if (Emit == EmitTVM || Emit == EmitRELAY) {
     addTCOptimizePipeline(PM);
     mlir::failed(PM.run(*M));
     SmallString<32> outputFileName(inputFileName);
-    sys::path::replace_extension(outputFileName, ".tvm.py");
+    sys::path::replace_extension(outputFileName,
+                                 Emit == EmitTVM ? ".tvm.py" : "relay.py");
     std::error_code EC;
     raw_fd_ostream dest(outputFileName, EC, sys::fs::OF_Text);
     if (EC) {
