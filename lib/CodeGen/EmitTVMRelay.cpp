@@ -268,12 +268,12 @@ private:
     auto input = op.getInput();
     auto result = op.getResult();
     auto axesMap = op.getAxesMapArray();
-    emitTEComputeForValue(result);
-    out << valueNameMap[input];
-    for (auto axis : axesMap) {
-      out << "[ls[" << axis << "]]";
-    }
-    emitTENameArgument(result);
+    std::string name = "var" + std::to_string(varIdx++);
+    out.indent(indent) << name << " = relay.transpose(" << valueNameMap[input]
+                       << ", axes=";
+    emitInverseAxesMap(axesMap);
+    out << ")\n";
+    valueNameMap[result] = name;
   }
 
   int cstIdx = 0;

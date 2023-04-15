@@ -35,7 +35,7 @@ def get_calculation(s0, s1, s2):
     term1 = relay.transpose(term1, axes=(0, 1, 3, 4, 2,))
     var3 = relay.multiply(term0, term1)
     var4 = relay.sum(var3, axis=[2])
-    var5 = te.compute((s0, s1, 3, 3,), lambda *ls: var4[ls[0]][ls[1]][ls[3]][ls[2]], name="var5")
+    var5 = relay.transpose(var4, axes=(0, 1, 3, 2,))
     func = relay.Function([t3, t4, t5], var5)
     mod = tvm.IRModule.from_expr(func)
     return mod, shapes
