@@ -191,6 +191,9 @@ int main(int argc, char **argv) {
     FuncPM2.addPass(mlir::tc::createTBLASDegeneralizePass());
     FuncPM2.addPass(mlir::createCSEPass());
     FuncPM2.addPass(mlir::createCSEPass());
+    FuncPM2.addPass(mlir::tc::createTBLASSpecialGemmPass());
+    FuncPM2.addPass(mlir::createCSEPass());
+    FuncPM2.addPass(mlir::createCSEPass());
     // FuncPM2.addPass(mlir::createCSEPass());
     // PM.addPass(mlir::tc::createConvertTCToLinalgPass());
     // PM.addPass(mlir::createCSEPass());
