@@ -1,9 +1,9 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/IR/TCPatterns.h"
 #include "TCC/Dialect/TC/Transforms/Passes.h"
+#include "TCC/Dialect/TC/Utils/AxesMap.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 #include "TCC/Dialect/Utils/FuncUtils.h"
-#include "TCC/Dialect/TC/Utils/AxesMap.h"
 
 #include "TCC/Dialect/TBLAS/IR/TBLASOps.h"
 
@@ -14,7 +14,7 @@
 
 #include "llvm/Support/Debug.h"
 
-#define DEBUG_TYPE "convert-tc-2-tblas"
+#define DEBUG_TYPE "tc-convert-to-tblas-generic"
 
 using namespace mlir;
 using namespace mlir::tc;
@@ -38,11 +38,63 @@ void convertContractOpToTBLASGenericOp(ContractOp ctOp) {
     contractSizes *= ubs[sizeIDs[axis]];
   if (contractSizes < 8)
     return;
+  auto rank = sizeIDs.size();
   auto lhs = inputs[0];
   auto rhs = inputs[1];
   auto axesMaps = mulOp.getAxesMaps();
-  auto lhsInverseAxesMap = utils::inverseAxesMap(axesMaps[0]);
-  auto rhsInverseAxesMap = utils::inverseAxesMap(axesMaps[1]);
+  auto lhsAxesMap = AxesMapRefTy(axesMaps[0]);
+  auto rhsAxesMap = AxesMapRefTy(axesMaps[1]);
+  auto lhsInverseAxesMap = utils::inverseAxesMap(lhsAxesMap, rank);
+  auto rhsInverseAxesMap = utils::inverseAxesMap(rhsAxesMap, rank);
+  AxesTy lhsBatch, rhsBatch;
+  AxesTy lhsRest, rhsRest;
+  AxesTy lhsContract, rhsContract;
+  auto contractAxesMap = getContractOpInput2OutputAxisMap(axes, rank);
+  for (auto [iAxis, oAxis] : llvm::enumerate(contractAxesMap)) {
+    auto lhsAxis = lhsInverseAxesMap[iAxis];
+    auto rhsAxis = rhsInverseAxesMap[iAxis];
+    assert(lhsAxis >= 0 || rhsAxis >= 0);
+    if (oAxis < 0) {
+      assert(lhsAxis >= 0 && rhsAxis >= 0);
+      lhsContract.emplace_back(lhsAxis);
+      rhsContract.emplace_back(rhsAxis);
+    } else if (lhsAxis >= 0 && rhsAxis >= 0) {
+      lhsBatch.emplace_back(lhsAxis);
+      rhsBatch.emplace_back(rhsAxis);
+    } else if (lhsAxis >= 0)
+      lhsRest.emplace_back(lhsAxis);
+    else if (rhsAxis >= 0)
+      rhsRest.emplace_back(rhsAxis);
+  }
+  AxesMapTy permuteMap;
+  for (auto [lhsAxis, rhsAxis] : llvm::zip(lhsBatch, rhsBatch)) {
+    auto iAxis1 = lhsAxesMap[lhsAxis];
+    auto iAxis2 = rhsAxesMap[rhsAxis];
+    assert(iAxis1 == iAxis2);
+    auto oAxis = contractAxesMap[iAxis1];
+    permuteMap.emplace_back(oAxis);
+  }
+  for (auto lhsAxis : lhsRest) {
+    auto iAxis = lhsAxesMap[lhsAxis];
+    auto oAxis = contractAxesMap[iAxis];
+    permuteMap.emplace_back(oAxis);
+  }
+  for (auto rhsAxis : rhsRest) {
+    auto iAxis = rhsAxesMap[rhsAxis];
+    auto oAxis = contractAxesMap[iAxis];
+    permuteMap.emplace_back(oAxis);
+  }
+  OpBuilder builder(ctOp);
+  auto genericOp = builder.create<tblas::GenericOp>(
+      ctOp.getLoc(), lhs, rhs, lhsBatch, rhsBatch, lhsRest, rhsRest,
+      lhsContract, rhsContract);
+  auto result = genericOp.getResult();
+  if (!isOrderedAxesMap(permuteMap)) {
+    auto permuteOp =
+        builder.create<tc::PermuteOp>(ctOp.getLoc(), result, permuteMap);
+    result = permuteOp.getResult();
+  }
+  ctOp.replaceAllUsesWith(result);
 }
 
 struct ConvertTCToTBLASPass
@@ -55,76 +107,8 @@ struct ConvertTCToTBLASPass
         worklist.emplace_back(ctOp);
       }
     }
-    for (auto ctOp : worklist) {
-      // convertContractOpToTBLASGenericOp(ctOp);
-      auto input = ctOp.getInput();
-      if (auto mulOp = input.getDefiningOp<tc::MulOp>()) {
-        auto inputs = mulOp.getInputs();
-        if (inputs.size() == 2) {
-          auto rank = tc::getTensorRank(input);
-          auto axes = ctOp.getAxesArray();
-          auto axesMaps = tc::getAxesMaps(mulOp);
-          auto &axesMap1 = axesMaps[0];
-          auto &axesMap2 = axesMaps[1];
-          auto inverseMap1 = tc::inverseAxesMap(axesMap1, rank);
-          auto inverseMap2 = tc::inverseAxesMap(axesMap2, rank);
-          tblas::AxesTy restAxes1;
-          tblas::AxesTy restAxes2;
-          tblas::AxesTy batchAxes1;
-          tblas::AxesTy batchAxes2;
-          tblas::AxesTy contractAxes1;
-          tblas::AxesTy contractAxes2;
-          for (auto axis : llvm::seq<int64_t>(0, rank)) {
-            if (llvm::find(axes, axis) != axes.end()) {
-              assert(inverseMap1[axis] >= 0);
-              assert(inverseMap2[axis] >= 0);
-              contractAxes1.emplace_back(inverseMap1[axis]);
-              contractAxes2.emplace_back(inverseMap2[axis]);
-            } else {
-              if (inverseMap1[axis] >= 0 && inverseMap2[axis] >= 0) {
-                batchAxes1.emplace_back(inverseMap1[axis]);
-                batchAxes2.emplace_back(inverseMap2[axis]);
-              } else if (inverseMap1[axis] >= 0) {
-                restAxes1.emplace_back(inverseMap1[axis]);
-              } else {
-                assert(inverseMap2[axis] >= 0);
-                restAxes2.emplace_back(inverseMap2[axis]);
-              }
-            }
-          }
-          auto ctI2OAxesMap = tc::getContractOpInput2OutputAxisMap(axes, rank);
-          tc::AxesMapTy permuteMap;
-          for (auto [iAxis1, iAxis2] : llvm::zip(batchAxes1, batchAxes2)) {
-            auto oAxis1 = axesMap1[iAxis1];
-            auto oAxis2 = axesMap2[iAxis2];
-            assert(oAxis1 == oAxis2);
-            auto oAxis = ctI2OAxesMap[oAxis1];
-            permuteMap.emplace_back(oAxis);
-          }
-          for (auto iAxis : restAxes1) {
-            auto oAxis = axesMap1[iAxis];
-            oAxis = ctI2OAxesMap[oAxis];
-            permuteMap.emplace_back(oAxis);
-          }
-          for (auto iAxis : restAxes2) {
-            auto oAxis = axesMap2[iAxis];
-            oAxis = ctI2OAxesMap[oAxis];
-            permuteMap.emplace_back(oAxis);
-          }
-          OpBuilder builder(ctOp);
-          auto genericOp = builder.create<tblas::GenericOp>(
-              ctOp.getLoc(), inputs[0], inputs[1], batchAxes1, batchAxes2,
-              restAxes1, restAxes2, contractAxes1, contractAxes2);
-          if (tc::isOrderedAxesMap(permuteMap)) {
-            ctOp.replaceAllUsesWith(genericOp.getResult());
-          } else {
-            auto permuteOp = builder.create<tc::PermuteOp>(
-                ctOp.getLoc(), genericOp.getResult(), permuteMap);
-            ctOp.replaceAllUsesWith(permuteOp.getResult());
-          }
-        }
-      }
-    }
+    for (auto ctOp : worklist)
+      convertContractOpToTBLASGenericOp(ctOp);
   }
 };
 
