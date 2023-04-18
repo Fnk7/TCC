@@ -4,6 +4,7 @@
 #include "mlir/Support/LLVM.h"
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 
 namespace mlir::tc {
@@ -21,6 +22,7 @@ using AxisPairTy = std::pair<AxisTy, AxisTy>;
 using SymmPairTy = AxisPairTy;
 using SymmArrayTy = SmallVector<SymmPairTy>;
 using SymmArrayRefTy = ArrayRef<SymmPairTy>;
+using SymmetryMapTy = DenseMap<AxisTy, AxisTy>;
 /// TODO: Delete it
 using AxesPairsTy = SmallVector<AxesTy>;
 } // namespace mlir::tc

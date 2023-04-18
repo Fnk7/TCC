@@ -95,6 +95,7 @@ struct Syr2kPattern : public OpRewritePattern<AddOp> {
       result = permuteOp.getResult();
     }
     rewriter.replaceOp(op, result);
+    rewriter.eraseOp(op);
     return success();
   }
 };

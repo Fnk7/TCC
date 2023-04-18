@@ -8,4 +8,9 @@ def Degeneralize : Pass<"tblas-degeneralize", "func::FuncOp"> {
   let dependentDialects = ["func::FuncDialect"];
 }
 
+def SpecialGemm : Pass<"tblas-special-gemm", "func::FuncOp"> {
+  let constructor = "mlir::tc::createTBLASSpecialGemmPass()";
+  let dependentDialects = ["func::FuncDialect"];
+}
+
 #endif

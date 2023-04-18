@@ -5,8 +5,9 @@
 #include "mlir/Pass/Pass.h"
 
 namespace mlir::tc {
-std::unique_ptr<Pass> createTBLASDegeneralizePass();
 void populateSyr2kPattern(RewritePatternSet &patterns, MLIRContext *context);
+std::unique_ptr<Pass> createTBLASDegeneralizePass();
+std::unique_ptr<Pass> createTBLASSpecialGemmPass();
 } // namespace mlir::tc
 
 #endif
