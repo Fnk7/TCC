@@ -187,13 +187,14 @@ int main(int argc, char **argv) {
     FuncPM2.addPass(mlir::tc::createConvertTCToTBLASPass());
     FuncPM2.addPass(mlir::createCSEPass());
     FuncPM2.addPass(mlir::createCSEPass());
-    PM.addPass(mlir::tc::createConvertTCToLinalgPass());
-    PM.addPass(mlir::createCSEPass());
-    PM.addPass(mlir::createLinalgElementwiseOpFusionPass());
-    PM.addPass(mlir::createCSEPass());
+    // FuncPM2.addPass(mlir::createCSEPass());
+    // PM.addPass(mlir::tc::createConvertTCToLinalgPass());
+    // PM.addPass(mlir::createCSEPass());
+    // PM.addPass(mlir::createLinalgElementwiseOpFusionPass());
+    // PM.addPass(mlir::createCSEPass());
     mlir::failed(PM.run(*M));
-    mlir::tc::codegen::emitLinalgToC(M.get());
-    // M->dump();
+    M->print(llvm::outs());
+    // mlir::tc::codegen::emitLinalgToC(M.get());
     return 0;
   }
 

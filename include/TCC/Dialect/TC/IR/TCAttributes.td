@@ -1,7 +1,7 @@
 #ifndef TCC_DIALECT_TC_IR_TCATTRIBUTE_TD
 #define TCC_DIALECT_TC_IR_TCATTRIBUTE_TD
 
-include "./TCBase.td"
+include "TCC/Dialect/TC/IR/TCBase.td"
 include "mlir/IR/AttrTypeBase.td"
 
 class TC_Attr<string attrName, string attrMnemonic, list<Trait> traits = []>

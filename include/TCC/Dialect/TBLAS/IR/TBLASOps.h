@@ -1,6 +1,8 @@
 #ifndef TCC_DIALECT_TBLAS_IR_TBLASOPS_H
 #define TCC_DIALECT_TBLAS_IR_TBLASOPS_H
 
+#include "TCC/Dialect/TC/IR/TCOps.h"
+
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"

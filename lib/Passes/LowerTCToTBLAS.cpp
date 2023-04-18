@@ -2,6 +2,8 @@
 #include "TCC/Dialect/TC/IR/TCPatterns.h"
 #include "TCC/Dialect/TC/Transforms/Passes.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
+#include "TCC/Dialect/Utils/FuncUtils.h"
+#include "TCC/Dialect/TC/Utils/AxesMap.h"
 
 #include "TCC/Dialect/TBLAS/IR/TBLASOps.h"
 
@@ -15,6 +17,33 @@
 #define DEBUG_TYPE "convert-tc-2-tblas"
 
 using namespace mlir;
+using namespace mlir::tc;
+
+namespace {
+
+void convertContractOpToTBLASGenericOp(ContractOp ctOp) {
+  MulOp mulOp;
+  auto input = ctOp.getInput();
+  if (!(mulOp = input.getDefiningOp<MulOp>()))
+    return;
+  auto inputs = mulOp.getInputs();
+  if (inputs.size() != 2)
+    return;
+  auto funcOp = ctOp->getParentOfType<func::FuncOp>();
+  auto [lbs, ubs] = utils::getSizesRanges(funcOp);
+  auto axes = ctOp.getAxes();
+  auto sizeIDs = getTensorSizeIDs(input);
+  auto contractSizes = 1;
+  for (auto axis : axes)
+    contractSizes *= ubs[sizeIDs[axis]];
+  if (contractSizes < 8)
+    return;
+  auto lhs = inputs[0];
+  auto rhs = inputs[1];
+  auto axesMaps = mulOp.getAxesMaps();
+  auto lhsInverseAxesMap = utils::inverseAxesMap(axesMaps[0]);
+  auto rhsInverseAxesMap = utils::inverseAxesMap(axesMaps[1]);
+}
 
 struct ConvertTCToTBLASPass
     : public PassWrapper<ConvertTCToTBLASPass, OperationPass<func::FuncOp>> {
@@ -27,6 +56,7 @@ struct ConvertTCToTBLASPass
       }
     }
     for (auto ctOp : worklist) {
+      // convertContractOpToTBLASGenericOp(ctOp);
       auto input = ctOp.getInput();
       if (auto mulOp = input.getDefiningOp<tc::MulOp>()) {
         auto inputs = mulOp.getInputs();
@@ -97,6 +127,8 @@ struct ConvertTCToTBLASPass
     }
   }
 };
+
+} // namespace
 
 namespace mlir::tc {
 std::unique_ptr<Pass> createConvertTCToTBLASPass() {
