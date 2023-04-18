@@ -29,29 +29,20 @@ def GenericOp : TBLAS_Op<"generic", [NoMemoryEffect]> {
                        DenseI64ArrayAttr : $lhs_contract,
                        DenseI64ArrayAttr : $rhs_contract);
   let results = (outs F64Tensor : $result);
-  // let builders = [OpBuilder<(ins "Type" : $result,
-  //                                "Value" : $lhs,
-  //                                "Value" : $rhs,
-  //                                "AxesRefTy" : $lhs_batch,
-  //                                "AxesRefTy" : $rhs_batch,
-  //                                "AxesRefTy" : $lhs_rest,
-  //                                "AxesRefTy" : $rhs_rest,
-  //                                "AxesRefTy" : $lhs_contract,
-  //                                "AxesRefTy" : $rhs_contract)>];
 }
 
-def BatchMatMulOp : TBLAS_Op<"batch.matmul", [NoMemoryEffect]> {
-  let summary = "Batch matrix multiplication.";
+def BatchGemmOp : TBLAS_Op<"batch.gemm", [NoMemoryEffect]> {
+  let summary = "Batch general matrix multiplication.";
   let description = "None";
 
   let arguments = (ins F64Tensor : $lhs,
                        F64Tensor : $rhs,
                        I64Attr : $num_batch,
+                       BoolAttr : $lhs_trans,
+                       BoolAttr : $rhs_trans,
                        I64Attr : $num_M,
                        I64Attr : $num_N,
-                       I64Attr : $num_K,
-                       BoolAttr : $lhs_trans,
-                       BoolAttr : $rhs_trans);
+                       I64Attr : $num_K);
   let results = (outs F64Tensor : $result);
 }
 

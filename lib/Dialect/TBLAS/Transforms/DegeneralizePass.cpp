@@ -19,8 +19,8 @@ using namespace mlir;
 using namespace mlir::tc;
 
 namespace {
-Value permuteInput(OpBuilder &builder, Value input, AxesRefTy batch,
-                   AxesRefTy contract, AxesRefTy rest) {
+Value permuteInput(OpBuilder &builder, Value input, bool &trans,
+                   AxesRefTy batch, AxesRefTy contract, AxesRefTy rest) {
   AxesMapTy inversePermuteMap;
   for (auto axis : batch)
     inversePermuteMap.emplace_back(axis);
@@ -30,13 +30,26 @@ Value permuteInput(OpBuilder &builder, Value input, AxesRefTy batch,
     inversePermuteMap.emplace_back(axis);
   if (isOrderedAxesMap(inversePermuteMap))
     return input;
+  {
+    AxesMapTy inversePermuteMap;
+    for (auto axis : batch)
+      inversePermuteMap.emplace_back(axis);
+    for (auto axis : contract)
+      inversePermuteMap.emplace_back(axis);
+    for (auto axis : rest)
+      inversePermuteMap.emplace_back(axis);
+    if (isOrderedAxesMap(inversePermuteMap)) {
+      trans = !trans;
+      return input;
+    }
+  }
   auto permuteMap = inverseAxesMap(inversePermuteMap);
   auto permuteOp =
       builder.create<PermuteOp>(builder.getUnknownLoc(), input, permuteMap);
   return permuteOp.getResult();
 }
 
-void createBatchMatMulFromGeneric(GenericOp op) {
+void createBatchGemmFromGeneric(GenericOp op) {
   auto lhsBatch = op.getLhsBatch();
   auto rhsBatch = op.getRhsBatch();
   assert(lhsBatch.size() == rhsBatch.size());
@@ -51,13 +64,15 @@ void createBatchMatMulFromGeneric(GenericOp op) {
   auto numN = rhsRest.size();
   OpBuilder builder(op);
   auto lhs = op.getLhs();
-  lhs = permuteInput(builder, lhs, lhsBatch, lhsContract, lhsRest);
+  auto lhsTrans = false;
+  lhs = permuteInput(builder, lhs, lhsTrans, lhsBatch, lhsContract, lhsRest);
   auto rhs = op.getRhs();
-  rhs = permuteInput(builder, rhs, rhsBatch, rhsContract, rhsRest);
-  auto batchMatMulOp =
-      builder.create<BatchMatMulOp>(op.getLoc(), op.getType(), lhs, rhs,
-                                    numBatch, numM, numN, numK, false, true);
-  op.replaceAllUsesWith(batchMatMulOp.getResult());
+  auto rhsTrans = true;
+  rhs = permuteInput(builder, rhs, rhsTrans, rhsBatch, rhsContract, rhsRest);
+  auto batchGemmOp =
+      builder.create<BatchGemmOp>(op.getLoc(), op.getType(), lhs, rhs, numBatch,
+                                  lhsTrans, rhsTrans, numM, numN, numK);
+  op.replaceAllUsesWith(batchGemmOp.getResult());
   op.erase();
 }
 
@@ -69,7 +84,7 @@ void degeneralizeGenericOp(GenericOp op) {
     return;
   }
   if (lhsRest.size() && lhsRest.size()) {
-    createBatchMatMulFromGeneric(op);
+    createBatchGemmFromGeneric(op);
     return;
   }
   assert("TODO: generate batch matrix vector dot");
