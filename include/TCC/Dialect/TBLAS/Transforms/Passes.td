@@ -3,8 +3,8 @@
 
 include "mlir/Pass/PassBase.td"
 
-def TBLASTOTO : Pass<"tblas-toto", "func::FuncOp"> {
-  let constructor = "mlir::tc::createTBLASTOTOPass()";
+def Degeneralize : Pass<"tblas-degeneralize", "func::FuncOp"> {
+  let constructor = "mlir::tc::createTBLASDegeneralizePass()";
   let dependentDialects = ["func::FuncDialect"];
 }
 

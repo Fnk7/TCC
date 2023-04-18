@@ -46,21 +46,13 @@ def BatchMatMulOp : TBLAS_Op<"batch.matmul", [NoMemoryEffect]> {
 
   let arguments = (ins F64Tensor : $lhs,
                        F64Tensor : $rhs,
-                       I64ArrayAttr : $lhs_batch,
-                       I64ArrayAttr : $rhs_batch,
-                       I64ArrayAttr : $lhs_rest,
-                       I64ArrayAttr : $rhs_rest,
-                       I64ArrayAttr : $lhs_contract,
-                       I64ArrayAttr : $rhs_contract);
+                       I64Attr : $num_batch,
+                       I64Attr : $num_M,
+                       I64Attr : $num_N,
+                       I64Attr : $num_K,
+                       BoolAttr : $lhs_trans,
+                       BoolAttr : $rhs_trans);
   let results = (outs F64Tensor : $result);
-  let builders = [OpBuilder<(ins "Value" : $lhs,
-                                 "Value" : $rhs,
-                                 "AxesTy&" : $lhs_batch,
-                                 "AxesTy&" : $rhs_batch,
-                                 "AxesTy&" : $lhs_rest,
-                                 "AxesTy&" : $rhs_rest,
-                                 "AxesTy&" : $lhs_contract,
-                                 "AxesTy&" : $rhs_contract)>];
 }
 
 #endif

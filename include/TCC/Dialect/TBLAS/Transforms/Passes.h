@@ -4,7 +4,7 @@
 #include "mlir/Pass/Pass.h"
 
 namespace mlir::tc {
-std::unique_ptr<Pass> createTBLASTODOPass();
+std::unique_ptr<Pass> createTBLASDegeneralizePass();
 } // namespace mlir::tc
 
 #endif
