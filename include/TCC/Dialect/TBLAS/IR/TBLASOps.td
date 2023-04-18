@@ -46,4 +46,17 @@ def BatchGemmOp : TBLAS_Op<"batch.gemm", [NoMemoryEffect]> {
   let results = (outs F64Tensor : $result);
 }
 
+def BatchSyr2kOp : TBLAS_Op<"batch.syr2k", [NoMemoryEffect]> {
+  let summary = "Batch matrix multiplication and transpose add.";
+  let description = "None";
+
+  let arguments = (ins F64Tensor : $lhs,
+                       F64Tensor : $rhs,
+                       I64Attr : $num_batch,
+                       BoolAttr : $trans,
+                       I64Attr : $num_N,
+                       I64Attr : $num_K);
+  let results = (outs F64Tensor : $result);
+}
+
 #endif
