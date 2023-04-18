@@ -4,7 +4,7 @@
 #include "TCC/Dialect/TBLAS/IR/TBLASOps.h"
 
 using namespace mlir;
-using namespace mlir::tblas;
+using namespace mlir::tc;
 
 #include "TCC/Dialect/TBLAS/IR/TBLASOpsDialect.cpp.inc"
 

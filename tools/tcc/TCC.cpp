@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
   mlir::MLIRContext context;
   context.getOrLoadDialect<mlir::func::FuncDialect>();
   context.getOrLoadDialect<mlir::tc::TCDialect>();
-  context.getOrLoadDialect<mlir::tblas::TBLASDialect>();
+  context.getOrLoadDialect<mlir::tc::TBLASDialect>();
   mlir::PassManager PM(&context);
   auto M = mlir::tc::MLIRGen(context, *CF);
   if (Emit == DumpMLIR) {

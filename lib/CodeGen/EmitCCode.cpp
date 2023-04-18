@@ -161,7 +161,7 @@ private:
         emitLinalgGenericOp(linalgOp);
       } else if (auto fillOp = dyn_cast_or_null<linalg::FillOp>(&op)) {
         emitLinalgFillOp(fillOp);
-      } else if (auto blasOp = dyn_cast_or_null<tblas::GenericOp>(&op)) {
+      } else if (auto blasOp = dyn_cast_or_null<GenericOp>(&op)) {
         out.indent(indent) << "// Failed: Emit C for op: " << op.getName()
                            << "\n";
       } else if (auto emptyOp = dyn_cast_or_null<tensor::EmptyOp>(&op)) {

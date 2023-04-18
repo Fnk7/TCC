@@ -66,6 +66,8 @@ void convertContractOpToTBLASGenericOp(ContractOp ctOp) {
     else if (rhsAxis >= 0)
       rhsRest.emplace_back(rhsAxis);
   }
+  llvm::sort(lhsRest);
+  llvm::sort(rhsRest);
   AxesMapTy permuteMap;
   for (auto [lhsAxis, rhsAxis] : llvm::zip(lhsBatch, rhsBatch)) {
     auto iAxis1 = lhsAxesMap[lhsAxis];
@@ -85,10 +87,13 @@ void convertContractOpToTBLASGenericOp(ContractOp ctOp) {
     permuteMap.emplace_back(oAxis);
   }
   OpBuilder builder(ctOp);
-  auto genericOp = builder.create<tblas::GenericOp>(
-      ctOp.getLoc(), lhs, rhs, lhsBatch, rhsBatch, lhsRest, rhsRest,
-      lhsContract, rhsContract);
-  auto result = genericOp.getResult();
+  auto inversePermuteMap = utils::inverseAxesMap(permuteMap);
+  auto result = ctOp.getResult();
+  auto resultType = getResultTypeByAxesMap(builder, result, inversePermuteMap);
+  auto genericOp = builder.create<GenericOp>(ctOp.getLoc(), resultType, lhs,
+                                             rhs, lhsBatch, rhsBatch, lhsRest,
+                                             rhsRest, lhsContract, rhsContract);
+  result = genericOp.getResult();
   if (!isOrderedAxesMap(permuteMap)) {
     auto permuteOp =
         builder.create<tc::PermuteOp>(ctOp.getLoc(), result, permuteMap);
