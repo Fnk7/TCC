@@ -23,6 +23,7 @@
 #include "mlir/Transforms/Passes.h"
 
 #include "TCC/Dialect/TBLAS/IR/TBLASOps.h"
+#include "TCC/Dialect/TBLAS/Transforms/Passes.h"
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/Transforms/Passes.h"
 #include "TCC/MLIRGen.h"
@@ -185,6 +186,9 @@ int main(int argc, char **argv) {
     addTCOptimizePipeline(PM);
     mlir::OpPassManager &FuncPM2 = PM.nest<mlir::func::FuncOp>();
     FuncPM2.addPass(mlir::tc::createConvertTCToTBLASPass());
+    FuncPM2.addPass(mlir::createCSEPass());
+    FuncPM2.addPass(mlir::createCSEPass());
+    FuncPM2.addPass(mlir::tc::createTBLASDegeneralizePass());
     FuncPM2.addPass(mlir::createCSEPass());
     FuncPM2.addPass(mlir::createCSEPass());
     // FuncPM2.addPass(mlir::createCSEPass());
