@@ -30,7 +30,7 @@ Value permuteInput(OpBuilder &builder, Value input, bool &trans,
     inversePermuteMap.emplace_back(axis);
   if (isOrderedAxesMap(inversePermuteMap))
     return input;
-  {
+  if (!rest.empty()) {
     AxesMapTy inversePermuteMap;
     for (auto axis : batch)
       inversePermuteMap.emplace_back(axis);
@@ -76,6 +76,37 @@ void createBatchGemmFromGeneric(GenericOp op) {
   op.erase();
 }
 
+void createBatchGemvFromGeneric(GenericOp op) {
+  auto lhsBatch = op.getLhsBatch();
+  auto rhsBatch = op.getRhsBatch();
+  assert(lhsBatch.size() == rhsBatch.size());
+  auto lhsContract = op.getLhsContract();
+  auto rhsContract = op.getRhsContract();
+  assert(lhsContract.size() == rhsContract.size());
+  auto lhsRest = op.getLhsRest();
+  auto rhsRest = op.getRhsRest();
+  OpBuilder builder(op);
+  auto lhs = op.getLhs();
+  auto lhsTrans = false;
+  lhs = permuteInput(builder, lhs, lhsTrans, lhsBatch, lhsContract, lhsRest);
+  auto rhs = op.getRhs();
+  auto rhsTrans = false;
+  rhs = permuteInput(builder, rhs, rhsTrans, rhsBatch, rhsContract, rhsRest);
+  auto matrix = rhsRest.empty() ? lhs : rhs;
+  auto vector = rhsRest.empty() ? rhs : lhs;
+  auto numBatch = lhsBatch.size();
+  auto trans = rhsRest.empty() ? lhsTrans : rhsTrans;
+  auto numM = lhsRest.size() + rhsRest.size();
+  auto numN = lhsContract.size();
+  if (lhsTrans || rhsTrans)
+    std::swap(numM, numN);
+  auto batchGemvOp =
+      builder.create<BatchGemvOp>(op.getLoc(), op.getType(), matrix, vector,
+                                  numBatch, trans, numM, numN);
+  op.replaceAllUsesWith(batchGemvOp.getResult());
+  op.erase();
+}
+
 void degeneralizeGenericOp(GenericOp op) {
   auto lhsRest = op.getLhsRest();
   auto rhsRest = op.getRhsRest();
@@ -87,7 +118,7 @@ void degeneralizeGenericOp(GenericOp op) {
     createBatchGemmFromGeneric(op);
     return;
   }
-  assert("TODO: generate batch matrix vector dot");
+  createBatchGemvFromGeneric(op);
 }
 
 struct DegeneralizePass : public tc::impl::DegeneralizeBase<DegeneralizePass> {
