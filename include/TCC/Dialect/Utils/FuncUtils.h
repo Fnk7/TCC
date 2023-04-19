@@ -12,6 +12,13 @@ inline int getNumInputSizes(func::FuncOp funcOp) {
 inline void setNumInputSizes(func::FuncOp funcOp, Attribute attr) {
   funcOp->setAttr("num_input_sizes", attr);
 }
+inline int getWorkloadType(func::FuncOp funcOp) {
+  auto attrDict = funcOp->getAttrDictionary();
+  if (!attrDict.contains("workload"))
+    return 0;
+  auto attr = attrDict.get("workload").cast<IntegerAttr>();
+  return attr.getValue().getSExtValue();
+}
 inline StringRef getFuncOpArgName(func::FuncOp funcOp, int64_t argIdx) {
   auto nameAttr = funcOp.getArgAttr(argIdx, "func.name");
   if (!nameAttr)

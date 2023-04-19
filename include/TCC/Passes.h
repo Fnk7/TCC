@@ -13,6 +13,7 @@ std::unique_ptr<Pass>
 createConvertTCToLinalgPass(bool eraseTensorEncoding = false);
 std::unique_ptr<Pass> createConvertTCToTBLASPass();
 std::unique_ptr<Pass> createAddBatchPass();
+std::unique_ptr<Pass> createSplitWorkloadPass();
 } // namespace tc
 } // namespace mlir
 
