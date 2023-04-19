@@ -100,10 +100,34 @@ void createBatchGemvFromGeneric(GenericOp op) {
   auto numN = lhsContract.size();
   if (lhsTrans || rhsTrans)
     std::swap(numM, numN);
-  auto batchGemvOp =
-      builder.create<BatchGemvOp>(op.getLoc(), op.getType(), matrix, vector,
-                                  numBatch, trans, numM, numN);
+  auto batchGemvOp = builder.create<BatchGemvOp>(
+      op.getLoc(), op.getType(), matrix, vector, numBatch, trans, numM, numN);
   op.replaceAllUsesWith(batchGemvOp.getResult());
+  op.erase();
+}
+
+Value permuteInput(OpBuilder &builder, Value input, AxesRefTy batch,
+                   AxesRefTy contract) {
+  bool trans = false;
+  return permuteInput(builder, input, trans, batch, contract, {});
+}
+
+void createBatchDotFromGeneric(GenericOp op) {
+  auto lhsBatch = op.getLhsBatch();
+  auto rhsBatch = op.getRhsBatch();
+  assert(lhsBatch.size() == rhsBatch.size());
+  auto lhsContract = op.getLhsContract();
+  auto rhsContract = op.getRhsContract();
+  assert(lhsContract.size() == rhsContract.size());
+  OpBuilder builder(op);
+  auto lhs = op.getLhs();
+  lhs = permuteInput(builder, lhs, lhsBatch, lhsContract);
+  auto rhs = op.getRhs();
+  rhs = permuteInput(builder, rhs, rhsBatch, rhsContract);
+  auto numBatch = lhsBatch.size();
+  auto batchDotOp =
+      builder.create<BatchDotOp>(op.getLoc(), op.getType(), lhs, rhs, numBatch);
+  op.replaceAllUsesWith(batchDotOp.getResult());
   op.erase();
 }
 
@@ -111,7 +135,7 @@ void degeneralizeGenericOp(GenericOp op) {
   auto lhsRest = op.getLhsRest();
   auto rhsRest = op.getRhsRest();
   if (lhsRest.empty() && rhsRest.empty()) {
-    llvm_unreachable("TODO: generate batch vector vector dot");
+    createBatchDotFromGeneric(op);
     return;
   }
   if (lhsRest.size() && lhsRest.size()) {

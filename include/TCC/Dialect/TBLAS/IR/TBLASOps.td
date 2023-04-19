@@ -47,7 +47,7 @@ def BatchGemmOp : TBLAS_Op<"batch.gemm", [NoMemoryEffect]> {
 }
 
 def BatchGemvOp : TBLAS_Op<"batch.gemv", [NoMemoryEffect]> {
-  let summary = "Batch general matrix multiplication.";
+  let summary = "Batch general matrix vector multiplication.";
   let description = "None";
 
   let arguments = (ins F64Tensor : $matrix,
@@ -56,6 +56,16 @@ def BatchGemvOp : TBLAS_Op<"batch.gemv", [NoMemoryEffect]> {
                        BoolAttr : $trans,
                        I64Attr : $num_M,
                        I64Attr : $num_N);
+  let results = (outs F64Tensor : $result);
+}
+
+def BatchDotOp : TBLAS_Op<"batch.dot", [NoMemoryEffect]> {
+  let summary = "Batch general vector multiplication.";
+  let description = "None";
+
+  let arguments = (ins F64Tensor : $lhs,
+                       F64Tensor : $rhs,
+                       I64Attr : $num_batch);
   let results = (outs F64Tensor : $result);
 }
 
