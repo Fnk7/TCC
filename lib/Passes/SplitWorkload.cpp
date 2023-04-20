@@ -20,22 +20,23 @@ using namespace mlir::tc;
 
 namespace {
 auto collectWorkloadInputs(SetVector<Value> &workload) {
-  SmallVector<Value> inputs;
+  SetVector<Value> inputs;
   for (auto value : workload) {
     if (value.isa<BlockArgument>())
-      inputs.emplace_back(value);
+      inputs.insert(value);
     else {
       auto op = value.getDefiningOp();
       for (auto value : op->getOperands())
         if (!workload.count(value))
-          inputs.emplace_back(value);
+          inputs.insert(value);
     }
   }
   return inputs;
 }
 
 auto createWorkloadFuncOp(func::FuncOp funcOp, int workloadID,
-                          SetVector<Value> &workload, ArrayRef<Value> inputs) {
+                          SetVector<Value> &workload,
+                          SetVector<Value> &inputs) {
   OpBuilder builder(funcOp);
   auto result = workload[0];
   LLVM_DEBUG(llvm::dbgs() << "Creating workload for:\n";
@@ -89,7 +90,7 @@ auto collectFuncWorkloads(func::FuncOp funcOp) {
   SmallVector<Value> worklist;
   for (auto output : returnOp.getOperands())
     worklist.emplace_back(output);
-  DenseMap<Value, SetVector<Value>> workloadMap;
+  llvm::MapVector<Value, SetVector<Value>> workloadMap;
   while (!worklist.empty()) {
     auto output = worklist.pop_back_val();
     if (workloadMap.count(output))
@@ -128,11 +129,16 @@ auto collectFuncWorkloads(func::FuncOp funcOp) {
     };
     LLVM_DEBUG(llvm::dbgs() << "/--------------------------------\\\n");
     addWorkload(output);
-    LLVM_DEBUG(llvm::dbgs() << "\\--------------------------------/\n");
     for (auto [input, count] : valueUseCount) {
-      if (count != valueUsedBy[input].size())
-        worklist.emplace_back(input);
+      if (count != valueUsedBy[input].size()) {
+        if (input.getDefiningOp<ConstantOp>()) {
+          LLVM_DEBUG(input.print(llvm::dbgs()); llvm::dbgs() << "\n";);
+          workload.insert(input);
+        } else
+          worklist.emplace_back(input);
+      }
     }
+    LLVM_DEBUG(llvm::dbgs() << "\\--------------------------------/\n");
   }
   return workloadMap;
 }
@@ -146,7 +152,7 @@ void splitFuncIntoWorkloads(func::FuncOp funcOp) {
   auto workloadID = 0;
   OpBuilder builder(funcOp);
   SmallVector<std::pair<func::CallOp, Operation *>> replaces;
-  for (auto &[result, workload] : workloads) {
+  for (auto &[result, workload] : llvm::reverse(workloads)) {
     auto inputs = collectWorkloadInputs(workload);
     auto workloadFuncOp =
         createWorkloadFuncOp(funcOp, workloadID++, workload, inputs);
@@ -154,7 +160,8 @@ void splitFuncIntoWorkloads(func::FuncOp funcOp) {
     builder.setInsertionPoint(op);
     SmallVector<Value> callOperands;
     callOperands.append(argSizes);
-    callOperands.append(inputs);
+    for (auto input : inputs)
+      callOperands.emplace_back(input);
     auto callOp = builder.create<func::CallOp>(op->getLoc(), workloadFuncOp,
                                                callOperands);
     replaces.emplace_back(callOp, op);
