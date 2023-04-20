@@ -145,6 +145,7 @@ auto collectFuncWorkloads(func::FuncOp funcOp) {
 }
 
 void splitFuncIntoWorkloads(func::FuncOp funcOp) {
+  utils::setWorkloadType(funcOp, 1);
   auto workloads = collectFuncWorkloads(funcOp);
   auto numInputSizes = utils::getNumInputSizes(funcOp);
   SmallVector<Value> argSizes;

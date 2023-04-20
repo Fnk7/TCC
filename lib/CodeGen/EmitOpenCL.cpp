@@ -38,8 +38,72 @@ public:
   }
 
 private:
+  int indent = 0;
+  using ValueNameMapTy = DenseMap<Value, std::string>;
+  ValueNameMapTy valueNameMap;
+  using SizeIDValueMapTy = DenseMap<int64_t, std::string>;
+  SizeIDValueMapTy sizeIDValueMap;
+
+  void emitFunctionType(func::FuncOp funcOp) {
+    std::string funcDeclare = "__kernel void ";
+    out << funcDeclare;
+    indent = funcDeclare.size();
+    out << funcOp.getName();
+    indent += funcOp.getName().size();
+    out << "(";
+    indent += 1;
+    bool newLine = false;
+    emitArgumentTypes(funcOp.front(), newLine);
+    emitResultTypes(funcOp.front(), newLine);
+    out << ")\n";
+  }
+
+  void emitArgumentTypes(Block &block, bool &newLine) {
+    auto inputs = block.getArguments();
+    for (auto [idx, input] : llvm::enumerate(inputs)) {
+      if (newLine) {
+        out << ",\n";
+        out.indent(indent);
+      }
+      newLine = true;
+      auto name = "arg" + std::to_string(idx);
+      if (input.getType().isIndex()) {
+        out << "int " << name;
+        sizeIDValueMap[idx] = name;
+      } else {
+        out << "double* " << name;
+      }
+      valueNameMap[input] = name;
+    }
+  }
+
+  SmallVector<std::string> returnNames;
+  void emitResultTypes(Block &block, bool &newLine) {
+    auto returnOp = block.getTerminator();
+    for (auto [idx, input] : llvm::enumerate(returnOp->getOperands())) {
+      if (newLine) {
+        out << ",\n";
+        out.indent(indent);
+      }
+      newLine = true;
+      auto name = "ret" + std::to_string(idx);
+      out << "double* " << name;
+      valueNameMap[input] = name;
+      returnNames.emplace_back(name);
+    }
+  }
+
+  void emitWorkloadFunctionBody(func::FuncOp funcOp) {
+    out << "{\n";
+    indent = 2;
+    out << "}\n";
+  }
+
   void emitWorkloadFunc(func::FuncOp funcOp) {
-    out << "// TODO: Emit " << funcOp.getName() << "\n";
+    out << "inline\n";
+    emitFunctionType(funcOp);
+    emitWorkloadFunctionBody(funcOp);
+    out << "\n";
   }
 
   void emitEntryFunc(func::FuncOp funcOp) {
