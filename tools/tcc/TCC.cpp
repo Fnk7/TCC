@@ -186,27 +186,27 @@ int main(int argc, char **argv) {
     addTCOptimizePipeline(PM);
     mlir::OpPassManager &FuncPM2 = PM.nest<mlir::func::FuncOp>();
     FuncPM2.addPass(mlir::tc::createConvertTCToTBLASPass());
-    FuncPM2.addPass(mlir::createCSEPass());
-    FuncPM2.addPass(mlir::createCSEPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::tc::createTCDCEPass());
     FuncPM2.addPass(mlir::tc::createTBLASDegeneralizePass());
-    FuncPM2.addPass(mlir::createCSEPass());
-    FuncPM2.addPass(mlir::createCSEPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::tc::createTCDCEPass());
     FuncPM2.addPass(mlir::tc::createTBLASSpecialGemmPass());
-    FuncPM2.addPass(mlir::createCSEPass());
-    FuncPM2.addPass(mlir::createCSEPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::tc::createTCDCEPass());
     PM.addPass(mlir::tc::createSplitWorkloadPass());
     PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
-    PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
-    PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
-    PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
-    // FuncPM2.addPass(mlir::createCSEPass());
-    // PM.addPass(mlir::tc::createConvertTCToLinalgPass());
-    // PM.addPass(mlir::createCSEPass());
-    // PM.addPass(mlir::createLinalgElementwiseOpFusionPass());
-    // PM.addPass(mlir::createCSEPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::tc::createTCDCEPass());
     mlir::failed(PM.run(*M));
-    M->print(llvm::outs());
-    // mlir::tc::codegen::emitLinalgToC(M.get());
+    SmallString<32> outputFileName(inputFileName);
+    sys::path::replace_extension(outputFileName, ".blas.mlir");
+    std::error_code EC;
+    raw_fd_ostream dest(outputFileName, EC, sys::fs::OF_Text);
+    if (EC) {
+      errs() << "Could not open file: " << EC.message();
+      return 1;
+    }
+    M->print(dest);
     return 0;
   }
 
