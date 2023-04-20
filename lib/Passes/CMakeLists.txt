@@ -7,5 +7,6 @@ add_mlir_library(
   LowerTCToTBLAS.cpp
   AddBatchPass.cpp
   SplitWorkload.cpp
+  DeadCodeElimination.cpp
 
   ADDITIONAL_HEADER_DIRS ${PROJECT_SOURCE_DIR}/include)
