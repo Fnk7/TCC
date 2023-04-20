@@ -5,6 +5,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 
@@ -116,6 +117,12 @@ void addLinalgFusePass(mlir::PassManager &PM) {
     PM.addPass(mlir::createCSEPass());
   }
 }
+
+auto replaceSuffix(StringRef filename, StringRef suffix) {
+  SmallString<32> outputFileName(filename);
+  sys::path::replace_extension(outputFileName, suffix);
+  return outputFileName;
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -207,15 +214,14 @@ int main(int argc, char **argv) {
     PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
     PM.addNestedPass<mlir::func::FuncOp>(mlir::tc::createTCDCEPass());
     mlir::failed(PM.run(*M));
-    SmallString<32> outputFileName(inputFileName);
-    sys::path::replace_extension(outputFileName, ".blas.mlir");
-    std::error_code EC;
-    raw_fd_ostream dest(outputFileName, EC, sys::fs::OF_Text);
-    if (EC) {
-      errs() << "Could not open file: " << EC.message();
+    auto mlirBLASFile = replaceSuffix(inputFileName, ".blas.mlir");
+    if (auto err = writeToOutput(mlirBLASFile, [&](raw_ostream &out) {
+          M->print(out);
+          return Error::success();
+        })) {
+      llvm::errs() << err << "\n";
       return 1;
     }
-    M->print(dest);
     return 0;
   }
 
