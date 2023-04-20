@@ -113,6 +113,11 @@ auto collectFuncWorkloads(func::FuncOp funcOp) {
     };
     auto &workload = workloadMap[output];
     std::function<void(Value)> addWorkload = [&](Value output) {
+      if (auto op = output.getDefiningOp())
+        if (op->getDialect() == tblasDialect) {
+          worklist.emplace_back(output);
+          return;
+        }
       LLVM_DEBUG(output.print(llvm::dbgs()); llvm::dbgs() << "\n";);
       workload.insert(output);
       for (auto input : valueUsing[output]) {
