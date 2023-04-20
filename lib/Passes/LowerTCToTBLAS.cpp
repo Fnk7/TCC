@@ -21,7 +21,8 @@ using namespace mlir::tc;
 
 namespace {
 
-void convertContractOpToTBLASGenericOp(ContractOp ctOp) {
+void convertContractOpToTBLASGenericOp(ContractOp ctOp,
+                                       int64_t minContractSize) {
   MulOp mulOp;
   auto input = ctOp.getInput();
   if (!(mulOp = input.getDefiningOp<MulOp>()))
@@ -33,11 +34,13 @@ void convertContractOpToTBLASGenericOp(ContractOp ctOp) {
   auto [lbs, ubs] = utils::getSizesRanges(funcOp);
   auto axes = ctOp.getAxes();
   auto sizeIDs = getTensorSizeIDs(input);
-  auto contractSizes = 1;
-  for (auto axis : axes)
-    contractSizes *= ubs[sizeIDs[axis]];
-  if (contractSizes < 8)
-    return;
+  if (minContractSize >= 1) {
+    auto contractSizes = 1;
+    for (auto axis : axes)
+      contractSizes *= ubs[sizeIDs[axis]];
+    if (contractSizes < minContractSize)
+      return;
+  }
   auto rank = sizeIDs.size();
   auto lhs = inputs[0];
   auto rhs = inputs[1];
@@ -104,7 +107,13 @@ void convertContractOpToTBLASGenericOp(ContractOp ctOp) {
 
 struct ConvertTCToTBLASPass
     : public PassWrapper<ConvertTCToTBLASPass, OperationPass<func::FuncOp>> {
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ConvertTCToTBLASPass)
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ConvertTCToTBLASPass);
+
+  int64_t minContractSize;
+
+  ConvertTCToTBLASPass(int64_t minContractSize)
+      : minContractSize(minContractSize) {}
+
   void runOnOperation() override {
     SmallVector<tc::ContractOp> worklist;
     for (auto &op : getOperation().front()) {
@@ -113,14 +122,14 @@ struct ConvertTCToTBLASPass
       }
     }
     for (auto ctOp : worklist)
-      convertContractOpToTBLASGenericOp(ctOp);
+      convertContractOpToTBLASGenericOp(ctOp, minContractSize);
   }
 };
 
 } // namespace
 
 namespace mlir::tc {
-std::unique_ptr<Pass> createConvertTCToTBLASPass() {
-  return std::make_unique<ConvertTCToTBLASPass>();
+std::unique_ptr<Pass> createConvertTCToTBLASPass(int64_t minContractSize) {
+  return std::make_unique<ConvertTCToTBLASPass>(minContractSize);
 }
 } // namespace mlir::tc

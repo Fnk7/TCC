@@ -11,7 +11,7 @@ std::unique_ptr<Pass> createReturnToArgumentPass();
 std::unique_ptr<Pass> createLowerToLLVMPass();
 std::unique_ptr<Pass>
 createConvertTCToLinalgPass(bool eraseTensorEncoding = false);
-std::unique_ptr<Pass> createConvertTCToTBLASPass();
+std::unique_ptr<Pass> createConvertTCToTBLASPass(int64_t minContractSize = 8);
 std::unique_ptr<Pass> createAddBatchPass();
 std::unique_ptr<Pass> createSplitWorkloadPass();
 std::unique_ptr<Pass> createTCDCEPass();

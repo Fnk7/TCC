@@ -53,6 +53,10 @@ static cl::opt<bool> LowerLinalg("lower-linalg",
                                  cl::desc("Lower linalg dialect"),
                                  cl::init(false));
 
+static cl::opt<bool> SmallBLAS("allow-small-blas",
+                               cl::desc("Allow convert contract to small blas"),
+                               cl::init(false));
+
 namespace {
 enum Action {
   DumpAST,
@@ -184,14 +188,19 @@ int main(int argc, char **argv) {
 
   if (Emit == DumpMLIRBLAS) {
     addTCOptimizePipeline(PM);
-    mlir::OpPassManager &FuncPM2 = PM.nest<mlir::func::FuncOp>();
-    FuncPM2.addPass(mlir::tc::createConvertTCToTBLASPass());
+    auto minContractSize = 8;
+    if (SmallBLAS)
+      minContractSize = 2;
+    PM.addNestedPass<mlir::func::FuncOp>(
+        mlir::tc::createConvertTCToTBLASPass(minContractSize));
     PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
     PM.addNestedPass<mlir::func::FuncOp>(mlir::tc::createTCDCEPass());
-    FuncPM2.addPass(mlir::tc::createTBLASDegeneralizePass());
+    PM.addNestedPass<mlir::func::FuncOp>(
+        mlir::tc::createTBLASDegeneralizePass());
     PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
     PM.addNestedPass<mlir::func::FuncOp>(mlir::tc::createTCDCEPass());
-    FuncPM2.addPass(mlir::tc::createTBLASSpecialGemmPass());
+    PM.addNestedPass<mlir::func::FuncOp>(
+        mlir::tc::createTBLASSpecialGemmPass());
     PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
     PM.addNestedPass<mlir::func::FuncOp>(mlir::tc::createTCDCEPass());
     PM.addPass(mlir::tc::createSplitWorkloadPass());
