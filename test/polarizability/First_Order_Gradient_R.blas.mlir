@@ -1,9 +1,9 @@
 module {
-  func.func @first_order_gradient_r_workload_0(%arg0: index, %arg1: index, %arg2: tensor<?x?x3xf64, {size_id = array<i64: 1, 1, 2>}>) -> tensor<?x?x3xf64, {size_id = array<i64: 1, 1, 2>, symmetry = #tc.symm<0~1>}> attributes {num_input_sizes = 2 : i64} {
+  func.func @first_order_gradient_r_workload_0(%arg0: index, %arg1: index, %arg2: tensor<?x?x3xf64, {size_id = array<i64: 1, 1, 2>}>) -> tensor<?x?x3xf64, {size_id = array<i64: 1, 1, 2>, symmetry = #tc.symm<0~1>}> attributes {num_input_sizes = 2 : i64, workload = 2 : ui64} {
     %0 = tc.add(%arg2, %arg2) {axesmaps = [(0, 1, 2), (1, 0, 2)], signs = [+, +]} :(tensor<?x?x3xf64, {size_id = array<i64: 1, 1, 2>}>, tensor<?x?x3xf64, {size_id = array<i64: 1, 1, 2>}>) -> tensor<?x?x3xf64, {size_id = array<i64: 1, 1, 2>, symmetry = #tc.symm<0~1>}>
     tc.return %0 : tensor<?x?x3xf64, {size_id = array<i64: 1, 1, 2>, symmetry = #tc.symm<0~1>}>
   }
-  func.func @first_order_gradient_r_workload_1(%arg0: index, %arg1: index, %arg2: tensor<?x3x3xf64, {size_id = array<i64: 0, 2, 2>}>) -> tensor<?x3x3xf64, {size_id = array<i64: 0, 2, 2>}> attributes {num_input_sizes = 2 : i64} {
+  func.func @first_order_gradient_r_workload_1(%arg0: index, %arg1: index, %arg2: tensor<?x3x3xf64, {size_id = array<i64: 0, 2, 2>}>) -> tensor<?x3x3xf64, {size_id = array<i64: 0, 2, 2>}> attributes {num_input_sizes = 2 : i64, workload = 2 : ui64} {
     %0 = tc.permute(%arg2) {axesmap = [(0, 2, 1)]} : tensor<?x3x3xf64, {size_id = array<i64: 0, 2, 2>}> -> tensor<?x3x3xf64, {size_id = array<i64: 0, 2, 2>}>
     tc.return %0 : tensor<?x3x3xf64, {size_id = array<i64: 0, 2, 2>}>
   }

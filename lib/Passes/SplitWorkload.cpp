@@ -52,6 +52,7 @@ auto createWorkloadFuncOp(func::FuncOp funcOp, int workloadID,
   auto funcType = builder.getFunctionType(inputTypes, resultTypes);
   auto workloadFuncOp =
       builder.create<func::FuncOp>(result.getLoc(), funcName, funcType);
+  utils::setWorkloadType(workloadFuncOp, 2);
   auto attrNames = utils::getTCFuncAttrNames();
   utils::copyFuncAttributes(funcOp, workloadFuncOp, attrNames);
   auto block = workloadFuncOp.addEntryBlock();

@@ -31,13 +31,19 @@ public:
       if (getWorkloadType(funcOp) == 2)
         emitWorkloadFunc(funcOp);
     }
-    // TODO:
+    for (auto funcOp : funcOps) {
+      if (getWorkloadType(funcOp) == 1)
+        emitEntryFunc(funcOp);
+    }
   }
 
 private:
   void emitWorkloadFunc(func::FuncOp funcOp) {
-    // TODO
-    llvm::errs() << funcOp << "\n";
+    out << "// TODO: Emit " << funcOp.getName() << "\n";
+  }
+
+  void emitEntryFunc(func::FuncOp funcOp) {
+    out << "// TODO: Emit entry " << funcOp.getName() << "\n";
   }
 };
 } // namespace

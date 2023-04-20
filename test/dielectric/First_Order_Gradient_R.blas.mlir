@@ -1,5 +1,5 @@
 module {
-  func.func @first_order_gradient_r_workload_0(%arg0: index, %arg1: index, %arg2: tensor<?x?xf64, {size_id = array<i64: 1, 1>}>) -> tensor<?x?xf64, {size_id = array<i64: 1, 1>, symmetry = #tc.symm<0~1>}> attributes {num_input_sizes = 2 : i64} {
+  func.func @first_order_gradient_r_workload_0(%arg0: index, %arg1: index, %arg2: tensor<?x?xf64, {size_id = array<i64: 1, 1>}>) -> tensor<?x?xf64, {size_id = array<i64: 1, 1>, symmetry = #tc.symm<0~1>}> attributes {num_input_sizes = 2 : i64, workload = 2 : ui64} {
     %0 = tc.add(%arg2, %arg2) {axesmaps = [(0, 1), (1, 0)], signs = [+, +]} :(tensor<?x?xf64, {size_id = array<i64: 1, 1>}>, tensor<?x?xf64, {size_id = array<i64: 1, 1>}>) -> tensor<?x?xf64, {size_id = array<i64: 1, 1>, symmetry = #tc.symm<0~1>}>
     tc.return %0 : tensor<?x?xf64, {size_id = array<i64: 1, 1>, symmetry = #tc.symm<0~1>}>
   }

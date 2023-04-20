@@ -222,6 +222,14 @@ int main(int argc, char **argv) {
       llvm::errs() << err << "\n";
       return 1;
     }
+    auto clBLASFile = replaceSuffix(inputFileName, ".blas.cl");
+    if (auto err = writeToOutput(clBLASFile, [&](raw_ostream &out) {
+          mlir::tc::codegen::emitTBLASToOpenCL(M.get(), out);
+          return Error::success();
+        })) {
+      llvm::errs() << err << "\n";
+      return 1;
+    }
     return 0;
   }
 

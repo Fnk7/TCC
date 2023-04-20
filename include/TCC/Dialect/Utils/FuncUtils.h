@@ -3,7 +3,12 @@
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 
+#include "llvm/ADT/APSInt.h"
+
 namespace mlir::tc::utils {
+inline IntegerAttr getIntegerAttr(MLIRContext *context, int64_t value) {
+  return IntegerAttr::get(context, APSInt(APInt(64, value), true));
+}
 inline int getNumInputSizes(func::FuncOp funcOp) {
   auto attrDict = funcOp->getAttrDictionary();
   auto attr = attrDict.get("num_input_sizes").cast<IntegerAttr>();
@@ -18,6 +23,10 @@ inline int getWorkloadType(func::FuncOp funcOp) {
     return 0;
   auto attr = attrDict.get("workload").cast<IntegerAttr>();
   return attr.getValue().getSExtValue();
+}
+inline void setWorkloadType(func::FuncOp funcOp, int64_t workloadType) {
+  auto context = funcOp.getContext();
+  funcOp->setAttr("workload", getIntegerAttr(context, workloadType));
 }
 inline StringRef getFuncOpArgName(func::FuncOp funcOp, int64_t argIdx) {
   auto nameAttr = funcOp.getArgAttr(argIdx, "func.name");
