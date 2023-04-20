@@ -194,6 +194,11 @@ int main(int argc, char **argv) {
     FuncPM2.addPass(mlir::tc::createTBLASSpecialGemmPass());
     FuncPM2.addPass(mlir::createCSEPass());
     FuncPM2.addPass(mlir::createCSEPass());
+    PM.addPass(mlir::tc::createSplitWorkloadPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
+    PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
     // FuncPM2.addPass(mlir::createCSEPass());
     // PM.addPass(mlir::tc::createConvertTCToLinalgPass());
     // PM.addPass(mlir::createCSEPass());

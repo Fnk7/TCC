@@ -42,6 +42,18 @@ inline void setSizesRanges(func::FuncOp funcOp, Attribute lbsAttr,
   funcOp->setAttr("sizes_lower_bound", lbsAttr);
   funcOp->setAttr("sizes_upper_bound", ubsAttr);
 }
+inline void copyFuncAttributes(func::FuncOp from, func::FuncOp to,
+                               ArrayRef<StringRef> attrNames) {
+  auto attrDict = from->getAttrDictionary();
+  for (auto attrName : attrNames) {
+    auto attr = attrDict.get(attrName);
+    to->setAttr(attrName, attr);
+  }
+}
+inline auto getTCFuncAttrNames() {
+  SmallVector<StringRef> attrNames = {"num_input_sizes"};
+  return attrNames;
+}
 }; // namespace mlir::tc::utils
 
 #endif
