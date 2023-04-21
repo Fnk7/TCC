@@ -9,6 +9,7 @@
 #include "TCC/Dialect/TC/Utils/AxesMap.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 #include "TCC/Dialect/Utils/FuncUtils.h"
+#include "TCC/Utils/SetRelation.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -27,6 +28,7 @@ namespace {
 class EmitOpenCLGroupKernel : public codegen::CodeGenBase {
 private:
   ModuleOp moduleOp;
+  ArrayRef<int64_t> lbs, ubs;
 
 public:
   EmitOpenCLGroupKernel(ModuleOp moduleOp, llvm::raw_ostream &out)
@@ -34,14 +36,19 @@ public:
 
   void emit() {
     auto funcOps = moduleOp.getOps<func::FuncOp>();
+    func::FuncOp entryFuncOp;
+    for (auto funcOp : funcOps) {
+      if (getWorkloadType(funcOp) == 1)
+        entryFuncOp = funcOp;
+    }
+    auto [lbs, ubs] = getSizesRanges(entryFuncOp);
+    this->lbs = lbs;
+    this->ubs = ubs;
     for (auto funcOp : funcOps) {
       if (getWorkloadType(funcOp) == 2)
         emitWorkloadFunc(funcOp);
     }
-    for (auto funcOp : funcOps) {
-      if (getWorkloadType(funcOp) == 1)
-        emitEntryFunc(funcOp);
-    }
+    emitEntryFunc(entryFuncOp);
   }
 
 private:
@@ -61,11 +68,17 @@ private:
     indent += 1;
     bool newLine = false;
     emitArgumentTypes(funcOp.front(), newLine);
+    auto numInputSizes = getNumInputSizes(funcOp);
+    for (auto sizeID : llvm::seq<int64_t>(0, numInputSizes)) {
+      if (!sizeIDValueMap.count(sizeID))
+        sizeIDValueMap[sizeID] = std::to_string(ubs[sizeID]);
+    }
     emitResultTypes(funcOp.front(), newLine);
     out << ")\n";
   }
 
   void emitArgumentTypes(Block &block, bool &newLine) {
+    sizeIDValueMap.clear();
     auto inputs = block.getArguments();
     for (auto [idx, input] : llvm::enumerate(inputs)) {
       if (newLine) {
@@ -199,6 +212,7 @@ private:
       if (isOuter)
         outerLoopAxes.emplace_back(loopAxis);
     }
+    llvm::sort(outerLoopAxes);
     LLVM_DEBUG(llvm::dbgs()
                    << "Number of outer loops: " << outerLoopAxes.size() << "\n";
                if (outerLoopAxes.size()) {
@@ -206,9 +220,123 @@ private:
                  llvm::interleaveComma(outerLoopAxes, llvm::dbgs());
                  llvm::dbgs() << "\n";
                });
-    LLVM_DEBUG(llvm::dbgs() << "\n";);
     if (outerLoopAxes.empty())
       llvm_unreachable("TODO: split workload into more small piece.");
+    using OperationsTy = SetVector<Operation *>;
+    SmallVector<OperationsTy> loopAxisOperations(loopSizeIDs.size());
+    for (auto &[op, _loopAxes] : operationLoopAxes) {
+      auto &loopAxes = _loopAxes[0];
+      for (auto loopAxis : loopAxes)
+        loopAxisOperations[loopAxis].insert(op);
+    }
+    SmallVector<SmallVector<int64_t>> loopOuterLoops(loopSizeIDs.size());
+    SmallVector<SmallVector<int64_t>> loopInnerLoops(loopSizeIDs.size());
+    SmallVector<SmallVector<int64_t>> loopExchangableLoops(loopSizeIDs.size());
+    for (auto [loopAxis1, operationSet1] :
+         llvm::enumerate(loopAxisOperations)) {
+      for (auto loopAxis2 : llvm::seq<AxisTy>(loopAxis1, loopSizeIDs.size())) {
+        auto &operationSet2 = loopAxisOperations[loopAxis2];
+        if (isIntersect(operationSet1, operationSet2)) {
+          auto subset1 = isSubsetOf(operationSet1, operationSet2);
+          auto subset2 = isSubsetOf(operationSet2, operationSet1);
+          if (subset1 && subset2) {
+            loopExchangableLoops[loopAxis1].emplace_back(loopAxis2);
+            loopExchangableLoops[loopAxis2].emplace_back(loopAxis1);
+          } else if (subset1) {
+            loopOuterLoops[loopAxis1].emplace_back(loopAxis2);
+            loopInnerLoops[loopAxis2].emplace_back(loopAxis1);
+          } else if (subset2) {
+            loopOuterLoops[loopAxis2].emplace_back(loopAxis1);
+            loopInnerLoops[loopAxis1].emplace_back(loopAxis2);
+          } else if (loopAxis1 < rank && (size_t)loopAxis2 < rank) {
+            LLVM_DEBUG(
+                llvm::dbgs() << "loopAxis1 = " << loopAxis1
+                             << ", loopAxis2 = " << loopAxis2 << "\n";
+                llvm::dbgs() << "Set commons:\n"; for (auto *op
+                                                       : operationSet1) {
+                  if (operationSet2.count(op)) {
+                    op->dump();
+                    llvm::dbgs() << "    loop axis: ";
+                    llvm::interleaveComma(operationLoopAxes[op][0],
+                                          llvm::dbgs());
+                    llvm::dbgs() << "\n";
+                  }
+                } llvm::dbgs() << "Set 1 extra:\n";
+                for (auto *op
+                     : operationSet1) {
+                  if (!operationSet2.count(op)) {
+                    op->dump();
+                    llvm::dbgs() << "    loop axis: ";
+                    llvm::interleaveComma(operationLoopAxes[op][0],
+                                          llvm::dbgs());
+                    llvm::dbgs() << "\n";
+                  }
+                } llvm::dbgs()
+                << "Set 2 extra:\n";
+                for (auto *op
+                     : operationSet2) {
+                  if (!operationSet1.count(op)) {
+                    op->dump();
+                    llvm::dbgs() << "    loop axis: ";
+                    llvm::interleaveComma(operationLoopAxes[op][0],
+                                          llvm::dbgs());
+                    llvm::dbgs() << "\n";
+                  }
+                });
+            llvm_unreachable("TODO: split workload into more small piece.");
+          }
+        }
+      }
+    }
+    LLVM_DEBUG(for (auto [loopAxis, outerLoops]
+                    : llvm::enumerate(loopOuterLoops)) {
+      llvm::dbgs() << "Loop axis: " << loopAxis << ", outer loops are [";
+      llvm::interleaveComma(outerLoops, llvm::dbgs());
+      llvm::dbgs() << "]\n";
+    });
+    AxisTy loopAxis = outerLoopAxes[0];
+    std::string name = "i" + std::to_string(loopAxis);
+    out.indent(indent) << "int i" << loopAxis << " = get_local_id(0);\n";
+    auto sizeID = loopSizeIDs[loopAxis];
+    out.indent(indent) << "if (" << name << " >= " << sizeIDValueMap[sizeID]
+                       << ") return;\n";
+    for (auto innerLoop : loopExchangableLoops[loopAxis]) {
+      if (innerLoop == loopAxis)
+        continue;
+      auto sizeID = loopSizeIDs[innerLoop];
+      std::string name = "i" + std::to_string(loopAxis);
+      out.indent(indent) << "for (int " << name << " = 0; ";
+      out << name << " < " << sizeIDValueMap[sizeID] << "; ";
+      out << name << "++) {\n";
+      indent += 2;
+    }
+    // TODO: init
+    SmallVector<AxisTy> nestLoops;
+    SetVector<Operation *> worklist;
+    while (!worklist.empty()) {
+      auto &subOperations = loopAxisOperations[loopAxis];
+      Operation *toEmit = nullptr;
+      for (auto op : worklist) {
+        bool canEmit = true;
+        for (auto input : op->getOperands()) {
+          if (!valueNameMap.count(input)) {
+            canEmit = false;
+            break;
+          }
+        }
+        if (!canEmit)
+          continue;
+        auto opLoops = operationLoopAxes[op][0];
+
+      }
+    }
+    for (auto innerLoop : loopExchangableLoops[loopAxis]) {
+      if (innerLoop == loopAxis)
+        continue;
+      indent -= 2;
+      out.indent(indent) << "}\n";
+    }
+    LLVM_DEBUG(llvm::dbgs() << "\n";);
     out << "}\n";
   }
 
