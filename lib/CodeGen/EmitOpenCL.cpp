@@ -304,32 +304,85 @@ private:
       if (innerLoop == loopAxis)
         continue;
       auto sizeID = loopSizeIDs[innerLoop];
-      std::string name = "i" + std::to_string(loopAxis);
+      std::string name = "i" + std::to_string(innerLoop);
       out.indent(indent) << "for (int " << name << " = 0; ";
       out << name << " < " << sizeIDValueMap[sizeID] << "; ";
       out << name << "++) {\n";
       indent += 2;
     }
-    // TODO: init
-    SmallVector<AxisTy> nestLoops;
-    SetVector<Operation *> worklist;
-    while (!worklist.empty()) {
-      auto &subOperations = loopAxisOperations[loopAxis];
-      Operation *toEmit = nullptr;
-      for (auto op : worklist) {
-        bool canEmit = true;
-        for (auto input : op->getOperands()) {
-          if (!valueNameMap.count(input)) {
-            canEmit = false;
-            break;
-          }
+    int varId = 0;
+    for (auto &op : block) {
+      if (auto constOp = llvm::dyn_cast<ConstantOp>(&op)) {
+        SmallVector<char> value;
+        constOp.getValue().toString(value);
+        valueNameMap[constOp.getResult()] =
+            std::string(value.begin(), value.end());
+        continue;
+      }
+      if (auto returnOp = llvm::dyn_cast<ReturnOp>(&op))
+        continue;
+      auto emitNewVar = [&]() {
+        std::string name = "var" + std::to_string(varId++);
+        out.indent(indent) << name << "(";
+        llvm::interleaveComma(operationLoopAxes[&op][0], out);
+        out << ") = ";
+        valueNameMap[op.getResult(0)] = name;
+      };
+      if (auto addOp = llvm::dyn_cast<AddOp>(&op)) {
+        emitNewVar();
+        auto inputs = addOp.getInputs();
+        auto axesMaps = addOp.getAxesMaps();
+        for (auto [idx, input] : llvm::enumerate(inputs)) {
+          if (idx != 0)
+            out << " + ";
+          out << valueNameMap[input];
         }
-        if (!canEmit)
-          continue;
-        auto opLoops = operationLoopAxes[op][0];
-
+        out << ";\n";
+      } else if (auto mulOp = llvm::dyn_cast<MulOp>(&op)) {
+        emitNewVar();
+        auto inputs = mulOp.getInputs();
+        auto axesMaps = mulOp.getAxesMaps();
+        for (auto [idx, input] : llvm::enumerate(inputs)) {
+          if (idx != 0)
+            out << " * ";
+          out << valueNameMap[input];
+        }
+        out << ";\n";
+      } else if (auto ctOp = llvm::dyn_cast<ContractOp>(&op)) {
+        std::string name = "var" + std::to_string(varId++);
+        out.indent(indent) << name << "(";
+        
+        out << "+= ";
+        auto input = ctOp.getInput();
+        out << valueNameMap[input];
+        out << ";\n";
+      } else if (auto permuteOp = dyn_cast<PermuteOp>(&op)) {
+        emitNewVar();
+        auto input = permuteOp.getInput();
+        out << valueNameMap[input];
+        out << ";\n";
       }
     }
+    // TODO: init
+    // SmallVector<AxisTy> nestLoops;
+    // SetVector<Operation *> worklist;
+    // while (!worklist.empty()) {
+    //   auto &subOperations = loopAxisOperations[loopAxis];
+    //   // Operation *toEmit = nullptr;
+    //   // for (auto op : worklist) {
+    //   //   bool canEmit = true;
+    //   //   for (auto input : op->getOperands()) {
+    //   //     if (!valueNameMap.count(input)) {
+    //   //       canEmit = false;
+    //   //       break;
+    //   //     }
+    //   //   }
+    //   //   if (!canEmit)
+    //   //     continue;
+    //   //   auto opLoops = operationLoopAxes[op][0];
+
+    //   }
+    // }
     for (auto innerLoop : loopExchangableLoops[loopAxis]) {
       if (innerLoop == loopAxis)
         continue;
@@ -349,6 +402,9 @@ private:
 
   void emitEntryFunc(func::FuncOp funcOp) {
     out << "// TODO: Emit entry " << funcOp.getName() << "\n";
+    emitFunctionType(funcOp);
+    out << "{\n";
+    out << "}\n";
   }
 };
 } // namespace
