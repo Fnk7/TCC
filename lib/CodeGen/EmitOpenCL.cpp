@@ -4,6 +4,9 @@
 
 #include "TCC/Dialect/TC/IR/TCOps.h"
 
+#include "TCC/Utils/UnionFind.h"
+
+#include "TCC/Dialect/TC/Utils/AxesMap.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 #include "TCC/Dialect/Utils/FuncUtils.h"
 
@@ -11,6 +14,10 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+
+#include "llvm/Support/Debug.h"
+
+#define DEBUG_TYPE "tc-gen-opencl"
 
 using namespace mlir;
 using namespace mlir::tc;
@@ -96,6 +103,88 @@ private:
   void emitWorkloadFunctionBody(func::FuncOp funcOp) {
     out << "{\n";
     indent = 2;
+    auto &block = funcOp.front();
+    auto returnOp = block.getTerminator();
+    assert(returnOp->getOperands().size() == 1);
+    auto result = returnOp->getOperand(0);
+    DenseMap<Operation *, size_t> operationUsesSize;
+    for (auto &op : block) {
+      if (op.getResults().size() == 0)
+        continue;
+      operationUsesSize[&op] = 0;
+      for (auto input : op.getOperands()) {
+        if (auto op = input.getDefiningOp())
+          operationUsesSize[op]++;
+      }
+    }
+    DenseMap<Operation *, SmallVector<AxesTy>> operationLoopAxes;
+    SmallVector<Operation *> worklist;
+    auto addOperationToWorklist = [&](Operation *op) {
+      if (operationLoopAxes[op].size() == operationUsesSize[op] &&
+          llvm::all_equal(operationLoopAxes[op])) {
+        operationLoopAxes[op].truncate(1);
+        worklist.emplace_back(op);
+      }
+    };
+    auto op = result.getDefiningOp();
+    assert(op);
+    worklist.emplace_back(op);
+    auto loopSizeIDs = getTensorSizeIDs(result);
+    operationLoopAxes[op].emplace_back(
+        llvm::to_vector(llvm::seq<AxisTy>(0, loopSizeIDs.size())));
+    while (!worklist.empty()) {
+      auto op = worklist.pop_back_val();
+      auto loopAxes = AxesRefTy(operationLoopAxes[op][0]);
+      auto addInputWithAxesMap = [&](Value input, AxesMapRefTy axesMap) {
+        if (auto inputOp = input.getDefiningOp()) {
+          auto inputLoopAxes = applyAxesMap(loopAxes, axesMap);
+          operationLoopAxes[inputOp].emplace_back(inputLoopAxes);
+          addOperationToWorklist(inputOp);
+        }
+      };
+      if (auto addOp = dyn_cast<AddOp>(op)) {
+        auto inputs = addOp.getInputs();
+        auto axesMaps = addOp.getAxesMaps();
+        for (auto [input, axesMap] : llvm::zip(inputs, axesMaps))
+          addInputWithAxesMap(input, axesMap);
+      } else if (auto mulOp = dyn_cast<MulOp>(op)) {
+        auto inputs = mulOp.getInputs();
+        auto axesMaps = mulOp.getAxesMaps();
+        for (auto [input, axesMap] : llvm::zip(inputs, axesMaps))
+          addInputWithAxesMap(input, axesMap);
+      } else if (auto ctOp = dyn_cast<ContractOp>(op)) {
+        auto input = ctOp.getInput();
+        if (auto inputOp = input.getDefiningOp()) {
+          auto axes = ctOp.getAxes();
+          auto sizeIDs = getTensorSizeIDs(input);
+          auto inputLoopAxes = getContractOpInput2OutputAxisMap(ctOp);
+          applyAxesMapWithEmpty(loopAxes, inputLoopAxes);
+          for (auto axis : axes) {
+            inputLoopAxes[axis] = loopSizeIDs.size();
+            loopSizeIDs.emplace_back(sizeIDs[axis]);
+          }
+          operationLoopAxes[inputOp].emplace_back(inputLoopAxes);
+          addOperationToWorklist(inputOp);
+        }
+      } else if (auto permuteOp = dyn_cast<PermuteOp>(op)) {
+        auto input = permuteOp.getInput();
+        auto axesMaps = permuteOp.getAxesMap();
+        addInputWithAxesMap(input, axesMaps[0]);
+      }
+    }
+    LLVM_DEBUG(llvm::dbgs() << "operationLoopAxes size is: "
+                            << operationLoopAxes.size() << "\n";
+               llvm::dbgs() << "operationUsesSize size is: "
+                            << operationUsesSize.size() << "\n";);
+    LLVM_DEBUG(llvm::dbgs()
+                   << "Number of loops: " << loopSizeIDs.size() << "\n";
+               llvm::dbgs() << "    loop ranges is [";
+               llvm::interleaveComma(loopSizeIDs, llvm::dbgs());
+               llvm::dbgs() << "]\n";);
+    LLVM_DEBUG(llvm::dbgs() << "\n";);
+    if (operationLoopAxes.size() != operationUsesSize.size())
+      llvm_unreachable("TODO: split workload into more small piece.");
+
     out << "}\n";
   }
 

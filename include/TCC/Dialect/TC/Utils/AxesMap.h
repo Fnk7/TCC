@@ -6,12 +6,18 @@
 
 namespace mlir::tc::utils {
 // Apply axesMap1 on axesMap2, axesMap2 changed
+inline auto applyAxesMap(AxesMapRefTy axesMap1, AxesMapRefTy axesMap2) {
+  AxesMapTy axesMap;
+  for (auto axis2 : axesMap2)
+    axesMap.emplace_back(axesMap1[axis2]);
+  return axesMap;
+}
 inline void applyAxesMap(AxesMapRefTy axesMap1, AxesMapTy &axesMap2) {
   for (auto &axis : axesMap2) {
     axis = axesMap1[axis];
   }
 }
-inline void applyAxesMapWithEmpty(AxesMapTy &axesMap1, AxesMapTy &axesMap2) {
+inline void applyAxesMapWithEmpty(AxesMapRefTy axesMap1, AxesMapTy &axesMap2) {
   for (auto &axis : axesMap2) {
     if (axis >= 0) {
       axis = axesMap1[axis];
