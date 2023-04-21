@@ -82,4 +82,43 @@ def BatchSyr2kOp : TBLAS_Op<"batch.syr2k", [NoMemoryEffect]> {
   let results = (outs F64Tensor : $result);
 }
 
+def BatchSyrkOp : TBLAS_Op<"batch.syrk", [NoMemoryEffect]> {
+  let summary = "Batch matrix and self transpose multiplication.";
+  let description = "None";
+
+  let arguments = (ins F64Tensor : $input,
+                       I64Attr : $num_batch,
+                       BoolAttr : $trans,
+                       I64Attr : $num_N,
+                       I64Attr : $num_K);
+  let results = (outs F64Tensor : $result);
+}
+
+def BatchSyrkxOp : TBLAS_Op<"batch.syrkx", [NoMemoryEffect]> {
+  let summary = "Batch matrix multiplication, result is symmetry.";
+  let description = "None";
+
+  let arguments = (ins F64Tensor : $lhs,
+                       F64Tensor : $rhs,
+                       I64Attr : $num_batch,
+                       BoolAttr : $lhs_trans,
+                       BoolAttr : $rhs_trans,
+                       I64Attr : $num_N,
+                       I64Attr : $num_K);
+  let results = (outs F64Tensor : $result);
+}
+
+def BatchTrmmOp : TBLAS_Op<"batch.trmm", [NoMemoryEffect]> {
+  let summary = "Batch triangular matrix and matrix multiplication.";
+  let description = "None";
+
+  let arguments = (ins F64Tensor : $input,
+                       I64Attr : $num_batch,
+                       BoolAttr : $lhs_trans,
+                       BoolAttr : $rhs_trans,
+                       I64Attr : $num_N,
+                       I64Attr : $num_K);
+  let results = (outs F64Tensor : $result);
+}
+
 #endif
