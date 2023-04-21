@@ -130,6 +130,7 @@ private:
     assert(op);
     worklist.emplace_back(op);
     auto loopSizeIDs = getTensorSizeIDs(result);
+    auto rank = loopSizeIDs.size();
     operationLoopAxes[op].emplace_back(
         llvm::to_vector(llvm::seq<AxisTy>(0, loopSizeIDs.size())));
     while (!worklist.empty()) {
@@ -181,10 +182,33 @@ private:
                llvm::dbgs() << "    loop ranges is [";
                llvm::interleaveComma(loopSizeIDs, llvm::dbgs());
                llvm::dbgs() << "]\n";);
-    LLVM_DEBUG(llvm::dbgs() << "\n";);
     if (operationLoopAxes.size() != operationUsesSize.size())
       llvm_unreachable("TODO: split workload into more small piece.");
-
+    // Outer loop
+    AxesTy outerLoopAxes;
+    for (auto loopAxis : llvm::seq<AxisTy>(0, rank)) {
+      bool isOuter = true;
+      for (auto &[op, _loopAxes] : operationLoopAxes) {
+        auto &loopAxes = _loopAxes[0];
+        if (!loopAxes.empty() &&
+            llvm::find(loopAxes, loopAxis) == loopAxes.end()) {
+          isOuter = false;
+          break;
+        }
+      }
+      if (isOuter)
+        outerLoopAxes.emplace_back(loopAxis);
+    }
+    LLVM_DEBUG(llvm::dbgs()
+                   << "Number of outer loops: " << outerLoopAxes.size() << "\n";
+               if (outerLoopAxes.size()) {
+                 llvm::dbgs() << "    outer loops are ";
+                 llvm::interleaveComma(outerLoopAxes, llvm::dbgs());
+                 llvm::dbgs() << "\n";
+               });
+    LLVM_DEBUG(llvm::dbgs() << "\n";);
+    if (outerLoopAxes.empty())
+      llvm_unreachable("TODO: split workload into more small piece.");
     out << "}\n";
   }
 
