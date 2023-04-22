@@ -23,18 +23,14 @@ void first_order_gradient_r(int arg0,
   double var1[arg0 * arg1];
   {
     int B = 1;
-    char transA = 'N';
-    char transB = 'T';
-    int M = 1 * arg0;
-    int N = 1 * arg1;
-    int K = 1 * arg1;
+    char transA = 'N'; char transB = 'T';
+    int M = 1 * arg0; int N = 1 * arg1; int K = 1 * arg1;
     batch_gemm(B, transA, transB, M, N, K, arg4, var0, var1);
   }
   {
     int B = 1 * arg0;
     char trans = 'N';
-    int M = 1 * 3;
-    int N = 1 * arg1;
+    int M = 1 * 3; int N = 1 * arg1;
     batch_gemv(B, trans, M, N, arg2, var1, ret0);
   }
 }
