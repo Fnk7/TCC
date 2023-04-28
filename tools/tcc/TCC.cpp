@@ -163,6 +163,14 @@ int main(int argc, char **argv) {
     addLinalgFusePass(PM);
     mlir::failed(PM.run(*M));
     SmallString<32> outputFileName(inputFileName);
+    auto mlirBLASFile = replaceSuffix(inputFileName, ".linalg.mlir");
+    if (auto err = writeToOutput(mlirBLASFile, [&](raw_ostream &out) {
+          M->print(out);
+          return Error::success();
+        })) {
+      llvm::errs() << err << "\n";
+      return 1;
+    }
     sys::path::replace_extension(outputFileName, ".scop.c");
     std::error_code EC;
     raw_fd_ostream dest(outputFileName, EC, sys::fs::OF_Text);

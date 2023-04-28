@@ -1,7 +1,9 @@
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/Transforms/Passes.h"
 #include "TCC/Dialect/TC/Utils/AxesMap.h"
+#include "TCC/Dialect/TC/Utils/Tensor.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
+#include "TCC/Dialect/Utils/FuncUtils.h"
 
 #include "TCC/Dialect/TC/Transforms/ContractOrder.h"
 
@@ -24,28 +26,70 @@ using namespace mlir::tc::utils;
 
 #define DEBUG_TYPE "tc-opt"
 
+namespace {
+double totalMuls = 0;
+double totalAdds = 0;
 double getNaiveCost(func::FuncOp funcOp) {
   double cost = 0;
   auto funcAttr = funcOp->getAttrDictionary();
+  auto [lbs, ubs] = getSizesRanges(funcOp);
+  SmallVector<int64_t> sizes;
+  for (auto size : lbs) {
+    if (size == 180)
+      sizes.emplace_back(192);
+    else if (size == 200)
+      sizes.emplace_back(256);
+    else {
+      assert(size == 3);
+      sizes.emplace_back(3);
+    }
+  }
   auto numInputSizesAttr = funcAttr.get("num_input_sizes").cast<IntegerAttr>();
   auto numInputSizes = numInputSizesAttr.getValue().getSExtValue();
+  totalMuls = 0;
+  totalAdds = 0;
   for (auto &op : funcOp.front()) {
     if (auto mulOp = dyn_cast_or_null<MulOp>(&op)) {
-      auto [shape, sizeIDs] = getTensorSizeInfos(mulOp.getResult());
+      auto result = mulOp.getResult();
+      auto inputs = mulOp.getInputs();
+      auto sizeIDs = getTensorSizeIDs(result);
       double mulCost = 1;
-      for (auto [size, sizeID] : llvm::zip(shape, sizeIDs)) {
-        if (sizeID < numInputSizes) {
-          mulCost *= 256;
-        } else {
-          assert(size >= 1);
-          mulCost *= size;
-        }
+      for (auto sizeID : sizeIDs) {
+        mulCost *= sizes[sizeID];
       }
+      mulCost *= (inputs.size() - 1);
+      if (getTensorSymmetry(result).size())
+        mulCost /= 2;
       cost += mulCost;
+      totalMuls += mulCost;
+    } else if (auto addOp = dyn_cast_or_null<AddOp>(&op)) {
+      auto result = addOp.getResult();
+      auto inputs = addOp.getInputs();
+      auto sizeIDs = getTensorSizeIDs(addOp.getResult());
+      double addCost = 1;
+      for (auto sizeID : sizeIDs) {
+        addCost *= sizes[sizeID];
+      }
+      if (getTensorSymmetry(result).size())
+        addCost /= 2;
+      addCost *= (inputs.size() - 1);
+      totalAdds += addCost;
+    } else if (auto ctOp = dyn_cast_or_null<ContractOp>(&op)) {
+      auto result = ctOp.getResult();
+      auto input = ctOp.getInput();
+      auto sizeIDs = getTensorSizeIDs(input);
+      double addCost = 1;
+      for (auto sizeID : sizeIDs) {
+        addCost *= sizes[sizeID];
+      }
+      if (getTensorSymmetry(result).size())
+        addCost /= 2;
+      totalAdds += addCost;
     }
   }
   return cost;
 }
+} // namespace
 
 namespace {
 void splitContractOp(ContractOp ctOp, ContractOrder &axesOrder) {
@@ -106,6 +150,8 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
     LLVM_DEBUG(llvm::errs() << "Total number of ContractOp axes orders: ";
                llvm::errs() << totalOrders << "\n";);
     double minCost = 0;
+    double minAdd = 0;
+    double minMul = 0;
     func::FuncOp resultFunc;
     for (auto globalOrderID : llvm::seq<int64_t>(0, totalOrders)) {
       OpBuilder builder(funcOp);
@@ -177,16 +223,23 @@ struct TCOptimizePass : public tc::impl::TCOptimizeBase<TCOptimizePass> {
       if (!resultFunc) {
         resultFunc = newFuncOp;
         minCost = newCost;
+        minAdd = totalAdds;
+        minMul = totalMuls;
       } else if (newCost < minCost) {
         resultFunc.erase();
         resultFunc = newFuncOp;
         minCost = newCost;
+        minAdd = totalAdds;
+        minMul = totalMuls;
       } else {
         newFuncOp.erase();
       }
     }
     resultFunc.setName(funcOp.getName());
     funcOp.erase();
+    llvm::errs() << "Min cost is " << minCost << "\n";
+    llvm::outs() << "Total muls is " << minMul << "\n";
+    llvm::errs() << "Total adds is " << minAdd << "\n";
   }
 };
 

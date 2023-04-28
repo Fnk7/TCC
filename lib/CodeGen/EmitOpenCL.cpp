@@ -294,6 +294,9 @@ private:
       llvm::interleaveComma(outerLoops, llvm::dbgs());
       llvm::dbgs() << "]\n";
     });
+    for (auto [idx, sizeID] : llvm::enumerate(loopSizeIDs)) {
+      out.indent(indent) << "// i" << idx << " < " << sizeIDValueMap[sizeID] << "\n";
+    }
     AxisTy loopAxis = outerLoopAxes[0];
     std::string name = "i" + std::to_string(loopAxis);
     out.indent(indent) << "int i" << loopAxis << " = get_local_id(0);\n";
@@ -324,7 +327,8 @@ private:
       auto emitNewVar = [&]() {
         std::string name = "var" + std::to_string(varId++);
         out.indent(indent) << name << "(";
-        llvm::interleaveComma(operationLoopAxes[&op][0], out);
+        llvm::interleaveComma(operationLoopAxes[&op][0], out,
+                              [&](AxisTy axis) { out << "i" << axis; });
         out << ") = ";
         valueNameMap[op.getResult(0)] = name;
       };
@@ -336,6 +340,12 @@ private:
           if (idx != 0)
             out << " + ";
           out << valueNameMap[input];
+          out << "(";
+          auto axesMap = axesMaps[idx];
+          applyAxesMap(operationLoopAxes[&op][0], axesMap);
+          llvm::interleaveComma(axesMap, out,
+                                [&](AxisTy axis) { out << "i" << axis; });
+          out << ")";
         }
         out << ";\n";
       } else if (auto mulOp = llvm::dyn_cast<MulOp>(&op)) {
@@ -346,20 +356,47 @@ private:
           if (idx != 0)
             out << " * ";
           out << valueNameMap[input];
+          out << "(";
+          auto axesMap = axesMaps[idx];
+          applyAxesMap(operationLoopAxes[&op][0], axesMap);
+          llvm::interleaveComma(axesMap, out,
+                                [&](AxisTy axis) { out << "i" << axis; });
+          out << ")";
         }
         out << ";\n";
       } else if (auto ctOp = llvm::dyn_cast<ContractOp>(&op)) {
+        ctOp.dump();
         std::string name = "var" + std::to_string(varId++);
         out.indent(indent) << name << "(";
-        
+        valueNameMap[op.getResult(0)] = name;
+        auto ctOpMap = getContractOpInput2OutputAxisMap(ctOp);
+        AxesTy resultAxes;
+        for (auto axis : ctOpMap) {
+          if (axis >= 0)
+            resultAxes.emplace_back(operationLoopAxes[&op][0][axis]);
+        }
+        llvm::errs() << resultAxes.size() << "\n";
+        llvm::interleaveComma(resultAxes, out,
+                              [&](AxisTy axis) { out << "i" << axis; });        out << ") ";
         out << "+= ";
         auto input = ctOp.getInput();
         out << valueNameMap[input];
+        out << "(";
+        llvm::errs() << operationLoopAxes[&op][0].size() << "\n";
+        llvm::interleaveComma(operationLoopAxes[&op][0], out,
+                              [&](AxisTy axis) { out << "i" << axis; });
+        out << ")";
         out << ";\n";
       } else if (auto permuteOp = dyn_cast<PermuteOp>(&op)) {
         emitNewVar();
         auto input = permuteOp.getInput();
         out << valueNameMap[input];
+        out << "(";
+        auto axesMap = permuteOp.getAxesMapArray();
+        applyAxesMap(operationLoopAxes[&op][0], axesMap);
+        llvm::interleaveComma(axesMap, out,
+                              [&](AxisTy axis) { out << "i" << axis; });
+        out << ")";
         out << ";\n";
       }
     }
