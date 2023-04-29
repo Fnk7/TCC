@@ -315,7 +315,20 @@ private:
     emitForLoopsEnd(numReductionLoops);
     emitForLoopsEnd(numParallelLoops);
     for (auto [result, output] : llvm::zip(results, outputs)) {
-      valueNameMap[result] = valueNameMap[output];
+      // Today, I was really really shocked,
+      // one can not write program like this.
+      // In this statement, the reference of 
+      // map[out] is getted, and then the map[res]
+      // is added. The addition would make
+      // the map expanded and then the map[out]
+      // is moved, therefore it makes origin
+      // reference invalid.
+      // So, the map[res] is assigned to invalid
+      // value!
+      // valueNameMap[result] = valueNameMap[output];
+      // C++ loose, Rust win!
+      auto name = valueNameMap[output];
+      valueNameMap[result] = name;
     }
   }
   void emitForLoop(std::string iterName, int64_t size, int64_t sizeID) {
