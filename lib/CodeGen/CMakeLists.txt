@@ -1,6 +1,7 @@
 add_mlir_library(
   TCCCodeGen
   EmitCCode.cpp
+  EmitCCode2.cpp
   EmitTVM.cpp
   EmitTVMRelay.cpp
   EmitOpenCL.cpp

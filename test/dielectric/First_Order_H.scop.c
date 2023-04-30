@@ -1,127 +1,78 @@
-void first_order_h(int P,
+void first_order_h(int arg0,
+                   int P,
                    int N,
-                   double gradient_rho[P][3],
-                   double gradient_basis_wave[P][3][N],
-                   double first_order_gradient_rho[P][3],
-                   double ptab[P],
-                   double first_order_potential[P],
-                   double v2rho2[P],
-                   double first_order_rho[P],
-                   double v2rhosigma[P],
-                   double v2sigma2[P],
-                   double vsigma[P],
-                   double wave[P][N],
-                   double H[N][N])
+                   double gradient_rho[const restrict arg0][P][3],
+                   double gradient_basis_wave[const restrict arg0][P][3][N],
+                   double first_order_gradient_rho[const restrict arg0][P][3],
+                   double ptab[const restrict arg0][P],
+                   double first_order_potential[const restrict arg0][P],
+                   double v2rho2[const restrict arg0][P],
+                   double first_order_rho[const restrict arg0][P],
+                   double v2rhosigma[const restrict arg0][P],
+                   double v2sigma2[const restrict arg0][P],
+                   double vsigma[const restrict arg0][P],
+                   double wave[const restrict arg0][P][N],
+                   double H[const restrict arg0][N][N])
 {
 #pragma scop
-  double cst0 = 0;
-  double cst1 = 0.5;
-  // From Tensor EmptyOp
-  double local_0[P];
-  // From Linalg FillOp
-  for (int c0 = 0; c0 < P; c0++) {
-    local_0[c0] = cst0;
-  }
-  // From Linalg GenericOp
-  for (int c0 = 0; c0 < P; c0++) {
-    for (int c1 = 0; c1 < 3; c1++) {
-      double in0 = gradient_rho[c0][c1];
-      double in1 = first_order_gradient_rho[c0][c1];
-      double in2 = local_0[c0];
-      double var0 = in0 * in1;
-      double var1 = var0 + in2;
-      local_0[c0] = var1;
-    }
-  }
-  // From Tensor EmptyOp
-  double local_1[P][N];
-  // From Linalg FillOp
-  for (int c0 = 0; c0 < P; c0++) {
-    for (int c1 = 0; c1 < N; c1++) {
-      local_1[c0][c1] = cst0;
-    }
-  }
-  // From Linalg GenericOp
-  for (int c0 = 0; c0 < P; c0++) {
-    for (int c2 = 0; c2 < N; c2++) {
-      for (int c1 = 0; c1 < 3; c1++) {
-        double in0 = first_order_gradient_rho[c0][c1];
-        double in1 = ptab[c0];
-        double in2 = vsigma[c0];
-        double in3 = gradient_rho[c0][c1];
-        double in4 = first_order_rho[c0];
-        double in5 = v2rhosigma[c0];
-        double in6 = v2sigma2[c0];
-        double in7 = local_0[c0];
-        double in8 = gradient_basis_wave[c0][c1][c2];
-        double in9 = local_1[c0][c2];
-        double var0 = in6 * in7;
-        double var1 = in4 * in5;
-        double var2 = var1 + var0;
-        double var3 = in1 * var2;
-        double var4 = in3 * var3;
-        double var5 = in1 * in2;
-        double var6 = in0 * var5;
-        double var7 = var6 + var4;
-        double var8 = var7 * in8;
-        double var9 = var8 + in9;
-        local_1[c0][c2] = var9;
+if (777 <= arg0 && arg0 <= 777 && 180 <= P && P <= 200 && 200 <= N && N <= 300){
+  double local_0[arg0][P];
+  for (int c0 = 0; c0 < arg0; c0++) {
+    for (int c1 = 0; c1 < P; c1++) {
+      local_0[c0][c1] = 0;
+      for (int c2 = 0; c2 < 3; c2++) {
+        double var0 = gradient_rho[c0][c1][c2] * first_order_gradient_rho[c0][c1][c2];
+        local_0[c0][c1] = var0 + local_0[c0][c1];
       }
     }
   }
-  // From Tensor EmptyOp
-  double local_2[N][N];
-  // From Linalg FillOp
-  for (int c0 = 0; c0 < N; c0++) {
-    for (int c1 = 0; c1 < N; c1++) {
-      local_2[c0][c1] = cst0;
-    }
-  }
-  // From Linalg GenericOp
-  for (int c1 = 0; c1 < N; c1++) {
-    for (int c2 = 0; c2 < N; c2++) {
-      for (int c0 = 0; c0 < P; c0++) {
-        double in0 = wave[c0][c1];
-        double in1 = wave[c0][c2];
-        double in2 = ptab[c0];
-        double in3 = first_order_potential[c0];
-        double in4 = v2rho2[c0];
-        double in5 = first_order_rho[c0];
-        double in6 = v2rhosigma[c0];
-        double in7 = local_0[c0];
-        double in8 = local_1[c0][c2];
-        double in9 = local_2[c1][c2];
-        double var0 = in6 * in7;
-        double var1 = in4 * in5;
-        double var2 = in3 + var1;
-        double var3 = var2 + var0;
-        double var4 = in2 * var3;
-        double var5 = var4 * cst1;
-        double var6 = in1 * var5;
-        double var7 = var6 + in8;
-        double var8 = in0 * var7;
-        double var9 = var8 + in9;
-        local_2[c1][c2] = var9;
+  double local_1[arg0][P][N];
+  for (int c0 = 0; c0 < arg0; c0++) {
+    for (int c1 = 0; c1 < P; c1++) {
+      for (int c3 = 0; c3 < N; c3++) {
+        local_1[c0][c1][c3] = 0;
+        for (int c2 = 0; c2 < 3; c2++) {
+          double var0 = v2sigma2[c0][c1] * local_0[c0][c1];
+          double var1 = first_order_rho[c0][c1] * v2rhosigma[c0][c1];
+          double var2 = var1 + var0;
+          double var3 = ptab[c0][c1] * var2;
+          double var4 = gradient_rho[c0][c1][c2] * var3;
+          double var5 = ptab[c0][c1] * vsigma[c0][c1];
+          double var6 = first_order_gradient_rho[c0][c1][c2] * var5;
+          double var7 = var6 + var4;
+          double var8 = var7 * gradient_basis_wave[c0][c1][c2][c3];
+          local_1[c0][c1][c3] = var8 + local_1[c0][c1][c3];
+        }
       }
     }
   }
-  // From Tensor EmptyOp
-  double local_3[N][N];
-  // From Linalg GenericOp
-  for (int c0 = 0; c0 < N; c0++) {
-    for (int c1 = 0; c1 < N; c1++) {
-      double in0 = local_2[c0][c1];
-      double in1 = local_2[c1][c0];
-      double in2 = local_3[c0][c1];
-      double var0 = in0 + in1;
-      local_3[c0][c1] = var0;
+  double local_2[arg0][N][N];
+  for (int c0 = 0; c0 < arg0; c0++) {
+    for (int c2 = 0; c2 < N; c2++) {
+      for (int c3 = 0; c3 < N; c3++) {
+        local_2[c0][c2][c3] = 0;
+        for (int c1 = 0; c1 < P; c1++) {
+          double var0 = v2rhosigma[c0][c1] * local_0[c0][c1];
+          double var1 = v2rho2[c0][c1] * first_order_rho[c0][c1];
+          double var2 = first_order_potential[c0][c1] + var1;
+          double var3 = var2 + var0;
+          double var4 = ptab[c0][c1] * var3;
+          double var5 = var4 * 0.5;
+          double var6 = wave[c0][c1][c3] * var5;
+          double var7 = var6 + local_1[c0][c1][c3];
+          double var8 = wave[c0][c1][c2] * var7;
+          local_2[c0][c2][c3] = var8 + local_2[c0][c2][c3];
+        }
+      }
     }
   }
-  // From ReturnOp
-  for (int c0 = 0; c0 < N; c0++) {
+  for (int c0 = 0; c0 < arg0; c0++) {
     for (int c1 = 0; c1 < N; c1++) {
-      H[c0][c1] = local_3[c0][c1];
+      for (int c2 = 0; c2 < N; c2++) {
+        H[c0][c1][c2] = local_2[c0][c1][c2] + local_2[c0][c2][c1];
+      }
     }
   }
+}
 #pragma endscop
 }
