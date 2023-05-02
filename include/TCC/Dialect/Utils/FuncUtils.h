@@ -60,7 +60,8 @@ inline void copyFuncAttributes(func::FuncOp from, func::FuncOp to,
   }
 }
 inline auto getTCFuncAttrNames() {
-  SmallVector<StringRef> attrNames = {"num_input_sizes"};
+  SmallVector<StringRef> attrNames = {"num_input_sizes", "sizes_lower_bound",
+                                      "sizes_upper_bound"};
   return attrNames;
 }
 }; // namespace mlir::tc::utils

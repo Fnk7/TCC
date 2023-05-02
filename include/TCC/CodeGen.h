@@ -16,4 +16,5 @@ void emitTCToTVMRelay(ModuleOp op, llvm::raw_ostream &out = llvm::errs());
 void emitTBLASToOpenCL(ModuleOp op, llvm::raw_ostream &out,
                        bool workgroup = true);
 void emitBLASWithLinalgToC(ModuleOp op, llvm::raw_ostream &out = llvm::errs());
+void emitBLASToLibrary(ModuleOp op, llvm::raw_ostream &out = llvm::errs());
 } // namespace mlir::tc::codegen

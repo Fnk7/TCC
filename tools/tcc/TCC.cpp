@@ -240,6 +240,14 @@ int main(int argc, char **argv) {
       llvm::errs() << err << "\n";
       return 1;
     }
+    auto libraryBLASFile = replaceSuffix(inputFileName, ".blas.c");
+    if (auto err = writeToOutput(libraryBLASFile, [&](raw_ostream &out) {
+          mlir::tc::codegen::emitBLASToLibrary(M.get(), out);
+          return Error::success();
+        })) {
+      llvm::errs() << err << "\n";
+      return 1;
+    }
     return 0;
   }
 
