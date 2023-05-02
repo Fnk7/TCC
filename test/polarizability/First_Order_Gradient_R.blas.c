@@ -31,6 +31,7 @@ if (256 <= arg0 && arg0 <= 768 && 150 <= arg1 && arg1 <= 250 && 256 <= arg2 && a
     for (int c1 = 0; c1 < arg1; c1++) {
       for (int c2 = 0; c2 < 3; c2++) {
         for (int c3 = 0; c3 < 3; c3++) {
+          ret0[c0][c1][c2][c3] = arg3[c0][c1][c3][c2];
         }
       }
     }

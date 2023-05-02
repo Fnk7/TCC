@@ -286,7 +286,13 @@ private:
       arrayUsageExpr += getArrayUsage(affineMap, iterVars);
       auto blockArg = block.getArgument(inputs.size() + idx);
       valueNameMap[blockArg] = arrayUsageExpr;
-      valueNameMap[yieldOp.getOperand(idx)] = arrayUsageExpr;
+      auto toYield = yieldOp.getOperand(idx);
+      if (toYield.isa<BlockArgument>()) {
+        out.indent(indent) << arrayUsageExpr << " = ";
+        out << valueNameMap[toYield] << ";\n";
+      } else {
+        valueNameMap[toYield] = arrayUsageExpr;
+      }
     }
     // 7. emit body
     for (auto [idx, op] : llvm::enumerate(block)) {
@@ -687,7 +693,13 @@ private:
       arrayUsageExpr += getArrayUsage(affineMap, iterVars);
       auto blockArg = block.getArgument(inputs.size() + idx);
       valueNameMap[blockArg] = arrayUsageExpr;
-      valueNameMap[yieldOp.getOperand(idx)] = arrayUsageExpr;
+      auto toYield = yieldOp.getOperand(idx);
+      if (toYield.isa<BlockArgument>()) {
+        out.indent(indent) << arrayUsageExpr << " = ";
+        out << valueNameMap[toYield] << ";\n";
+      } else {
+        valueNameMap[toYield] = arrayUsageExpr;
+      }
     }
     // 7. emit body
     for (auto [idx, op] : llvm::enumerate(block)) {

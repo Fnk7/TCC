@@ -41,6 +41,7 @@ if (256 <= batches && batches <= 768 && 150 <= P && P <= 250 && 256 <= N && N <=
     for (int c1 = 0; c1 < P; c1++) {
       for (int c2 = 0; c2 < 3; c2++) {
         for (int c3 = 0; c3 < 3; c3++) {
+          R[c0][c1][c2][c3] = local_1[c0][c1][c3][c2];
         }
       }
     }
