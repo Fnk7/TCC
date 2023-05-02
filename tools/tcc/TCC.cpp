@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
       llvm::errs() << err << "\n";
       return 1;
     }
-    auto cWihtBLASFile = replaceSuffix(inputFileName, ".0.scop.c");
+    auto cWihtBLASFile = replaceSuffix(inputFileName, ".bscop.c");
     if (auto err = writeToOutput(cWihtBLASFile, [&](raw_ostream &out) {
           mlir::tc::codegen::emitBLASWithLinalgToC(M.get(), out);
           return Error::success();
