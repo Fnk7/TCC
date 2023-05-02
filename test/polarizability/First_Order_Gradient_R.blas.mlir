@@ -2,7 +2,7 @@
 #map1 = affine_map<(d0, d1, d2, d3) -> (d0, d2, d1, d3)>
 #map2 = affine_map<(d0, d1, d2, d3) -> (d0, d1, d3, d2)>
 module {
-  func.func @first_order_gradient_r_workload_0(%arg0: index, %arg1: index, %arg2: index, %arg3: tensor<?x?x?x3xf64, {size_id = array<i64: 0, 2, 2, 3>}>) -> tensor<?x?x?x3xf64, {size_id = array<i64: 0, 2, 2, 3>, symmetry = #tc.symm<1~2>}> attributes {num_input_sizes = 3 : i64, workload = 2 : ui64} {
+  func.func @first_order_gradient_r_workload_0(%arg0: index, %arg1: index, %arg2: index, %arg3: tensor<?x?x?x3xf64, {size_id = array<i64: 0, 2, 2, 3>}>) -> tensor<?x?x?x3xf64, {size_id = array<i64: 0, 2, 2, 3>, symmetry = #tc.symm<1~2>}> attributes {num_input_sizes = 3 : i64, sizes_lower_bound = array<i64: 256, 150, 256, 3>, sizes_upper_bound = array<i64: 768, 250, 768, 3>, workload = 2 : ui64} {
     %0 = tensor.empty(%arg0, %arg2, %arg2) : tensor<?x?x?x3xf64, {size_id = array<i64: 0, 2, 2, 3>, symmetry = #tc.symm<1~2>}>
     %1 = linalg.generic {indexing_maps = [#map0, #map1, #map0], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%arg3, %arg3 : tensor<?x?x?x3xf64, {size_id = array<i64: 0, 2, 2, 3>}>, tensor<?x?x?x3xf64, {size_id = array<i64: 0, 2, 2, 3>}>) outs(%0 : tensor<?x?x?x3xf64, {size_id = array<i64: 0, 2, 2, 3>, symmetry = #tc.symm<1~2>}>) {
     ^bb0(%in: f64, %in_0: f64, %out: f64):
@@ -11,7 +11,7 @@ module {
     } -> tensor<?x?x?x3xf64, {size_id = array<i64: 0, 2, 2, 3>, symmetry = #tc.symm<1~2>}>
     tc.return %1 : tensor<?x?x?x3xf64, {size_id = array<i64: 0, 2, 2, 3>, symmetry = #tc.symm<1~2>}>
   }
-  func.func @first_order_gradient_r_workload_1(%arg0: index, %arg1: index, %arg2: index, %arg3: tensor<?x?x3x3xf64, {size_id = array<i64: 0, 1, 3, 3>}>) -> tensor<?x?x3x3xf64, {size_id = array<i64: 0, 1, 3, 3>}> attributes {num_input_sizes = 3 : i64, workload = 2 : ui64} {
+  func.func @first_order_gradient_r_workload_1(%arg0: index, %arg1: index, %arg2: index, %arg3: tensor<?x?x3x3xf64, {size_id = array<i64: 0, 1, 3, 3>}>) -> tensor<?x?x3x3xf64, {size_id = array<i64: 0, 1, 3, 3>}> attributes {num_input_sizes = 3 : i64, sizes_lower_bound = array<i64: 256, 150, 256, 3>, sizes_upper_bound = array<i64: 768, 250, 768, 3>, workload = 2 : ui64} {
     %0 = tensor.empty(%arg0, %arg1) : tensor<?x?x3x3xf64, {size_id = array<i64: 0, 1, 3, 3>}>
     %1 = linalg.generic {indexing_maps = [#map2, #map0], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%arg3 : tensor<?x?x3x3xf64, {size_id = array<i64: 0, 1, 3, 3>}>) outs(%0 : tensor<?x?x3x3xf64, {size_id = array<i64: 0, 1, 3, 3>}>) {
     ^bb0(%in: f64, %out: f64):

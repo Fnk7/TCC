@@ -1,7 +1,7 @@
 #map0 = affine_map<(d0, d1, d2) -> (d0, d1, d2)>
 #map1 = affine_map<(d0, d1, d2) -> (d0, d2, d1)>
 module {
-  func.func @first_order_gradient_r_workload_0(%arg0: index, %arg1: index, %arg2: index, %arg3: tensor<?x?x?xf64, {size_id = array<i64: 0, 2, 2>}>) -> tensor<?x?x?xf64, {size_id = array<i64: 0, 2, 2>, symmetry = #tc.symm<1~2>}> attributes {num_input_sizes = 3 : i64, workload = 2 : ui64} {
+  func.func @first_order_gradient_r_workload_0(%arg0: index, %arg1: index, %arg2: index, %arg3: tensor<?x?x?xf64, {size_id = array<i64: 0, 2, 2>}>) -> tensor<?x?x?xf64, {size_id = array<i64: 0, 2, 2>, symmetry = #tc.symm<1~2>}> attributes {num_input_sizes = 3 : i64, sizes_lower_bound = array<i64: 256, 150, 256, 3>, sizes_upper_bound = array<i64: 768, 250, 768, 3>, workload = 2 : ui64} {
     %0 = tensor.empty(%arg0, %arg2, %arg2) : tensor<?x?x?xf64, {size_id = array<i64: 0, 2, 2>, symmetry = #tc.symm<1~2>}>
     %1 = linalg.generic {indexing_maps = [#map0, #map1, #map0], iterator_types = ["parallel", "parallel", "parallel"]} ins(%arg3, %arg3 : tensor<?x?x?xf64, {size_id = array<i64: 0, 2, 2>}>, tensor<?x?x?xf64, {size_id = array<i64: 0, 2, 2>}>) outs(%0 : tensor<?x?x?xf64, {size_id = array<i64: 0, 2, 2>, symmetry = #tc.symm<1~2>}>) {
     ^bb0(%in: f64, %in_0: f64, %out: f64):

@@ -1,52 +1,31 @@
 void first_order_gradient_r_workload_0(int arg0,
                                        int arg1,
-                                       double* arg2,
-                                       double* ret0)
+                                       int arg2,
+                                       double arg3[const restrict arg0][arg2][arg2],
+                                       double ret0[const restrict arg0][arg2][arg2])
 {
-#define arg2(i0, i1) arg2[i0 * arg1 + i1]
-#define ret0(i0, i1) ret0[i0 * arg1 + i1]
-  for (int i0 = 0; i0 < arg0; i0++) {
-    for (int i1 = 0; i1 < arg1; i1++)
-      ret0(i0, i1) = arg2(i0, i1) + arg2(i1, i0);
+#pragma scop
+if (256 <= arg0 && arg0 <= 768 && 150 <= arg1 && arg1 <= 250 && 256 <= arg2 && arg2 <= 768){
+  for (int c0 = 0; c0 < arg0; c0++) {
+    for (int c1 = 0; c1 < arg2; c1++) {
+      for (int c2 = 0; c2 < arg2; c2++) {
+        ret0[c0][c1][c2] = arg3[c0][c1][c2] + arg3[c0][c2][c1];
+      }
+    }
   }
 }
-
-void first_order_gradient_r(int arg0,
-                            int arg1,
-                            double* arg2,
-                            double* arg3,
-                            double* arg4,
-                            double* ret0)
-{
-  double var0[arg1 * arg1];
-  first_order_gradient_r_workload_0(arg0, arg1, arg2, var0);
-  double var1[arg0 * arg1];
-  {
-    int B = 1;
-    char transA = 'N'; char transB = 'T';
-    int M = 1 * arg0; int N = 1 * arg1; int K = 1 * arg1;
-    batch_gemm(B, transA, transB, M, N, K, arg4, var0, var1);
-  }
-  {
-    int B = 1 * arg0;
-    char trans = 'N';
-    int M = 1 * 3; int N = 1 * arg1;
-    batch_gemv(B, trans, M, N, arg2, var1, ret0);
-  }
+#pragma endscop
 }
 
-void batch_first_order_gradient_r(int num_batch,
-                                  int arg0,
-                                  int arg1,
-                                  double* arg2,
-                                  double* arg3,
-                                  double* arg4,
-                                  double* ret0)
-{
-#define arg2(b) (&arg2[arg0 * 3 * arg1 * b])
-#define arg3(b) (&arg3[arg1 * arg1 * b])
-#define arg4(b) (&arg4[arg0 * arg1 * b])
-#define ret0(b) (&ret0[arg0 * 3 * b])
-  for (int b = 0; b < num_batch; b++)
-    first_order_gradient_r(arg0, arg1, arg2(b), arg3(b), arg4(b), ret0(b));
+void first_order_gradient_r(int batches,
+                            int P,
+                            int N,
+                            double Gwave[const restrict batches][P][3][N],
+                            double DM[const restrict batches][N][N],
+                            double wave[const restrict batches][P][N],
+                            double GR[const restrict batches][P][3]) {
+  double local_0[batches][N][N];
+  first_order_gradient_r_workload_0(batches, P, N, DM, local_0);
+  // TODO: Emit C for op: tblas.batch.gemm
+  // TODO: Emit C for op: tblas.batch.gemv
 }
