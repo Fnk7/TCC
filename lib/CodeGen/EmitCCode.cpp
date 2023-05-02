@@ -22,13 +22,13 @@ using namespace mlir::tc::utils;
 
 namespace {
 class EmitCImpl : public codegen::CodeGenBase {
-  func::FuncOp funcOp;
+  func::FuncOp entryFuncOp;
   Block &block;
   ReturnOp returnOp;
 
 public:
   EmitCImpl(func::FuncOp funcOp, llvm::raw_ostream &out)
-      : CodeGenBase(out), funcOp(funcOp), block(funcOp.front()) {
+      : CodeGenBase(out), entryFuncOp(funcOp), block(funcOp.front()) {
     returnOp = dyn_cast<ReturnOp>(block.getTerminator());
   }
 
@@ -45,7 +45,7 @@ private:
   ArrayRef<int64_t> ubs;
 
   void emitImpl() {
-    auto sizeRanges = getSizesRanges(funcOp);
+    auto sizeRanges = getSizesRanges(entryFuncOp);
     lbs = sizeRanges.first;
     ubs = sizeRanges.second;
     sizeIDSymbols.reserve(ubs.size());
@@ -56,7 +56,7 @@ private:
   }
 
   void emitFunctionType() {
-    auto declare = ("void " + funcOp.getName() + "(").str();
+    auto declare = ("void " + entryFuncOp.getName() + "(").str();
     out << declare;
     indent += declare.size();
     emitArgumentTypes();
@@ -88,7 +88,7 @@ private:
   }
 
   void emitArgumentTypes() {
-    auto &block = funcOp.front();
+    auto &block = entryFuncOp.front();
     auto inputs = block.getArguments();
     for (auto [idx, input] : llvm::enumerate(inputs)) {
       auto name = getArgName(idx);
@@ -131,7 +131,7 @@ private:
   void emitFunctionBody() {
     out << "\n{\n";
     out << "#pragma scop\n";
-    auto numInputSizes = getNumInputSizes(funcOp);
+    auto numInputSizes = getNumInputSizes(entryFuncOp);
     if (numInputSizes) {
       out << "if (";
       llvm::interleave(
@@ -387,13 +387,13 @@ private:
     return "c" + std::to_string(position);
   }
   std::string getArgName(int64_t argIdx) {
-    auto name = getFuncOpArgName(funcOp, argIdx);
+    auto name = getFuncOpArgName(entryFuncOp, argIdx);
     if (isValidName(name))
       return std::string(name);
     return "arg" + std::to_string(argIdx);
   }
   std::string getResultName(int64_t resultIdx) {
-    auto name = getFuncOpResultName(funcOp, resultIdx);
+    auto name = getFuncOpResultName(entryFuncOp, resultIdx);
     if (isValidName(name))
       return std::string(name);
     return "ret" + std::to_string(resultIdx);

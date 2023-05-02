@@ -11,6 +11,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 
+#include "TCC/Dialect/TBLAS/IR/TBLASOps.h"
 #include "TCC/Dialect/TC/IR/TCOps.h"
 #include "TCC/Dialect/TC/Utils/Utils.h"
 #include "TCC/Passes.h"
@@ -263,6 +264,7 @@ void ConvertTCToLinalgPass::runOnOperation() {
   target.addLegalDialect<linalg::LinalgDialect>();
   target.addLegalDialect<arith::ArithDialect>();
   target.addLegalDialect<tensor::TensorDialect>();
+  target.addLegalDialect<tc::TBLASDialect>();
   target.addIllegalDialect<TCDialect>();
   if (eraseTensorEncoding) {
     target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op) {

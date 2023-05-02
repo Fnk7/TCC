@@ -22,53 +22,62 @@ using namespace mlir::tc::utils;
 
 namespace {
 class EmitCImpl : public codegen::CodeGenBase {
-  func::FuncOp funcOp;
-  Block &block;
+  ModuleOp moduleOp;
+  SymbolTable symbolTable;
+  func::FuncOp entryFuncOp;
   ReturnOp returnOp;
 
 public:
-  EmitCImpl(func::FuncOp funcOp, llvm::raw_ostream &out)
-      : CodeGenBase(out), funcOp(funcOp), block(funcOp.front()) {
-    returnOp = dyn_cast<ReturnOp>(block.getTerminator());
+  EmitCImpl(ModuleOp moduleOp, llvm::raw_ostream &out)
+      : CodeGenBase(out), moduleOp(moduleOp), symbolTable(moduleOp) {
+    auto funcOps = moduleOp.getOps<func::FuncOp>();
+    for (auto funcOp : funcOps) {
+      if (getWorkloadType(funcOp) == 1) {
+        entryFuncOp = funcOp;
+        break;
+      }
+    }
+    auto &entryBlock = entryFuncOp.front();
+    returnOp = llvm::cast<ReturnOp>(entryBlock.getTerminator());
   }
 
-  void emit() {
-    emitFunctionType();
-    emitFunctionBody();
-  }
+  void emit() { emitImpl(); }
 
 private:
   int64_t indent = 0;
 
   using ValueNameMapTy = DenseMap<Value, std::string>;
   ValueNameMapTy valueNameMap;
+  using SizeIDSymbolsTy = SmallVector<std::string>;
+  SizeIDSymbolsTy sizeIDSymbols;
+  ArrayRef<int64_t> lbs;
+  ArrayRef<int64_t> ubs;
 
-  // emit size
-  using SizeIDSymbolMapTy = DenseMap<int64_t, std::string>;
-  SizeIDSymbolMapTy sizeIDNameMap;
-  void emitConstantOrVaribaleSize(int64_t size, int64_t sizeID) {
-    if (size >= 0) {
-      out << size;
-    } else {
-      out << sizeIDNameMap[sizeID];
-    }
+  void emitImpl() {
+    auto sizeRanges = getSizesRanges(entryFuncOp);
+    lbs = sizeRanges.first;
+    ubs = sizeRanges.second;
+    sizeIDSymbols.reserve(ubs.size());
+    for (auto ub : ubs)
+      sizeIDSymbols.emplace_back(std::to_string(ub));
+    emitFunctionType();
+    emitEntryBlock();
   }
+
   // emit local array
   int64_t localIdx = 0;
-  void emitLocalArrayForTensor(Value value) {
+  std::string emitLocalArrayForTensor(Value value) {
     if (valueNameMap.count(value)) {
-      return;
+      return valueNameMap[value];
     }
     std::string name = "local_" + std::to_string(localIdx++);
     out.indent(indent) << "double " << name;
-    auto [shape, sizeIDs] = getTensorSizeInfos(value);
-    for (auto [size, sizeID] : llvm::zip(shape, sizeIDs)) {
-      out << "[";
-      emitConstantOrVaribaleSize(size, sizeID);
-      out << "]";
-    }
+    auto sizeIDs = getTensorSizeIDs(value);
+    for (auto sizeID : sizeIDs)
+      out << "[" << sizeIDSymbols[sizeID] << "]";
     out << ";\n";
     valueNameMap[value] = name;
+    return name;
   }
 
 private:
@@ -78,144 +87,190 @@ private:
         return false;
     return true;
   }
-  std::string getArgName(int64_t argIdx) {
-    auto name = getFuncOpArgName(funcOp, argIdx);
-    if (isValidName(name))
-      return std::string(name);
-    return "arg" + std::to_string(argIdx);
-  }
-  std::string getResultName(int64_t resultIdx) {
-    auto name = getFuncOpResultName(funcOp, resultIdx);
-    if (isValidName(name))
-      return std::string(name);
-    return "ret" + std::to_string(resultIdx);
-  }
 
   void emitFunctionType() {
-    std::string funcDeclare = "void ";
-    out << "void ";
-    indent = 5;
-    out << funcOp.getName();
-    indent += funcOp.getName().size();
-    out << "(";
-    indent += 1;
-    bool newLine = false;
-    emitArgumentTypes(newLine);
-    emitResultTypes(newLine);
-    out << ")\n";
+    auto declare = ("void " + entryFuncOp.getName() + "(").str();
+    out << declare;
+    indent += declare.size();
+    emitArgumentTypes();
+    emitResultTypes();
+    out << ")";
+    indent -= declare.size();
   }
-
-  void emitArgumentTypes(bool &newLine) {
+  void emitArgumentTypes() {
+    auto &block = entryFuncOp.front();
     auto inputs = block.getArguments();
     for (auto [idx, input] : llvm::enumerate(inputs)) {
-      if (newLine) {
-        out << ",\n";
-        out.indent(indent);
-      }
-      newLine = true;
       auto name = getArgName(idx);
-      if (input.getType().isIndex()) {
-        emitIndexArgument(input, idx, name);
-      } else {
-        emitTensorArgument(input, name);
-      }
       valueNameMap[input] = name;
-    }
-  }
-
-  void emitIndexArgument(Value value, int64_t sizeID, std::string name) {
-    out << "int " << name;
-    sizeIDNameMap[sizeID] = name;
-  }
-
-  void emitTensorArgument(Value value, std::string name) {
-    out << "double " << name;
-    auto [shape, sizeIDs] = getTensorSizeInfos(value);
-    for (auto [size, sizeID] : llvm::zip(shape, sizeIDs)) {
-      out << "[";
-      emitConstantOrVaribaleSize(size, sizeID);
-      out << "]";
-    }
-  }
-
-  SmallVector<std::string> returnNames;
-  void emitResultTypes(bool &newLine) {
-    // TODO: use writebacks
-    for (auto [idx, input] : llvm::enumerate(returnOp.getOperands())) {
-      if (newLine) {
+      if (input.getType().isIndex()) {
+        sizeIDSymbols[idx] = name;
+        out << "int " << name;
+      } else
+        emitTensorArgument(input, name, true);
+      if (idx + 1 != inputs.size()) {
         out << ",\n";
         out.indent(indent);
       }
-      newLine = true;
+    }
+  }
+  void emitResultTypes() {
+    auto results = returnOp.getOperands();
+    for (auto [idx, result] : llvm::enumerate(results)) {
+      out << ",\n";
+      out.indent(indent);
       auto name = getResultName(idx);
-      emitTensorArgument(input, name);
-      valueNameMap[input] = name;
-      returnNames.emplace_back(name);
+      valueNameMap[result] = name;
+      emitTensorArgument(result, name, true);
     }
   }
 
-  void emitFunctionBody() {
-    out << "{\n";
+  void emitTensorArgument(Value value, std::string name,
+                          bool isRestrict = false) {
+    out << "double " << name;
+    auto sizeIDs = getTensorSizeIDs(value);
+    for (auto [idx, sizeID] : llvm::enumerate(sizeIDs)) {
+      out << "[";
+      if (idx == 0 && isRestrict)
+        out << "const restrict ";
+      out << sizeIDSymbols[sizeID] << "]";
+    }
+  }
+
+  void emitBlockBegin(bool newline = false) {
+    if (newline)
+      out.indent(indent) << "{\n";
+    else
+      out << " {\n";
+    indent += 2;
+  }
+  void emitBlockEnd() {
+    indent -= 2;
+    out.indent(indent) << "}\n";
+  }
+  void emitPragmaSCoPBegin() {
     out << "#pragma scop\n";
-    indent = 2;
+    auto numInputSizes = getNumInputSizes(entryFuncOp);
+    out.indent(indent) << "if (1";
+    for (auto sizeID : llvm::seq<int64_t>(0, numInputSizes)) {
+      if (lbs[sizeID] > 0)
+        out << " && " << lbs[sizeID] << " <= " << sizeIDSymbols[sizeID];
+      if (ubs[sizeID] > 0)
+        out << " && " << sizeIDSymbols[sizeID] << " <= " << ubs[sizeID];
+    }
+    out << ")";
+    emitBlockBegin();
+  }
+  void emitPragmaSCoPEnd() {
+    emitBlockEnd();
+    out << "#pragma endscop\n";
+  }
+  void emitEntryBlock() {
+    auto &block = entryFuncOp.front();
+    emitBlockBegin();
+    emitPragmaSCoPBegin();
     for (auto &op : block) {
+      LLVM_DEBUG(llvm::dbgs() << "Emitting " << op.getName() << "\n";
+                 llvm::dbgs() << "\t" << op << "\n";);
+      if (auto callOp = dyn_cast_or_null<func::CallOp>(&op)) {
+        emitFuncCallOp(callOp);
+      } else if (auto returnOp = dyn_cast_or_null<ReturnOp>(&op)) {
+      } else {
+        out.indent(indent) << "// TODO: Emit C for op: ";
+        out << op.getName() << "\n";
+      }
+    }
+    emitPragmaSCoPEnd();
+    emitBlockEnd();
+  }
+
+  // CallOp
+  void emitFuncCallOp(func::CallOp callOp) {
+    // create result local array
+    auto operands = callOp.getOperands();
+    auto result = callOp.getResult(0);
+    auto resultName = emitLocalArrayForTensor(result);
+    auto symbolOp = symbolTable.lookup(callOp.getCallee());
+    auto workloadFuncOp = llvm::cast<func::FuncOp>(symbolOp);
+    auto &block = workloadFuncOp.front();
+    for (auto [input, operand] : llvm::zip(block.getArguments(), operands)) {
+      auto name = valueNameMap[operand];
+      valueNameMap[input] = name;
+    }
+    auto returnOp = llvm::cast<ReturnOp>(block.getTerminator());
+    valueNameMap[returnOp.getOperand(0)] = resultName;
+    emitWorkloadBlock(block);
+  }
+
+  void emitWorkloadBlock(Block &block) {
+    emitBlockBegin(true);
+    for (auto &op : block) {
+      LLVM_DEBUG(llvm::dbgs() << "Emitting " << op.getName() << "\n";
+                 llvm::dbgs() << "\t" << op << "\n";);
       if (auto cstOp = dyn_cast_or_null<arith::ConstantFloatOp>(&op)) {
         emitArithConstantOp(cstOp);
       } else if (auto linalgOp = dyn_cast_or_null<linalg::GenericOp>(&op)) {
         emitLinalgGenericOp(linalgOp);
       } else if (auto fillOp = dyn_cast_or_null<linalg::FillOp>(&op)) {
-        emitLinalgFillOp(fillOp);
-      } else if (auto blasOp = dyn_cast_or_null<GenericOp>(&op)) {
-        out.indent(indent) << "// Failed: Emit C for op: " << op.getName()
-                           << "\n";
       } else if (auto emptyOp = dyn_cast_or_null<tensor::EmptyOp>(&op)) {
-        emitTensorEmptyOp(emptyOp);
       } else if (auto returnOp = dyn_cast_or_null<ReturnOp>(&op)) {
-        emitFuncReturnOp(returnOp);
       } else {
-        out.indent(indent) << "// Failed: Emit C for op: " << op.getName()
-                           << "\n";
+        out.indent(indent) << "// Failed: Emit C for op: ";
+        out << op.getName() << "\n";
       }
     }
+    emitBlockEnd();
+  }
+
+  void emitFunctionBody() {
+    out << "\n{\n";
+    out << "#pragma scop\n";
+    auto numInputSizes = getNumInputSizes(entryFuncOp);
+    if (numInputSizes) {
+      out << "if (";
+      llvm::interleave(
+          llvm::seq<int64_t>(0, numInputSizes), out,
+          [&](int64_t sizeID) {
+            out << lbs[sizeID] << " <= " << sizeIDSymbols[sizeID];
+            out << " && ";
+            out << sizeIDSymbols[sizeID] << " <= " << ubs[sizeID];
+          },
+          " && ");
+      out << ")";
+    }
+    out << "{\n";
+    indent = 2;
+    // for (auto &op : block) {
+    //   LLVM_DEBUG(llvm::dbgs() << "Emitting " << op.getName() << "\n";
+    //              llvm::dbgs() << "\t" << op << "\n";);
+    //   if (auto cstOp = dyn_cast_or_null<arith::ConstantFloatOp>(&op)) {
+    //     emitArithConstantOp(cstOp);
+    //   } else if (auto linalgOp = dyn_cast_or_null<linalg::GenericOp>(&op)) {
+    //     emitLinalgGenericOp(linalgOp);
+    //   } else if (auto fillOp = dyn_cast_or_null<linalg::FillOp>(&op)) {
+    //   } else if (auto emptyOp = dyn_cast_or_null<tensor::EmptyOp>(&op)) {
+    //   } else if (auto returnOp = dyn_cast_or_null<ReturnOp>(&op)) {
+    //   } else {
+    //     out.indent(indent) << "// Failed: Emit C for op: ";
+    //     out << op.getName() << "\n";
+    //   }
+    // }
+    out << "}\n";
     out << "#pragma endscop\n";
     out << "}\n";
   }
 
   // emit arith constant
-  int64_t cstIdx = 0;
   void emitArithConstantOp(arith::ConstantFloatOp op) {
-    std::string name = "cst" + std::to_string(cstIdx++);
     SmallVector<char> value;
     op.value().toString(value);
-    out.indent(indent) << "double " << name << " = " << value << ";\n";
-    valueNameMap[op.getResult()] = name;
+    valueNameMap[op.getResult()] = std::string(value.begin(), value.end());
   }
 
   // emit tensor empty op
   void emitTensorEmptyOp(tensor::EmptyOp op) {
     out.indent(indent) << "// From Tensor EmptyOp\n";
     emitLocalArrayForTensor(op.getResult());
-  }
-
-  // emit func return op
-  void emitFuncReturnOp(ReturnOp op) {
-    out.indent(indent) << "// From ReturnOp\n";
-    auto outputs = op.getOperands();
-    for (auto [idx, output] : llvm::enumerate(outputs)) {
-      auto [shape, sizeIDs] = getTensorSizeInfos(output);
-      int numLoops = shape.size();
-      SmallVector<std::string> iterVars(numLoops, "");
-      for (auto [idx, size] : llvm::enumerate(shape)) {
-        iterVars[idx] = getIteratorName(idx);
-        emitForLoop(iterVars[idx], size, sizeIDs[idx]);
-      }
-      out.indent(indent) << returnNames[idx];
-      emitIterVars(iterVars);
-      out << " = " << valueNameMap[output];
-      emitIterVars(iterVars);
-      out << ";\n";
-      emitForLoopsEnd(numLoops);
-    }
   }
 
   // emit linalg fill op
@@ -242,14 +297,16 @@ private:
   // emit linalg generic op
   using PositionIterVariableMapTy = DenseMap<unsigned, std::string>;
   void emitLinalgGenericOp(linalg::GenericOp op) {
-    out.indent(indent) << "// From Linalg GenericOp\n";
-    auto operands = op->getOperands();
+    LLVM_DEBUG(out.indent(indent) << "// From Linalg GenericOp\n";);
     auto inputs = op.getInputs();
     auto outputs = op.getOutputs();
     auto results = op.getResults();
     auto indexingMaps = op.getIndexingMapsArray();
     auto iteratorTypes = op.getIteratorTypesArray();
-    // 1. emit parallel loop
+    // 1. Create local array for results
+    for (auto result : results)
+      emitLocalArrayForTensor(result);
+    // 2. emit parallel loop
     int numLoops = iteratorTypes.size();
     SmallVector<std::string> iterVars(numLoops, "");
     int numParallelLoops = 0;
@@ -268,7 +325,25 @@ private:
         emitForLoop(iterVars[position], size, sizeID);
       }
     }
-    // 2. emit reduction loop
+    // 3. Copy output to result
+    for (auto [idx, result] : llvm::enumerate(results)) {
+      auto output = outputs[idx];
+      if (!llvm::isa<tensor::EmptyOp>(output.getDefiningOp())) {
+        out.indent(indent) << valueNameMap[result];
+        auto affineMap = indexingMaps[inputs.size() + idx];
+        auto arrayUsage = getArrayUsage(affineMap, iterVars);
+        out << arrayUsage;
+        out << " = ";
+        if (auto fillOp = output.getDefiningOp<linalg::FillOp>()) {
+          out << valueNameMap[fillOp.getInputs()[0]];
+        } else {
+          out << valueNameMap[outputs[idx]];
+          out << arrayUsage;
+        }
+        out << ";\n";
+      }
+    }
+    // 4. Emit reduction loop
     int numReductionLoops = 0;
     if (numParallelLoops < numLoops) {
       for (auto [idx, input] : llvm::enumerate(inputs)) {
@@ -287,30 +362,31 @@ private:
         }
       }
     }
-    // 3. emit load
+    // 5. Map block arguments to array usages
     auto &block = *(op.getBlock());
-    for (auto [idx, operand] : llvm::enumerate(operands)) {
-      std::string name = "in" + std::to_string(idx);
-      out.indent(indent) << "double " << name << " = ";
-      out << valueNameMap[operand];
-      emitAffineMap(indexingMaps[idx], iterVars);
-      out << ";\n";
+    for (auto [idx, input] : llvm::enumerate(inputs)) {
+      auto arrayUsageExpr = valueNameMap[input];
+      arrayUsageExpr += getArrayUsage(indexingMaps[idx], iterVars);
       auto blockArg = block.getArgument(idx);
-      valueNameMap[blockArg] = name;
+      valueNameMap[blockArg] = arrayUsageExpr;
     }
-    // 4. emit body
+    // 6. Map yieldOp values to array usages
+    auto yieldOp = cast<linalg::YieldOp>(block.getTerminator());
+    for (auto [idx, result] : llvm::enumerate(results)) {
+      auto arrayUsageExpr = valueNameMap[result];
+      auto affineMap = indexingMaps[inputs.size() + idx];
+      arrayUsageExpr += getArrayUsage(affineMap, iterVars);
+      auto blockArg = block.getArgument(inputs.size() + idx);
+      valueNameMap[blockArg] = arrayUsageExpr;
+      valueNameMap[yieldOp.getOperand(idx)] = arrayUsageExpr;
+    }
+    // 7. emit body
     for (auto [idx, op] : llvm::enumerate(block)) {
       if (auto addFOp = dyn_cast_or_null<arith::AddFOp>(&op)) {
         emitArithAddFOp(addFOp, idx);
       } else if (auto mulFOp = dyn_cast_or_null<arith::MulFOp>(&op)) {
         emitArithMulFOp(mulFOp, idx);
       } else if (auto yieldOp = dyn_cast_or_null<linalg::YieldOp>(&op)) {
-        for (auto [idx, output] : llvm::enumerate(outputs)) {
-          auto affineMap = indexingMaps[inputs.size() + idx];
-          out.indent(indent) << valueNameMap[output];
-          emitAffineMap(affineMap, iterVars);
-          out << " = " << valueNameMap[yieldOp.getOperand(idx)] << ";\n";
-        }
       } else {
         out.indent(indent) << "// Failed: Emit C for op: " << op.getName()
                            << "\n";
@@ -318,22 +394,6 @@ private:
     }
     emitForLoopsEnd(numReductionLoops);
     emitForLoopsEnd(numParallelLoops);
-    for (auto [result, output] : llvm::zip(results, outputs)) {
-      // Today, I was really really shocked,
-      // one can not write program like this.
-      // In this statement, the reference of 
-      // map[out] is getted, and then the map[res]
-      // is added. The addition would make
-      // the map expanded and then the map[out]
-      // is moved, therefore it makes origin
-      // reference invalid.
-      // So, the map[res] is assigned to invalid
-      // value!
-      // valueNameMap[result] = valueNameMap[output];
-      // C++ loose, Rust win!
-      auto name = valueNameMap[output];
-      valueNameMap[result] = name;
-    }
   }
   void emitForLoop(std::string iterName, int64_t size, int64_t sizeID) {
     out.indent(indent) << "for (";
@@ -341,7 +401,7 @@ private:
     out << "int " << iterName << " = 0; ";
     // condition
     out << iterName << " < ";
-    emitConstantOrVaribaleSize(size, sizeID);
+    out << sizeIDSymbols[sizeID];
     out << "; ";
     // increment
     out << iterName << "++) {\n";
@@ -362,6 +422,14 @@ private:
       out << "]";
     }
   }
+  std::string getArrayUsage(AffineMap map, SmallVector<std::string> &iterVars) {
+    std::string usage;
+    for (auto expr : map.getResults()) {
+      auto position = expr.dyn_cast<AffineDimExpr>().getPosition();
+      usage += "[" + iterVars[position] + "]";
+    }
+    return usage;
+  }
   void emitAffineMap(AffineMap map, SmallVector<std::string> &iterVars) {
     for (auto expr : map.getResults()) {
       auto position = expr.dyn_cast<AffineDimExpr>().getPosition();
@@ -379,36 +447,56 @@ private:
   }
   // emit arith add and mul
   void emitArithAddFOp(arith::AddFOp op, int64_t varIdx) {
-    std::string name = "var" + std::to_string(varIdx);
-    out.indent(indent) << "double " << name << " = ";
+    auto result = op.getResult();
+    if (valueNameMap.count(result)) {
+      out.indent(indent) << valueNameMap[result];
+    } else {
+      std::string name = "var" + std::to_string(varIdx);
+      valueNameMap[result] = name;
+      out.indent(indent) << "double " << name;
+    }
+    out << " = ";
     auto lhs = op.getLhs();
     auto rhs = op.getRhs();
     out << valueNameMap[lhs] << " + ";
     out << valueNameMap[rhs] << ";\n";
-    valueNameMap[op.getResult()] = name;
   }
   void emitArithMulFOp(arith::MulFOp op, int64_t varIdx) {
-    std::string name = "var" + std::to_string(varIdx);
-    out.indent(indent) << "double " << name << " = ";
+    auto result = op.getResult();
+    if (valueNameMap.count(result)) {
+      out.indent(indent) << valueNameMap[result];
+    } else {
+      std::string name = "var" + std::to_string(varIdx);
+      valueNameMap[result] = name;
+      out.indent(indent) << "double " << name;
+    }
+    out << " = ";
     auto lhs = op.getLhs();
     auto rhs = op.getRhs();
     out << valueNameMap[lhs] << " * ";
     out << valueNameMap[rhs] << ";\n";
-    valueNameMap[op.getResult()] = name;
   }
 
   inline std::string getIteratorName(unsigned position) {
     return "c" + std::to_string(position);
   }
+  std::string getArgName(int64_t argIdx) {
+    auto name = getFuncOpArgName(entryFuncOp, argIdx);
+    if (isValidName(name))
+      return std::string(name);
+    return "arg" + std::to_string(argIdx);
+  }
+  std::string getResultName(int64_t resultIdx) {
+    auto name = getFuncOpResultName(entryFuncOp, resultIdx);
+    if (isValidName(name))
+      return std::string(name);
+    return "ret" + std::to_string(resultIdx);
+  }
 };
 } // namespace
 
 namespace mlir::tc::codegen {
-// void emitLinalgToC(ModuleOp op, llvm::raw_ostream &out) {
-//   SymbolTable symTable(op);
-//   auto funcOps = op.getOps<func::FuncOp>();
-//   for (auto funcOp : funcOps) {
-//     EmitCImpl(funcOp, out).emit();
-//   }
-// }
+void emitBLASWithLinalgToC(ModuleOp op, llvm::raw_ostream &out) {
+  EmitCImpl(op, out).emit();
+}
 } // namespace mlir::tc::codegen

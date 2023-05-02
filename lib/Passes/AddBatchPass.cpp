@@ -153,12 +153,12 @@ void addBatchSizeAsArgument(func::FuncOp funcOp) {
   funcOp.front().insertArgument((unsigned)0, inputTypes[0], funcOp.getLoc());
   for (auto argIdx = inputTypes.size() - 1; argIdx >= 1; argIdx--)
     funcOp.setArgAttrs(argIdx, funcOp.getArgAttrs(argIdx - 1));
-  funcOp.setArgAttr(0, "func.name", builder.getStringAttr("batch#size"));
+  funcOp.setArgAttr(0, "func.name", builder.getStringAttr("batches"));
   auto numSizes = utils::getNumInputSizes(funcOp);
   auto numSizesAttr = builder.getI64IntegerAttr(numSizes + 1);
   utils::setNumInputSizes(funcOp, numSizesAttr);
   auto [lbs, ubs] = utils::getSizesRanges(funcOp);
-  SmallVector<int64_t> newlbs(1, 777), newubs(1, 777);
+  SmallVector<int64_t> newlbs(1, 256), newubs(1, 768);
   newlbs.append(lbs.begin(), lbs.end());
   newubs.append(ubs.begin(), ubs.end());
   auto lbsAttr = builder.getDenseI64ArrayAttr(newlbs);
