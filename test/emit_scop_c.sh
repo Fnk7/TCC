@@ -13,4 +13,5 @@ files=(
 for file_path in "${files[@]}"; do
     dir_name=$(dirname "$file_path")
     ${tcc} -emit=scop-c -add-batch -linalg-fuse "${file_path}"
+    ${tcc} -emit=mlir-blas -add-batch -linalg-fuse "${file_path}"
 done

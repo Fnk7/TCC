@@ -221,6 +221,8 @@ int main(int argc, char **argv) {
     PM.addPass(mlir::tc::createSplitWorkloadPass());
     PM.addNestedPass<mlir::func::FuncOp>(mlir::createCSEPass());
     PM.addNestedPass<mlir::func::FuncOp>(mlir::tc::createTCDCEPass());
+    addConvertToLinalgPipeline(PM);
+    addLinalgFusePass(PM);
     mlir::failed(PM.run(*M));
     auto mlirBLASFile = replaceSuffix(inputFileName, ".blas.mlir");
     if (auto err = writeToOutput(mlirBLASFile, [&](raw_ostream &out) {
@@ -230,9 +232,9 @@ int main(int argc, char **argv) {
       llvm::errs() << err << "\n";
       return 1;
     }
-    auto clBLASFile = replaceSuffix(inputFileName, ".blas.cl");
-    if (auto err = writeToOutput(clBLASFile, [&](raw_ostream &out) {
-          mlir::tc::codegen::emitTBLASToOpenCL(M.get(), out);
+    auto cWihtBLASFile = replaceSuffix(inputFileName, ".0.scop.c");
+    if (auto err = writeToOutput(cWihtBLASFile, [&](raw_ostream &out) {
+          mlir::tc::codegen::emitBLASWithLinalgToC(M.get(), out);
           return Error::success();
         })) {
       llvm::errs() << err << "\n";

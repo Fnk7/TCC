@@ -1,14 +1,14 @@
-void first_order_r(int arg0,
+void first_order_r(int batches,
                    int P,
                    int N,
-                   double wave[const restrict arg0][P][N],
-                   double DM[const restrict arg0][N][N],
-                   double R[const restrict arg0][P])
+                   double wave[const restrict batches][P][N],
+                   double DM[const restrict batches][N][N],
+                   double R[const restrict batches][P])
 {
 #pragma scop
-if (777 <= arg0 && arg0 <= 777 && 180 <= P && P <= 200 && 200 <= N && N <= 300){
-  double local_0[arg0][P][N];
-  for (int c0 = 0; c0 < arg0; c0++) {
+if (256 <= batches && batches <= 768 && 150 <= P && P <= 250 && 256 <= N && N <= 768){
+  double local_0[batches][P][N];
+  for (int c0 = 0; c0 < batches; c0++) {
     for (int c1 = 0; c1 < P; c1++) {
       for (int c3 = 0; c3 < N; c3++) {
         local_0[c0][c1][c3] = 0;
@@ -19,7 +19,7 @@ if (777 <= arg0 && arg0 <= 777 && 180 <= P && P <= 200 && 200 <= N && N <= 300){
       }
     }
   }
-  for (int c0 = 0; c0 < arg0; c0++) {
+  for (int c0 = 0; c0 < batches; c0++) {
     for (int c1 = 0; c1 < P; c1++) {
       R[c0][c1] = 0;
       for (int c2 = 0; c2 < N; c2++) {

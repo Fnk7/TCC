@@ -35,9 +35,9 @@ double getNaiveCost(func::FuncOp funcOp) {
   auto [lbs, ubs] = getSizesRanges(funcOp);
   SmallVector<int64_t> sizes;
   for (auto size : lbs) {
-    if (size == 180)
+    if (size == 150)
       sizes.emplace_back(192);
-    else if (size == 200)
+    else if (size == 256)
       sizes.emplace_back(256);
     else {
       assert(size == 3);

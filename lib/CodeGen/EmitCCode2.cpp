@@ -202,6 +202,8 @@ private:
     emitWorkloadBlock(block);
   }
 
+  // TBLAS operations
+
   void emitWorkloadBlock(Block &block) {
     emitBlockBegin(true);
     for (auto &op : block) {

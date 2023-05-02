@@ -1,4 +1,4 @@
-size P = (180,200), N=(200,300)
+size P = (150,250), N=(256,768)
 input wave(P,N)
 R(p) = sum((i,j), wave(p,i) * DM(i,j) * wave(p,j))
 keep R

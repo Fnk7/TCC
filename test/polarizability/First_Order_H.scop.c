@@ -1,24 +1,24 @@
-void first_order_h(int arg0,
+void first_order_h(int batches,
                    int P,
                    int N,
-                   double gradient_basis_wave[const restrict arg0][P][3][N],
-                   double first_order_gradient_rho[const restrict arg0][P][3][3],
-                   double gradient_rho[const restrict arg0][P][3],
-                   double ptab[const restrict arg0][P],
-                   double grid_coord[const restrict arg0][P][3],
-                   double v_hartree_gradient[const restrict arg0][P][3],
-                   double v2rho2[const restrict arg0][P],
-                   double first_order_rho[const restrict arg0][P][3],
-                   double v2rhosigma[const restrict arg0][P],
-                   double v2sigma2[const restrict arg0][P],
-                   double vsigma[const restrict arg0][P],
-                   double wave[const restrict arg0][P][N],
-                   double H[const restrict arg0][N][N][3])
+                   double gradient_basis_wave[const restrict batches][P][3][N],
+                   double first_order_gradient_rho[const restrict batches][P][3][3],
+                   double gradient_rho[const restrict batches][P][3],
+                   double ptab[const restrict batches][P],
+                   double grid_coord[const restrict batches][P][3],
+                   double v_hartree_gradient[const restrict batches][P][3],
+                   double v2rho2[const restrict batches][P],
+                   double first_order_rho[const restrict batches][P][3],
+                   double v2rhosigma[const restrict batches][P],
+                   double v2sigma2[const restrict batches][P],
+                   double vsigma[const restrict batches][P],
+                   double wave[const restrict batches][P][N],
+                   double H[const restrict batches][N][N][3])
 {
 #pragma scop
-if (777 <= arg0 && arg0 <= 777 && 180 <= P && P <= 200 && 200 <= N && N <= 300){
-  double local_0[arg0][P][3];
-  for (int c0 = 0; c0 < arg0; c0++) {
+if (256 <= batches && batches <= 768 && 150 <= P && P <= 250 && 256 <= N && N <= 768){
+  double local_0[batches][P][3];
+  for (int c0 = 0; c0 < batches; c0++) {
     for (int c1 = 0; c1 < P; c1++) {
       for (int c3 = 0; c3 < 3; c3++) {
         local_0[c0][c1][c3] = 0;
@@ -29,8 +29,8 @@ if (777 <= arg0 && arg0 <= 777 && 180 <= P && P <= 200 && 200 <= N && N <= 300){
       }
     }
   }
-  double local_1[arg0][P][N][3];
-  for (int c0 = 0; c0 < arg0; c0++) {
+  double local_1[batches][P][N][3];
+  for (int c0 = 0; c0 < batches; c0++) {
     for (int c1 = 0; c1 < P; c1++) {
       for (int c3 = 0; c3 < N; c3++) {
         for (int c4 = 0; c4 < 3; c4++) {
@@ -52,8 +52,8 @@ if (777 <= arg0 && arg0 <= 777 && 180 <= P && P <= 200 && 200 <= N && N <= 300){
       }
     }
   }
-  double local_2[arg0][N][N][3];
-  for (int c0 = 0; c0 < arg0; c0++) {
+  double local_2[batches][N][N][3];
+  for (int c0 = 0; c0 < batches; c0++) {
     for (int c2 = 0; c2 < N; c2++) {
       for (int c3 = 0; c3 < N; c3++) {
         for (int c4 = 0; c4 < 3; c4++) {
@@ -75,7 +75,7 @@ if (777 <= arg0 && arg0 <= 777 && 180 <= P && P <= 200 && 200 <= N && N <= 300){
       }
     }
   }
-  for (int c0 = 0; c0 < arg0; c0++) {
+  for (int c0 = 0; c0 < batches; c0++) {
     for (int c1 = 0; c1 < N; c1++) {
       for (int c2 = 0; c2 < N; c2++) {
         for (int c3 = 0; c3 < 3; c3++) {
