@@ -31,8 +31,6 @@
 #include "TCC/Parser.h"
 #include "TCC/Passes.h"
 
-#include <zstd.h>
-
 using namespace llvm;
 
 static cl::opt<std::string> inputFileName(cl::Positional,
@@ -270,8 +268,8 @@ int main(int argc, char **argv) {
     return 0;
   }
   PM.addPass(mlir::tc::createLowerToAffinePass());
+  PM.addPass(mlir::tc::createReturnToArgumentPass());
   mlir::OpPassManager &FuncPM = PM.nest<mlir::func::FuncOp>();
-  FuncPM.addPass(mlir::tc::createReturnToArgumentPass());
   FuncPM.addPass(mlir::createCanonicalizerPass());
   FuncPM.addPass(mlir::createCSEPass());
   FuncPM.addPass(mlir::createLoopFusionPass());
